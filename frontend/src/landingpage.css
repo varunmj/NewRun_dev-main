@@ -1,0 +1,67 @@
+/* LandingPage.css */
+body, html {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background-color: #f0f0f0; /* Light background color */
+}
+
+.landing-page .hero-section {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background: #FFFFFF; /* White background for hero section */
+}
+
+.landing-page .content {
+    text-align: center;
+    max-width: 600px;
+}
+
+.landing-page h1 {
+    font-size: 2.5rem;
+    color: #333;
+}
+
+.landing-page p {
+    color: #555;
+    font-size: 1.2rem;
+    margin-top: 20px;
+    margin-bottom: 30px;
+}
+
+.landing-page .cta-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+
+.landing-page .button {
+    padding: 10px 20px;
+    border: 2px solid #007BFF; /* Blue border */
+    background: none;
+    color: #007BFF;
+    border-radius: 5px;
+    text-decoration: none;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+.landing-page .button:hover {
+    background-color: #007BFF;
+    color: #fff;
+}
+
+.landing-page .button.primary {
+    background-color: #007BFF;
+    color: #fff;
+}
+
+.landing-page footer {
+    text-align: center;
+    padding: 20px 0;
+    font-size: 0.9rem;
+    color: #666;
+    background-color: #fff; /* Matching footer with the overall theme */
+}

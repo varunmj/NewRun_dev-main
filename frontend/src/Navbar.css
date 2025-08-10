@@ -1,0 +1,55 @@
+/* Navbar.css */
+
+.navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 50px; /* Adjust the padding as needed */
+    background-color: rgba(255, 255, 255, 0.8); /* Translucent white background */
+    backdrop-filter: blur(10px); /* Blur effect for the background */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Subtle shadow for depth */
+    position: fixed; /* Fix navbar to the top */
+    width: 100%;
+    top: 0;
+    z-index: 1000;
+}
+
+.logo img {
+    height: 40px; /* Logo height, adjust as needed */
+}
+
+.nav-links a, .nav-right a {
+    color: #333; /* Dark grey text color */
+    text-decoration: none; /* No underline */
+    margin-right: 20px; /* Space between links */
+    font-size: 16px; /* Link font size */
+    font-weight: 500; /* Medium font weight */
+}
+
+.nav-right {
+    display: flex;
+    align-items: center;
+}
+
+.user-count {
+    margin-right: 20px; /* Space before Get Started button */
+    font-size: 14px; /* Smaller font size for user count */
+    color: #666; /* Lighter text color */
+}
+
+.get-started-button {
+    background-color: #007bff; /* Blue background for button */
+    color: white;
+    padding: 10px 20px; /* Padding inside the button */
+    border-radius: 5px; /* Rounded corners */
+    text-decoration: none; /* No underline */
+}
+
+.get-started-button:hover {
+    background-color: #0056b3; /* Darker blue on hover */
+}
+
+/* Ensuring the content isn't hidden behind the navbar */
+body {
+    padding-top: 60px; /* Adjust this value based on the actual height of your navbar */
+}

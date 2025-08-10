@@ -1,0 +1,230 @@
+/* Marketplace Container Styling */
+.marketplace-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  
+  
+  .marketplace-title {
+    font-size: 2.5rem;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+  
+  .marketplace-description {
+    font-size: 1.25rem;
+    text-align: center;
+    margin-bottom: 2rem;
+    color: #6B7280; /* Tailwind Gray color */
+  }
+  
+  /* Filter Section */
+  .filter-section {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 2rem;
+  }
+  
+  .filter-btn {
+    background-color: #F3F4F6; /* Tailwind Light Gray */
+    color: #111827; /* Tailwind Dark Gray */
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-size: 1rem;
+    cursor: pointer;
+    border: none;
+    transition: all 0.3s ease;
+  }
+  
+  .filter-btn:hover {
+    background-color: #2563EB; /* Tailwind Blue */
+    color: white;
+  }
+  
+  /* Product Grid Layout */
+  .product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 20px;
+  }
+  
+  /* Item Card Styling */
+  .marketplace-item-card {
+    background-color: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  
+  .marketplace-item-card img {
+    width: 100%;
+    height: 200px; /* Ensure images are the same height */
+    object-fit: cover; /* Ensures images are scaled properly */
+    border-bottom: 1px solid #E5E7EB;
+  }
+  
+  .marketplace-item-card:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  }
+  
+  /* Product Titles and Text */
+  .marketplace-item-card h2 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  
+  .marketplace-item-card p {
+    margin: 0.5rem 0;
+  }
+  
+  
+  
+  /* Loading and Error Messages */
+  .text-center {
+    text-align: center;
+    font-size: 1.25rem;
+  }
+  
+  .text-red-500 {
+    color: #EF4444; /* Tailwind Red */
+  }
+  
+  /* Search Overlay */
+  .search-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  
+  .search-overlay input {
+    width: 80%;
+    padding: 15px;
+    font-size: 1.5rem;
+    border: none;
+    border-radius: 5px;
+  }
+  
+  .search-overlay-close {
+    position: absolute;
+    top: 20px;
+    right: 30px;
+    font-size: 2rem;
+    color: white;
+    cursor: pointer;
+  }
+  
+  /* General Product Link */
+  .product-link {
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    color: inherit;
+    opacity: 1;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    border-radius: 20px;
+  }
+  
+  .product-link:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* Image Container */
+  .image-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 20px;
+    overflow: hidden;
+  }
+  
+  .image-wrapper {
+    width: 100%;
+    height: 100%;
+    position: relative;
+  }
+  
+  .product-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: inherit;
+  }
+  
+  /* Text Wrapper */
+  .text-wrapper {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 10px 0;
+  }
+  
+  .product-title {
+    font-size: 16px;
+    font-weight: bold;
+    color: #000;
+  }
+  
+  .product-price {
+    font-size: 14px;
+    color: #7F7F7F;
+  }
+  
+  
+  
+  
+  
+  .item-card {
+    background-color: white;
+    border-radius: 20px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+  }
+  
+  .item-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2), 0 0 15px rgba(0, 255, 200, 0.6);
+  }
+  
+  .item-image-container {
+    overflow: hidden;
+    border-radius: 20px;
+  }
+  
+  .item-image {
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+  }
+  
+  .item-details {
+    padding: 20px;
+  }
+  
+  .item-title {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #333;
+  }
+  
+  .item-price {
+    font-size: 1.1rem;
+    color: #0077ff;
+    margin-top: 10px;
+  }
+  

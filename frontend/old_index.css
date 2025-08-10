@@ -1,0 +1,593 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base{
+
+  html{
+  font-family: 'Poppins','sans-serif';
+  }
+
+  body{
+    background-color: #fdfeff;
+    /* overflow-x: hidden; */
+  }
+}
+
+@layer components {
+  .input-box {
+      @apply w-full text-sm bg-transparent border-[1.5px] px-4 py-2 rounded mb-3 outline-none;
+  }
+
+  .input-box-half {
+      @apply w-1/2 text-sm bg-transparent border-[1.5px] px-4 py-2 rounded mb-3 outline-none;
+  }
+
+  .btn-primary {
+      @apply w-full text-sm bg-primary text-white p-2 rounded my-2 hover:bg-blue-600;
+  }
+
+  .icon-btn {
+      @apply text-xl text-slate-300 cursor-pointer hover:text-primary;
+  }
+
+  .input-label {
+      @apply text-xs text-slate-400;
+  }
+}
+/*  */
+
+.roadmap-step:hover {
+  transform: scale(1.1);
+}
+
+/* Flexbox Container for Roadmap */
+.roadmap-section .roadmap-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;  /* Align items to start */
+  text-align: center;
+  width: 20%;  /* Ensure consistent width for all tiles */
+}
+
+/* Icon wrapper */
+.icon-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 80px; /* Ensure consistent height for all icon containers */
+  width: 160px;  /* Ensure consistent width for all icon containers */
+}
+
+/* Hover Effect for Icons */
+.icon-wrapper:hover {
+  transition: background-color 0.3s ease;
+}
+
+/* Titles and Descriptions */
+.roadmap-step h3 {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-weight: bold;
+}
+
+/* .roadmap-step p {
+  margin: 0;
+  font-size: 1rem;
+  color: #ffffff;
+  line-height: 1.5;
+} */
+
+/* Adjust for responsiveness */
+@media (max-width: 1024px) {
+  .roadmap-section .roadmap-step {
+    width: 100%;  /* Stack items on smaller screens */
+    margin-bottom: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dropdown-content {
+    right: 10px; /* Adjust positioning for mobile */
+    width: auto;
+  }
+}
+/* =====================
+NAVBAR 
+===================== */
+
+/* Navbar link styles */
+.navbar-link {
+  font-size: 1rem;
+  color: #ffffff;  /* Default text color */
+  padding: 0.5rem 1rem;
+  border-radius: 20px;  /* Rounded background */
+  transition: background-color 0.3s ease, color 0.3s ease; /* Smooth transitions */
+}
+
+/* Hover effect for navbar link */
+.navbar-link:hover {
+  background-color: #007bff;  /* Blue background color */
+  color: white;  /* Change text color to white */
+  font-weight: bold;  /* Make text bold on hover */
+}
+
+.navbar {
+  background-color: #000; /* Black background */
+  color: #fff; /* White text */
+  display: flex;
+  justify-content: space-between; /* Space between major navbar sections */
+  padding: 0 20px; /* Padding on the sides */
+}
+
+.navbar-link {
+  padding: 10px 15px; /* More padding around links */
+  margin: 0 10px; /* Space between links */
+  white-space: nowrap; /* Prevents text wrapping */
+}
+
+.navbar-container {
+  position: relative;
+  z-index: 30; /* Higher than most other content */
+}
+
+.search-bar {
+  padding: 8px 10px;
+}
+
+.profile-info {
+  display: flex;
+  align-items: center; /* Center align the profile elements */
+  padding: 10px;
+}
+
+/* You might add media queries to adjust for smaller screens */
+@media (max-width: 768px) {
+  .navbar-link, .search-bar, .profile-info {
+    padding: 5px 10px;
+  }
+}
+
+/* =====================
+UNIVERSITY 
+===================== */
+
+.university-page {
+  font-family: 'Arial', sans-serif;
+  line-height: 1.6;
+  color: #ccc; /* Lighter text for readability on dark backgrounds */
+  background-color: #000000; /* Dark background for the whole page */
+}
+
+.university-hero {
+  background-color: #000000; /* Slightly lighter dark shade for the hero section */
+  color: #fff; /* White text for contrast */
+  padding: 50px 20px;
+  text-align: center;
+}
+
+.university-hero .content {
+  max-width: 600px;
+  margin: auto;
+}
+
+.university-hero h1 {
+  font-size: 2.5rem;
+  margin-bottom: 20px;
+}
+
+.university-hero p {
+  font-size: 1.2rem;
+  margin-bottom: 20px;
+}
+
+.features-container {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  padding: 40px;
+}
+
+.feature {
+  background: #000000; /* Dark grey for feature cards */
+  padding: 20px;
+  border-radius: 10px;
+}
+
+.feature h2 {
+  font-size: 1.5rem;
+  color: #66ccff; /* Light blue for headings to add some color */
+}
+
+.feature p {
+  color: #ddd; /* Light grey for paragraph text */
+}
+
+.call-to-action {
+  background-color: #333; /* Dark background for call to action */
+  color: white;
+  text-align: center;
+  padding: 40px 20px;
+  margin-top: 20px;
+}
+
+.call-to-action h2 {
+  font-size: 2rem;
+  margin-bottom: 20px;
+}
+
+.call-to-action p {
+  font-size: 1.2rem;
+  margin-bottom: 20px;
+}
+
+.btn {
+  background-color: #43cc47; /* Green button for actions */
+  color: white;
+  padding: 10px 20px;
+  text-decoration: none;
+  border-radius: 5px;
+}
+
+.btn:hover {
+  background-color: #019e09; /* Darker green on hover */
+  transition: background-color 0.3s;
+}
+
+/* =====================
+ChatBOT 
+===================== */
+
+/* Ensures the navbar blends into the background or is hidden */
+.navbar {
+  background: transparent; /* or 'display: none;' to hide */
+  box-shadow: none;
+  overflow: visible;
+  z-index: 40;
+  color: black; /* Adjust color to match the design */
+}
+
+/* Centers the chat window vertically and horizontally with increased padding and centered text */
+.chat-window {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60%; /* Responsive width */
+  max-width: 750px; /* Maximum width */
+  min-width: 300px; /* Minimum width */
+  height: auto;
+  padding: 20px; /* Padding inside the chat window */
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2); /* More prominent shadow */
+  text-align: center; /* Center the text inside the chat window */
+  border-radius: 20px; /* More rounded corners */
+  /* background: #FFFFFF; Solid white background */
+}
+
+/* Styling for the button to make it more prominent */
+.begin-button {
+  padding: 10px 20px;
+  font-size: 16px;
+  color: #ffffff;
+  background-color: #3ac566;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-top: 20px; /* Space above the button */
+  transition: background-color 0.3s ease; /* Smooth transition for hover effect */
+}
+
+.begin-button:hover {
+  background-color: #0056b3; /* Darker blue on hover */
+}
+
+/* Additional media queries for responsiveness */
+@media (max-width: 768px) {
+  .chat-window {
+    width: 80%; /* Takes more width on smaller screens */
+  }
+}
+
+
+/* ===================
+Footer
+=================== */
+
+.footer {
+  position: relative;  /* Fix footer to the bottom of the screen */
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  padding: 20px 10%;
+  background-color: #FFF;  /* White background */
+  font-family: 'Poppins', sans-serif;  /* Consistent font with the rest of the page */
+  color: #333;  /* Grey color for text for better readability */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);  /* Subtle shadow for depth */
+  z-index: 50;  /* Ensure it is above most content but below modal/pop-up windows */
+}
+
+.footer-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.footer-brand, .footer-newsletter, .footer-social, .footer-legal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.footer-newsletter, .footer-social {
+  flex: 1;  /* Flex grow to take available space */
+}
+
+.email-form {
+  display: flex;
+  align-items: center;
+  font-size: 10px;  /* Increased font size for better readability */
+}
+
+.social-links {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.social-links a {
+  margin: 0 15px;
+  font-size: 24px;  /* Large icons for better visibility */
+  color: #333;  /* Dark color for icons for consistency */
+}
+
+.email-form input[type="email"], .email-form button {
+  padding: 10px;
+  margin-right: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 12px;  /* Larger font size for readability */
+}
+
+.email-form button {
+  background-color: #007bff;  /* Blue background for button */
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size:12px;
+  transition: background-color 0.3s ease;  /* Smooth transition for hover effect */
+}
+
+.email-form button:hover {
+  background-color: #0056b3;  /* Darker blue on hover */
+}
+
+.legal-links a {
+  font-size: 10px;
+  padding: 10px 10px;
+  color: #666;
+  text-decoration: none;
+  margin-top: 20px;  /* Spacing above legal links */
+}
+
+.legal-links a:hover {
+  text-decoration: underline;
+}
+
+.footer-logo {
+  font-size: 24px;
+  font-weight: bold;
+  background: linear-gradient(to right, teal, blue);
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+@media (max-width: 768px) {
+  .blog-list {
+    @apply grid-cols-1;  /* Single column layout on small screens */
+  }
+}
+
+
+/* ================
+QuestionCard:
+================ */
+
+/* CommunityPage.css */
+.columns {
+  column-count: 3;
+  column-gap: 1rem;
+}
+
+@media (max-width: 768px) {
+  .columns {
+    column-count: 2;
+  }
+}
+
+@media (max-width: 480px) {
+  .columns {
+    column-count: 1;
+  }
+}
+/* 
+=================
+Modal:
+================= */
+.modal-content {
+  display: flex;
+  justify-content: space-between;  /* Distributes space evenly between the columns */
+  padding: 20px;
+  box-shadow: 0 8px 8px rgba(52, 48, 48, 0.1);
+}
+
+
+
+.modal-column {
+  flex: 1;  /* Each column takes equal width */
+  margin-right: 20px;  /* Adds space between columns */
+}
+
+.modal-column:last-child {
+  margin-right: 0;  /* Removes margin from the last column */
+}
+
+@media (max-width: 768px) {
+  .modal-content {
+    flex-direction: column;  /* Stacks columns vertically on small screens */
+  }
+  .modal-column {
+    margin-right: 0;  /* Remove margin for mobile view */
+  }
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  /* z-index: 9999; Ensure the z-index is high */
+  z-index: 10000; /* Lower than the dropdown, but above content */
+}
+
+.modal-content {
+  position: relative;
+  background-color: white;
+  padding: 20px;
+  border-radius: 10px;
+  width: 500px;
+  z-index: 10001; /* This must be higher than the card elements */
+  box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.card {
+  position: relative;
+  z-index: 20; /* Set a lower z-index for cards to ensure dropdown stays on top */
+}
+
+/* Container Overflow Control */
+.container, .page-container {
+  overflow: visible !important;
+}
+
+/* Navbar and dropdown styling */
+.navbar {
+  z-index: 20; /* Ensures Navbar is above most content */
+  overflow: visible; /* Allow dropdown to extend outside */
+  position: relative; /* Set position relative for dropdown positioning */
+}
+
+.dropdown-content {
+  position: absolute;
+  right: 10px;
+  top: 60px;
+  background-color: white;
+  width: 250px;
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1);
+  overflow: visible;
+  z-index: 100; /* Ensures dropdown stays on top */
+}
+/* General styling for LandingPage to avoid overflow issues */
+.landing-page {
+  overflow: visible;
+  position: relative;
+  z-index: 1;
+}
+
+/* Ensuring modal components have lower z-index */
+.modal-overlay {
+  z-index: 30; /* Lower than dropdown but above content */
+}
+
+.animation-content {
+  overflow: hidden;
+  position: relative;
+  z-index: 1; /* Lower than Navbar but above content background */
+}
+.landing-page {
+  overflow: visible;
+  position: relative;
+  z-index: 10;
+}
+
+.navbar-container, .dropdown-content {
+  position: relative;
+  z-index: 50; /* Ensure these stay above background and SplineGlobe */
+}
+
+
+.btn-primary {
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  border-radius: 5px;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.btn-primary:hover {
+  background-color: #0056b3;
+}
+
+
+/* ---------- Design tokens (Tailwind v4) ---------- */
+@theme {
+  --color-obsidian: #0b0b0c;
+  --color-carbon:   #111215;
+
+  --color-text:      #e5e7eb;  /* default body text */
+  --color-text-mid:  #94a3b8;  /* muted text */
+  --color-glass:     rgba(255 255 255 / 0.06);
+  --color-glass-bdr: rgba(255 255 255 / 0.10);
+  --color-edge-cyan: #22d3ee;
+}
+
+/* ---------- Base ---------- */
+@layer base {
+  :root{
+    --text-mid: var(--color-text-mid);
+    --bg-carbon: var(--color-carbon);
+    --glass-border: var(--color-glass-bdr);
+    --edge-cyan: var(--color-edge-cyan);
+  }
+
+  body { @apply bg-[var(--color-obsidian)] text-[var(--color-text)] antialiased; }
+}
+
+/* ---------- Components used by LandingPage ---------- */
+@layer components {
+  .body-obsidian { @apply bg-[var(--color-obsidian)] text-[var(--color-text)]; }
+
+  .edge-panel {
+    @apply rounded-2xl border border-white/10
+           bg-[var(--color-carbon)]/95 backdrop-blur
+           shadow-[0_0_0_1px_rgba(255,255,255,0.04)];
+  }
+
+  .btn-metal {
+    @apply inline-flex items-center gap-2 rounded-xl
+           bg-primary-600 px-5 py-3 font-medium text-white
+           hover:bg-primary-500 active:scale-[.99] transition;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 rounded-xl
+           border border-white/15 bg-white/5 px-5 py-3 font-medium text-white
+           hover:bg-white/10;
+  }
+
+  .edge-accent { @apply text-[--text-mid]; }
+}

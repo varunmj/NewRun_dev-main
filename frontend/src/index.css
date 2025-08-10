@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+/* Your design tokens (you can tweak) */
+:root {
+  --bg: #0b0b0c;
+  --text: #e5e7eb;
+  --text-mid: #9ca3af;
+  --edge-cyan: 0 212 255;
+  --glass: 255 255 255 / 0.06;
+  --glass-border: 255 255 255 / 0.12;
+  --primary: #2563eb; /* blue-600 as default primary */
+}
+
+/* Quick helpers used in your page */
+.body-obsidian { background: var(--bg); color: var(--text); }
+
+/* Reusable UI bits */
+@layer utilities {
+  .edge-panel {
+    @apply rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur;
+  }
+  .btn-metal {
+    @apply inline-flex items-center gap-2 rounded-xl px-4 py-2 font-medium text-white ring-1 ring-white/10;
+    background: linear-gradient(180deg, #3b82f6, #1e40af);
+  }
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 rounded-xl px-4 py-2 font-medium text-white/90 ring-1 ring-white/10 hover:bg-white/10;
+  }
+  .edge-accent { color: rgb(var(--edge-cyan)); }
+}
+
+
+@layer utilities {
+  .bg-primary { background-color: var(--primary); }
+  .text-primary { color: var(--primary); }
+}
