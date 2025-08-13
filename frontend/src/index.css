@@ -77,3 +77,12 @@
   background: radial-gradient(40% 80% at 50% 100%, rgba(99,102,241,.35), transparent 60%),
               linear-gradient(90deg, rgba(34,211,238,.25), rgba(99,102,241,.25));
 }
+
+
+/* small utility used above */
+.bg-white\/6 { background-color: rgba(255,255,255,.06); }
+.bg-white\/8 { background-color: rgba(255,255,255,.08); }
+.bg-white\/12 { background-color: rgba(255,255,255,.12); }
+
+html, body, #root { height: 100%; }
+body { background-color: #0b0c10; }

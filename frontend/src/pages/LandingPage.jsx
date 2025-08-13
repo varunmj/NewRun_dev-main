@@ -9,6 +9,7 @@ import Footer from "../components/Footer/Footer";
 import SplineGlobe from "../components/Globe/SplineGlobe";
 import ProcessSection from "../components/Sections/ProcessSection";
 import AnimatedFeatureGrid from "../components/Showcase/AnimatedFeatureGrid";
+import NewRunServices from "../components/Process/NewRunServices";
 
 
 import meshHero from "../assets/Graphics/mesh-hero.png";
@@ -156,7 +157,8 @@ export default function LandingPage() {
         </div>
       </section> */}
       {/* <ProcessSection /> */}
-      <AnimatedFeatureGrid />
+      {/* <AnimatedFeatureGrid /> */}
+      <NewRunServices />
 
       {/* FEATURES */}
       <section id="features" className="w-full">
