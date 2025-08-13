@@ -86,3 +86,8 @@
 
 html, body, #root { height: 100%; }
 body { background-color: #0b0c10; }
+
+/* Script wordmark */
+.brand-script {
+  font-family: "Pacifico", ui-rounded, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+}
