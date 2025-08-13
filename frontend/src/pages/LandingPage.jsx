@@ -7,6 +7,9 @@ import Lenis from "@studio-freight/lenis";
 import Navbar from "../components/Navbar/Navbar";
 import Footer from "../components/Footer/Footer";
 import SplineGlobe from "../components/Globe/SplineGlobe";
+import ProcessSection from "../components/Sections/ProcessSection";
+import AnimatedFeatureGrid from "../components/Showcase/AnimatedFeatureGrid";
+
 
 import meshHero from "../assets/Graphics/mesh-hero.png";
 import heroVideo from "../assets/Videos/hero/campus-arrival.mp4";
@@ -120,7 +123,7 @@ export default function LandingPage() {
       </section>
 
       {/* HOW IT WORKS */}
-      <section className="relative z-10 mx-auto max-w-7xl px-6 py-24">
+      {/* <section className="relative z-10 mx-auto max-w-7xl px-6 py-24">
         <motion.h2
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -151,7 +154,9 @@ export default function LandingPage() {
             </motion.div>
           ))}
         </div>
-      </section>
+      </section> */}
+      {/* <ProcessSection /> */}
+      <AnimatedFeatureGrid />
 
       {/* FEATURES */}
       <section id="features" className="w-full">
