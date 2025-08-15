@@ -97,7 +97,7 @@ io.on('connection', (socket) => {
 //Create Account API:
 app.post("/create-account", async(req,res)=>{
 
-    const {firstName,lastName,email,password } = req.body;
+    let { firstName, lastName, email, password, username } = req.body;
 
     if (!firstName){
         return res
@@ -123,6 +123,16 @@ app.post("/create-account", async(req,res)=>{
         .json({error:true, message:"Password is required"});
     }
 
+    email = String(email).toLowerCase().trim();
+    if (username) username = String(username).toLowerCase().trim();
+
+    if (username) {
+      const userByUsername = await User.findOne({ username });
+      if (userByUsername) {
+      return res.status(400).json({ error: true, message: "Username already taken" });
+      }
+    }
+
     const isUser = await User.findOne({email:email});
 
     if(isUser){
@@ -139,6 +149,7 @@ app.post("/create-account", async(req,res)=>{
         lastName,
         email,
         password,
+        username
     });
 
     await user.save();

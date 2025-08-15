@@ -5,6 +5,7 @@ const userSchema = new Schema({
   firstName: { type: String, required: true }, // Mandatory
   lastName: { type: String, required: true }, // Mandatory
   email: { type: String, required: true, unique: true }, // Login relies on this
+  username: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
   password: { type: String, required: true }, // Login relies on this
   currentLocation: { type: String, default: '' }, // New optional field
   hometown: { type: String, default: '' }, // New optional field

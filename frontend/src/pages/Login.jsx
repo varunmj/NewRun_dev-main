@@ -92,8 +92,8 @@ export default function Login() {
     setError("");
     try {
       const res = await axiosInstance.post("/login", {
-        identifier, // backend can accept email or username
-        password,
+      email: identifier.trim(),
+      password,
       });
       if (res?.data?.error) {
         setError(res.data.message || "Invalid credentials.");
