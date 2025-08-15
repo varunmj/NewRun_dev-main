@@ -211,11 +211,13 @@ app.post("/create-account", async(req,res)=>{
 // });
 
 app.post('/login', async (req, res) => {
-  const { email, password } = req.body;
+  let { identifier, email, password } = req.body;
 
-  if (!email) {
-    return res.status(400).json({ message: 'Email address is required' });
-  }
+  if (!identifier && email) identifier = email;
+
+  if (!identifier) {
+      return res.status(400).json({ message: 'Email or username is required' });
+    }
 
   if (!password) {
     return res.status(400).json({ message: 'Password is required' });
@@ -223,7 +225,10 @@ app.post('/login', async (req, res) => {
 
   try {
     // Fetch only the fields needed for login
-    const userInfo = await User.findOne({ email }, 'email password firstName lastName');
+    const query = identifier.includes("@")
+      ? { email: identifier.toLowerCase().trim() }
+      : { username: identifier.toLowerCase().trim() };
+    const userInfo = await User.findOne(query, 'email username password firstName lastName');
 
     if (!userInfo) {
       return res.status(400).json({ message: 'User not found' });
@@ -239,6 +244,7 @@ app.post('/login', async (req, res) => {
         error: false,
         message: 'Login Successful',
         email,
+        identifier,
         accessToken,
       });
     } else {
