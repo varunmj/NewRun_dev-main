@@ -22,6 +22,7 @@ import ChatbotUI from './components/ChatBotUI/ChatbotUI';
 import Welcome from './pages/welcomepage';
 import MessagingPage from './pages/MessagingPage';
 import Roommate from './pages/Roommate';
+import Waitlist from "./pages/Waitlist";
 import OnboardingFlow from "./onboarding/OnboardingFlow";
 // guards
 import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
@@ -128,6 +129,7 @@ const App = () => {
           />
 
           <Route path="/onboarding" element={<OnboardingFlow />} />
+          <Route path="/waitlist" element={<Waitlist />} />
 
           {/* Catch-all → home (prevents blank screens) */}
           <Route path="*" element={<Navigate to="/home" replace />} />
