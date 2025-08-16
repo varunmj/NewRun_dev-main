@@ -493,6 +493,181 @@ app.get("/get-all-property", async (req, res) => {
   }
 });
 
+// ===== Properties v2 (read-only) =====
+const { Types } = require("mongoose");
+
+/**
+ * GET /v2/properties
+ * Query params:
+ *  - universityId (string)
+ *  - q (string, search title/description/address)
+ *  - minPrice, maxPrice (numbers)
+ *  - beds (number)          // bedrooms exact
+ *  - furnished (true|false) // if your schema has it; ignored otherwise
+ *  - availableFrom (ISO)    // >= this date; ignored if schema lacks it
+ *  - sort=createdAt|price|distance (default: createdAt)
+ *  - order=asc|desc (default: desc)
+ *  - cursor (last _id from previous page)
+ *  - limit (default 24, max 50)
+ */
+app.get("/v2/properties", async (req, res) => {
+  try {
+    const {
+      universityId,
+      q,
+      minPrice,
+      maxPrice,
+      beds,
+      furnished,
+      availableFrom,
+      sort = "createdAt",
+      order = "desc",
+      cursor,
+      limit = 24,
+    } = req.query;
+
+    const lim = Math.min(Math.max(parseInt(limit, 10) || 24, 1), 50);
+
+    const filter = {};
+    if (universityId) filter.universityId = universityId;
+
+    if (minPrice || maxPrice) {
+      filter.price = {};
+      if (minPrice) filter.price.$gte = Number(minPrice);
+      if (maxPrice) filter.price.$lte = Number(maxPrice);
+    }
+
+    if (beds) filter.bedrooms = Number(beds);
+
+    // only apply if your Property schema actually has these fields
+    if (typeof furnished !== "undefined") {
+      if (furnished === "true" || furnished === true) filter.furnished = true;
+      if (furnished === "false" || furnished === false) filter.furnished = false;
+    }
+    if (availableFrom) filter.availableFrom = { $gte: new Date(availableFrom) };
+
+    if (q && q.trim()) {
+      const rx = new RegExp(q.trim(), "i");
+      filter.$or = [
+        { title: rx },
+        { description: rx },
+        { address: rx },
+        // fallback if you stored content in "content" earlier
+        { content: rx },
+      ];
+    }
+
+    // Cursor by _id (monotonic). We’ll sort by a real field for UX, but gate by _id.
+    const cursorCond = {};
+    if (cursor && Types.ObjectId.isValid(cursor)) {
+      cursorCond._id = order === "asc" ? { $gt: new Types.ObjectId(cursor) } : { $lt: new Types.ObjectId(cursor) };
+    }
+
+    // Compose final query
+    const query = Property.find({ ...filter, ...cursorCond });
+
+    // Select only what the grid needs; adjust if you want more/less
+    query.select(
+      "title price bedrooms bathrooms distanceFromUniversity address images isVerified createdAt likes"
+    );
+
+    // Sort
+    const sortField = ["createdAt", "price", "distance"].includes(sort) ? sort : "createdAt";
+    const sortObj = {};
+    sortObj[sortField] = order === "asc" ? 1 : -1;
+    // tie-breaker to keep pagination stable
+    sortObj._id = order === "asc" ? 1 : -1;
+
+    query.sort(sortObj).limit(lim + 1); // fetch one extra to know if there's a next page
+
+    const docs = await query.lean();
+
+    // Build response with cursor
+    const hasMore = docs.length > lim;
+    const items = hasMore ? docs.slice(0, lim) : docs;
+
+    const nextCursor = hasMore ? String(items[items.length - 1]._id) : null;
+
+    // Normalize likesCount and thumbnail
+    const normalized = items.map((p) => ({
+      _id: p._id,
+      title: p.title,
+      price: p.price,
+      bedrooms: p.bedrooms,
+      bathrooms: p.bathrooms,
+      distanceFromUniversity: p.distanceFromUniversity,
+      address: p.address,
+      isVerified: p.isVerified || false,
+      createdAt: p.createdAt,
+      likesCount: Array.isArray(p.likes) ? p.likes.length : p.likesCount || 0,
+      // slap a safe thumbnail (first image string) if present
+      thumbnail: Array.isArray(p.images) && p.images.length ? p.images[0] : null,
+    }));
+
+    return res.json({
+      error: false,
+      items: normalized,
+      nextCursor,
+    });
+  } catch (err) {
+    console.error("GET /v2/properties error:", err);
+    return res.status(500).json({ error: true, message: "Internal Server Error" });
+  }
+});
+
+/**
+ * GET /v2/properties/:id
+ * Returns detail including a few more images and basic owner info.
+ */
+app.get("/v2/properties/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: true, message: "Invalid id" });
+    }
+
+    const doc = await Property.findById(id)
+      .populate("userId", "firstName lastName email") // show safe host fields
+      .lean();
+
+    if (!doc) return res.status(404).json({ error: true, message: "Property not found" });
+
+    return res.json({
+      error: false,
+      property: {
+        _id: doc._id,
+        title: doc.title,
+        description: doc.description || doc.content, // backwards-compat
+        price: doc.price,
+        bedrooms: doc.bedrooms,
+        bathrooms: doc.bathrooms,
+        sqft: doc.sqft,
+        furnished: doc.furnished,
+        leaseLength: doc.leaseLength,
+        availableFrom: doc.availableFrom,
+        pets: doc.pets,
+        address: doc.address,
+        distanceFromUniversity: doc.distanceFromUniversity,
+        images: Array.isArray(doc.images) ? doc.images : [],
+        isVerified: doc.isVerified || false,
+        createdAt: doc.createdAt,
+        likesCount: Array.isArray(doc.likes) ? doc.likes.length : doc.likesCount || 0,
+        host: doc.userId
+          ? {
+              id: doc.userId._id,
+              name: `${doc.userId.firstName || ""} ${doc.userId.lastName || ""}`.trim(),
+              email: doc.userId.email,
+            }
+          : null,
+      },
+    });
+  } catch (err) {
+    console.error("GET /v2/properties/:id error:", err);
+    return res.status(500).json({ error: true, message: "Internal Server Error" });
+  }
+});
+
+
 
 //Delete property API:
 app.delete("/delete-property/:propertyId",authenticateToken,async(req,res)=>{
