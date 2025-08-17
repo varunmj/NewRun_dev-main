@@ -64,7 +64,7 @@ export default function PropertyCard({ property }) {
 
   return (
     <Link
-      to={`/property/${_id}`}
+      to={`/properties/${_id}`}
       className="group block overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-[0_20px_60px_-20px_rgba(0,0,0,.5)] transition-transform hover:-translate-y-0.5"
     >
       {/* image */}

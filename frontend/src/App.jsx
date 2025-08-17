@@ -130,6 +130,7 @@ const App = () => {
 
           <Route path="/onboarding" element={<OnboardingFlow />} />
           <Route path="/waitlist" element={<Waitlist />} />
+          {/* <Route path="/property/:id" element={<PropertyDetails />} /> */}
 
           {/* Catch-all → home (prevents blank screens) */}
           <Route path="*" element={<Navigate to="/home" replace />} />
