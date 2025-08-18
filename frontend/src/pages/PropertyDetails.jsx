@@ -1,15 +1,10 @@
+// src/pages/PropertyDetailPage.jsx
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axiosInstance from "../utils/axiosInstance";
 import Navbar from "../components/Navbar/Navbar";
 import { FaWhatsapp, FaEnvelope } from "react-icons/fa";
-import {
-  GoogleMap,
-  Marker,
-  DirectionsService,
-  DirectionsRenderer,
-  InfoWindow,
-} from "@react-google-maps/api";
+import { GoogleMap, Marker, DirectionsRenderer, InfoWindow } from "@react-google-maps/api";
 import { MdChevronLeft, MdChevronRight, MdClose } from "react-icons/md";
 import { AiFillHeart, AiOutlineHeart } from "react-icons/ai";
 import default_property_image from "../assets/Images/default-property-image.jpg";
@@ -23,7 +18,7 @@ const MAP_OPTIONS = {
   fullscreenControl: false,
 };
 
-// ===== helpers =====
+/* ----------------------------- helpers ----------------------------- */
 const money = (n) =>
   typeof n === "number" ? n.toLocaleString("en-US") : String(n || "");
 
@@ -46,6 +41,16 @@ const geocode = (query) =>
     });
   });
 
+const maskEmail = (e = "") => {
+  if (!e.includes("@")) return e;
+  const [user, domain] = e.split("@");
+  if (!user) return e;
+  return `${user[0]}•••@${domain}`;
+};
+
+const maskPhone = (p = "") => p.replace(/\d(?=\d{4})/g, "*"); // keep last 4 digits
+
+/* ---------------------------- component ---------------------------- */
 export default function PropertyDetailPage() {
   const { id } = useParams();
   const nav = useNavigate();
@@ -71,7 +76,12 @@ export default function PropertyDetailPage() {
   const [directions, setDirections] = useState(null);
   const [showInfo, setShowInfo] = useState(false);
 
-  // custom markers (created only when API is ready)
+  // reveal modal state
+  const [revealOpen, setRevealOpen] = useState(false);
+  const [revealed, setRevealed] = useState(null);
+  const [revealing, setRevealing] = useState(false);
+
+  // custom markers
   const PROPERTY_ICON = useMemo(() => {
     if (!isLoaded) return undefined;
     return {
@@ -150,12 +160,11 @@ export default function PropertyDetailPage() {
     fetchProperty();
   }, [fetchProperty]);
 
-  // compute geocodes → directions
+  // geocodes → directions
   useEffect(() => {
     if (!isLoaded || !property) return;
 
     const propAddr = addressLine(property.address);
-    // Pick a specific, unambiguous campus string.
     const campusQuery =
       property.campusName ||
       "NIU College of Business, Barsema Hall, DeKalb, IL 60115";
@@ -216,20 +225,38 @@ export default function PropertyDetailPage() {
     }
   };
 
+  // reveal full contact once (if backend supports it)
+  const requestReveal = async () => {
+    try {
+      setRevealing(true);
+      const { data } = await axiosInstance.post("/contacts/reveal", {
+        propertyId: property._id,
+      });
+      setRevealed(data?.contact || null);
+    } catch (e) {
+      alert(
+        e?.response?.data?.message ||
+          "Direct contact reveal is not available yet. Please use in-app messaging."
+      );
+    } finally {
+      setRevealing(false);
+    }
+  };
+
   // gallery helpers
   const openModal = (i) => {
     setIdx(i);
     setIsModalOpen(true);
   };
 
-  if (loading) return <p>Loading…</p>;
-  if (err) return <p className="text-red-400">{err}</p>;
+  if (loading) return <p className="min-h-screen bg-[#0b0c0f] text-white p-6">Loading…</p>;
+  if (err) return <p className="min-h-screen bg-[#0b0c0f] text-red-400 p-6">{err}</p>;
 
   const contact = property.contactInfo || {};
   const imgs = Array.isArray(property.images) ? property.images : [];
 
   return (
-    <div>
+    <div className="min-h-screen bg-[#0b0c0f] text-white">
       <Navbar />
 
       <div className="container mx-auto py-10">
@@ -274,35 +301,33 @@ export default function PropertyDetailPage() {
 
           {/* RIGHT: details */}
           <div className="space-y-6">
-            <h1 className="text-4xl font-bold">{property.title}</h1>
-            <p className="text-2xl font-semibold text-white/90">
-              {`USD $${money(property.price)}`}
-            </p>
+            <h1 className="text-4xl font-bold text-white">{property.title}</h1>
+            <p className="text-2xl font-semibold text-white/90">{`USD $${money(property.price)}`}</p>
             <p className="text-lg text-white/70">{property.description}</p>
 
-            <div className="flex items-center gap-4">
+            {/* CTA row */}
+            <div className="flex items-center gap-3">
               <button
-                className={`p-2 rounded-full transition ${
-                  likedByUser ? "bg-red-500" : "bg-white/20"
-                }`}
+                className={`p-2 rounded-full transition ${likedByUser ? "bg-red-500" : "bg-white/20"}`}
                 onClick={toggleLike}
                 title="Like"
               >
-                {likedByUser ? (
-                  <AiFillHeart className="text-white" />
-                ) : (
-                  <AiOutlineHeart className="text-red-500" />
-                )}
+                {likedByUser ? <AiFillHeart className="text-white" /> : <AiOutlineHeart className="text-red-500" />}
               </button>
-              <span className="text-white/70">
-                {likesCount} {likesCount === 1 ? "Like" : "Likes"}
-              </span>
+              <span className="text-white/70">{likesCount} {likesCount === 1 ? "Like" : "Likes"}</span>
 
               <button
-                className="ml-auto bg-black text-white py-2 px-4 rounded-lg font-semibold hover:bg-neutral-800 transition"
+                className="ml-auto rounded-lg bg-violet-600 px-4 py-2 font-semibold text-white hover:bg-violet-500 transition"
                 onClick={startDM}
               >
-                Contact – {contact.name || "Owner"}
+                Message host
+              </button>
+
+              <button
+                className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-white/90 hover:bg-white/10 transition"
+                onClick={() => { setRevealOpen(true); setRevealed(null); }}
+              >
+                Request phone / email
               </button>
             </div>
 
@@ -316,17 +341,11 @@ export default function PropertyDetailPage() {
               </p>
               <p>
                 <strong className="text-white/90">Location:</strong>{" "}
-                <span className="text-white/70">
-                  {addressLine(property.address) || "N/A"}
-                </span>
+                <span className="text-white/70">{addressLine(property.address) || "N/A"}</span>
               </p>
               <p>
-                <strong className="text-white/90">
-                  Distance from University:
-                </strong>{" "}
-                <span className="text-white/70">
-                  {property.distanceFromUniversity || "N/A"} miles
-                </span>
+                <strong className="text-white/90">Distance from University:</strong>{" "}
+                <span className="text-white/70">{property.distanceFromUniversity || "N/A"} miles</span>
               </p>
               <p>
                 <strong className="text-white/90">Bedrooms:</strong>{" "}
@@ -337,31 +356,33 @@ export default function PropertyDetailPage() {
                 <span className="text-white/70">{property.bathrooms || "N/A"}</span>
               </p>
 
-              {/* contact */}
-              <div className="grid grid-cols-3 gap-6 pt-6">
-                <div>
-                  <p className="font-bold text-white/90">Contact Name</p>
-                  <p className="text-white/70">{contact.name || "N/A"}</p>
-                </div>
-                <div>
-                  <p className="font-bold text-white/90">Contact Phone</p>
-                  <div className="flex items-center gap-2">
-                    <FaWhatsapp className="text-emerald-400" />
-                    <span className="text-white/70 whitespace-nowrap">
-                      {contact.phone || "N/A"}
-                    </span>
+              {/* masked contact preview (no scraping value) */}
+              {(contact.email || contact.phone || contact.name) && (
+                <div className="mt-4 grid grid-cols-3 gap-6">
+                  <div>
+                    <p className="font-bold text-white/90">Host</p>
+                    <p className="text-white/70">{contact.name || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="font-bold text-white/90">Phone (masked)</p>
+                    <div className="flex items-center gap-2">
+                      <FaWhatsapp className="text-emerald-400" />
+                      <span className="text-white/70 whitespace-nowrap">
+                        {contact.phone ? maskPhone(contact.phone) : "—"}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="font-bold text-white/90">Email (masked)</p>
+                    <div className="flex items-center gap-2">
+                      <FaEnvelope className="text-sky-400" />
+                      <span className="text-white/70 whitespace-nowrap">
+                        {contact.email ? maskEmail(contact.email) : "—"}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="font-bold text-white/90">Contact Email</p>
-                  <div className="flex items-center gap-2">
-                    <FaEnvelope className="text-sky-400" />
-                    <span className="text-white/70 whitespace-nowrap">
-                      {contact.email || "N/A"}
-                    </span>
-                  </div>
-                </div>
-              </div>
+              )}
 
               {/* ====== MAP ====== */}
               <div className="mt-8 relative">
@@ -376,38 +397,28 @@ export default function PropertyDetailPage() {
                       <DirectionsRenderer
                         directions={directions}
                         options={{
-                          suppressMarkers: true, // we render custom pins
-                          polylineOptions: {
-                            strokeColor: "#2f64ff",
-                            strokeWeight: 6,
-                          },
+                          suppressMarkers: true,
+                          polylineOptions: { strokeColor: "#2f64ff", strokeWeight: 6 },
                         }}
                       />
                     )}
 
                     {originLL && (
-                      <Marker
-                        position={originLL}
-                        icon={PROPERTY_ICON}
-                        onClick={() => setShowInfo((s) => !s)}
-                      />
+                      <Marker position={originLL} icon={PROPERTY_ICON} onClick={() => setShowInfo((s) => !s)} />
                     )}
                     {campusLL && <Marker position={campusLL} icon={CAMPUS_ICON} />}
 
                     {showInfo && originLL && (
-                      <InfoWindow
-                        position={originLL}
-                        onCloseClick={() => setShowInfo(false)}
-                      >
+                      <InfoWindow position={originLL} onCloseClick={() => setShowInfo(false)}>
                         <div style={{ minWidth: 180 }}>
-                          <div style={{ fontWeight: 600 }}>{property.title}</div>
-                          <div>USD ${money(property.price)}</div>
+                          <div style={{ fontWeight: 600, color: "#111827" }}>{property.title}</div>
+                          <div style={{ color: "#111827" }}>USD ${money(property.price)}</div>
                         </div>
                       </InfoWindow>
                     )}
                   </GoogleMap>
                 ) : (
-                  <p>Loading map…</p>
+                  <p className="text-white/70">Loading map…</p>
                 )}
 
                 {(originLL || campusLL) && (
@@ -416,9 +427,7 @@ export default function PropertyDetailPage() {
                       className="inline-block rounded-md bg-[#2f64ff] px-3 py-2 text-white hover:bg-[#2958e3]"
                       href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
                         `${originLL?.lat},${originLL?.lng}`
-                      )}&destination=${encodeURIComponent(
-                        `${campusLL?.lat},${campusLL?.lng}`
-                      )}`}
+                      )}&destination=${encodeURIComponent(`${campusLL?.lat},${campusLL?.lng}`)}`}
                       target="_blank"
                       rel="noreferrer"
                     >
@@ -436,18 +445,11 @@ export default function PropertyDetailPage() {
       {/* gallery modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <button
-            className="absolute top-5 right-5 text-white"
-            onClick={() => setIsModalOpen(false)}
-          >
+          <button className="absolute top-5 right-5 text-white" onClick={() => setIsModalOpen(false)}>
             <MdClose size={35} />
           </button>
           <div className="relative w-11/12 md:w-2/3 max-w-5xl">
-            <img
-              src={imgs[idx]}
-              alt={`Image ${idx + 1}`}
-              className="w-full h-auto rounded-lg shadow-lg"
-            />
+            <img src={imgs[idx]} alt={`Image ${idx + 1}`} className="w-full h-auto rounded-lg shadow-lg" />
             <button
               className="absolute left-0 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full"
               onClick={() => setIdx((i) => (i === 0 ? imgs.length - 1 : i - 1))}
@@ -460,6 +462,45 @@ export default function PropertyDetailPage() {
             >
               <MdChevronRight size={35} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* reveal contact modal */}
+      {revealOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#121318] p-5 text-white">
+            <div className="mb-2 text-lg font-semibold">Request host contact</div>
+            <p className="text-sm text-white/70">
+              To protect hosts from spam, we gate direct contact. Please use in-app messaging when possible.
+            </p>
+
+            <div className="mt-4 flex items-center gap-2">
+              <button
+                disabled={revealing}
+                className="rounded-lg bg-violet-600 px-4 py-2 font-medium text-white hover:bg-violet-500 disabled:opacity-60"
+                onClick={requestReveal}
+              >
+                {revealing ? "Requesting…" : "Reveal once"}
+              </button>
+              <button
+                className="rounded-lg border border-white/15 bg-white/5 px-4 py-2"
+                onClick={() => setRevealOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            {revealed && (
+              <div className="mt-4 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm">
+                {revealed.phone && <div>Phone: {revealed.phone}</div>}
+                {revealed.email && <div>Email: {revealed.email}</div>}
+                {!revealed.phone && !revealed.email && (
+                  <div>Direct contact currently unavailable. Please message the host in-app.</div>
+                )}
+                <div className="mt-2 text-white/60">Please keep communications on-platform when possible.</div>
+              </div>
+            )}
           </div>
         </div>
       )}

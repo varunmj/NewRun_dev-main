@@ -272,7 +272,7 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }) {
 
   useEffect(() => {
     if (!open || !initialUser) return;
-    const { season, year } = parseTerm(initial?.cohortTerm || "");
+    const { season, year } = parseTerm(initialUser?.cohortTerm || "");
     setCohortSeason(season);
     setCohortYear(year);
     setFirstName(initialUser.firstName || "");
@@ -289,7 +289,7 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }) {
     setCampusLabel(initialUser.campusLabel || "");
     setCampusDisplayName(initialUser.campusDisplayName || "");
     setCampusPlaceId(initialUser.campusPlaceId || "");
-  }, [open, initialUser,initial]);
+  }, [open, initialUser]);
 
   const onPlaceChanged = () => {
     if (!acRef.current) return;
@@ -468,16 +468,15 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }) {
             <div>
               {/* <label className="mb-1 block text-xs text-white/60">Cohort / Term</label> */}
               {/* Cohort / Term */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs text-white/60">Cohort / Term</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {/* Season */}
-                    <select
-                      value={cohortSeason}
-                      onChange={(e) => setCohortSeason(e.target.value)}
-                      className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
-                    >
+              <div>
+                <label className="mb-1 block text-xs text-white/60">Cohort / Term</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Season */}
+                  <select
+                    value={cohortSeason}
+                    onChange={(e) => setCohortSeason(e.target.value)}
+                    className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
+                  >
                       <option value="">Season</option>
                       <option value="Spring">Spring</option>
                       <option value="Summer">Summer</option>
@@ -499,12 +498,16 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }) {
                     </select>
                   </div>
                   <p className="mt-1 text-[11px] text-white/40">
-                    We’ll store it as <code>{cohortSeason && cohortYear ? `${cohortSeason} ${cohortYear}` : "Season YYYY"}</code>
-                    {" "}for routing and campus grouping.
+                    We’ll store it as{" "}
+                    <code>
+                      {cohortSeason && cohortYear ? `${cohortSeason} ${cohortYear}` : "Season YYYY"}
+                    </code>{" "}
+                    for routing and campus grouping.
                   </p>
                 </div>
 
-                {/* Campus label (unchanged, keep your current input/autocomplete here) */}
+                
+              {/* Campus label */}
                 <div>
                   <label className="mb-1 block text-xs text-white/60">
                     Campus label (e.g., NIU College of Business)
@@ -539,8 +542,11 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }) {
               <Autocomplete
                 onLoad={(ac) => (acRef.current = ac)}
                 onPlaceChanged={onPlaceChanged}
-                restrictions={{ country: ["us"] }}
-              >
+                options={{
+                fields: ["place_id", "name", "formatted_address"],
+                componentRestrictions: { country: "us" },
+                }}
+                >
                 <input
                   value={campusDisplayName}
                   onChange={(e) => setCampusDisplayName(e.target.value)}

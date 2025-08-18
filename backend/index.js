@@ -291,37 +291,43 @@ app.post('/login', async (req, res) => {
 
 // Updated Get User API
 app.get("/get-user", authenticateToken, async (req, res) => {
-  const { user } = req.user;
-
+  const payloadUser = req?.user?.user || req?.user; // support both token shapes
   try {
-      const isUser = await User.findOne({ _id: user._id });
+    const isUser = await User.findById(payloadUser._id);
+    if (!isUser) return res.sendStatus(401);
 
-      if (!isUser) {
-          return res.sendStatus(401);
-      }
+    return res.json({
+      user: {
+        _id: isUser._id,
+        firstName: isUser.firstName,
+        lastName: isUser.lastName,
+        email: isUser.email,
+        createdOn: isUser.createdOn,
 
-      // Include all required fields for the chatbot
-      return res.json({
-          user: {
-              firstName: isUser.firstName,
-              lastName: isUser.lastName,
-              email: isUser.email,
-              _id: isUser._id,
-              createdOn: isUser.createdOn,
-              currentLocation: isUser.currentLocation, // Include current location
-              hometown: isUser.hometown, // Include hometown
-              birthday: isUser.birthday, // Include birthday
-              university: isUser.university, // Include university name
-              major: isUser.major, // Include major
-              graduationDate: isUser.graduationDate, // Include graduation date
-          },
-          message: "",
-      });
+        currentLocation: isUser.currentLocation,
+        hometown: isUser.hometown,
+        birthday: isUser.birthday,
+
+        university: isUser.university,
+        major: isUser.major,
+        graduationDate: isUser.graduationDate,
+
+        // ✨ new fields
+        schoolDepartment:  isUser.schoolDepartment,
+        cohortTerm:        isUser.cohortTerm,
+        campusLabel:       isUser.campusLabel,
+        campusPlaceId:     isUser.campusPlaceId,
+        campusDisplayName: isUser.campusDisplayName,
+      },
+      message: "",
+    });
   } catch (error) {
-      console.error("Error retrieving user:", error);
-      res.status(500).json({ error: "Failed to fetch user data" });
+    console.error("Error retrieving user:", error);
+    res.status(500).json({ error: "Failed to fetch user data" });
   }
 });
+
+
 
 // Image upload API:
 // Route to handle image uploads
@@ -493,179 +499,6 @@ app.get("/get-all-property", async (req, res) => {
   }
 });
 
-// ===== Properties v2 (read-only) =====
-const { Types } = require("mongoose");
-
-/**
- * GET /v2/properties
- * Query params:
- *  - universityId (string)
- *  - q (string, search title/description/address)
- *  - minPrice, maxPrice (numbers)
- *  - beds (number)          // bedrooms exact
- *  - furnished (true|false) // if your schema has it; ignored otherwise
- *  - availableFrom (ISO)    // >= this date; ignored if schema lacks it
- *  - sort=createdAt|price|distance (default: createdAt)
- *  - order=asc|desc (default: desc)
- *  - cursor (last _id from previous page)
- *  - limit (default 24, max 50)
- */
-app.get("/v2/properties", async (req, res) => {
-  try {
-    const {
-      universityId,
-      q,
-      minPrice,
-      maxPrice,
-      beds,
-      furnished,
-      availableFrom,
-      sort = "createdAt",
-      order = "desc",
-      cursor,
-      limit = 24,
-    } = req.query;
-
-    const lim = Math.min(Math.max(parseInt(limit, 10) || 24, 1), 50);
-
-    const filter = {};
-    if (universityId) filter.universityId = universityId;
-
-    if (minPrice || maxPrice) {
-      filter.price = {};
-      if (minPrice) filter.price.$gte = Number(minPrice);
-      if (maxPrice) filter.price.$lte = Number(maxPrice);
-    }
-
-    if (beds) filter.bedrooms = Number(beds);
-
-    // only apply if your Property schema actually has these fields
-    if (typeof furnished !== "undefined") {
-      if (furnished === "true" || furnished === true) filter.furnished = true;
-      if (furnished === "false" || furnished === false) filter.furnished = false;
-    }
-    if (availableFrom) filter.availableFrom = { $gte: new Date(availableFrom) };
-
-    if (q && q.trim()) {
-      const rx = new RegExp(q.trim(), "i");
-      filter.$or = [
-        { title: rx },
-        { description: rx },
-        { address: rx },
-        // fallback if you stored content in "content" earlier
-        { content: rx },
-      ];
-    }
-
-    // Cursor by _id (monotonic). We’ll sort by a real field for UX, but gate by _id.
-    const cursorCond = {};
-    if (cursor && Types.ObjectId.isValid(cursor)) {
-      cursorCond._id = order === "asc" ? { $gt: new Types.ObjectId(cursor) } : { $lt: new Types.ObjectId(cursor) };
-    }
-
-    // Compose final query
-    const query = Property.find({ ...filter, ...cursorCond });
-
-    // Select only what the grid needs; adjust if you want more/less
-    query.select(
-      "title price bedrooms bathrooms distanceFromUniversity address images isVerified createdAt likes"
-    );
-
-    // Sort
-    const sortField = ["createdAt", "price", "distance"].includes(sort) ? sort : "createdAt";
-    const sortObj = {};
-    sortObj[sortField] = order === "asc" ? 1 : -1;
-    // tie-breaker to keep pagination stable
-    sortObj._id = order === "asc" ? 1 : -1;
-
-    query.sort(sortObj).limit(lim + 1); // fetch one extra to know if there's a next page
-
-    const docs = await query.lean();
-
-    // Build response with cursor
-    const hasMore = docs.length > lim;
-    const items = hasMore ? docs.slice(0, lim) : docs;
-
-    const nextCursor = hasMore ? String(items[items.length - 1]._id) : null;
-
-    // Normalize likesCount and thumbnail
-    const normalized = items.map((p) => ({
-      _id: p._id,
-      title: p.title,
-      price: p.price,
-      bedrooms: p.bedrooms,
-      bathrooms: p.bathrooms,
-      distanceFromUniversity: p.distanceFromUniversity,
-      address: p.address,
-      isVerified: p.isVerified || false,
-      createdAt: p.createdAt,
-      likesCount: Array.isArray(p.likes) ? p.likes.length : p.likesCount || 0,
-      // slap a safe thumbnail (first image string) if present
-      thumbnail: Array.isArray(p.images) && p.images.length ? p.images[0] : null,
-    }));
-
-    return res.json({
-      error: false,
-      items: normalized,
-      nextCursor,
-    });
-  } catch (err) {
-    console.error("GET /v2/properties error:", err);
-    return res.status(500).json({ error: true, message: "Internal Server Error" });
-  }
-});
-
-/**
- * GET /v2/properties/:id
- * Returns detail including a few more images and basic owner info.
- */
-app.get("/v2/properties/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: true, message: "Invalid id" });
-    }
-
-    const doc = await Property.findById(id)
-      .populate("userId", "firstName lastName email") // show safe host fields
-      .lean();
-
-    if (!doc) return res.status(404).json({ error: true, message: "Property not found" });
-
-    return res.json({
-      error: false,
-      property: {
-        _id: doc._id,
-        title: doc.title,
-        description: doc.description || doc.content, // backwards-compat
-        price: doc.price,
-        bedrooms: doc.bedrooms,
-        bathrooms: doc.bathrooms,
-        sqft: doc.sqft,
-        furnished: doc.furnished,
-        leaseLength: doc.leaseLength,
-        availableFrom: doc.availableFrom,
-        pets: doc.pets,
-        address: doc.address,
-        distanceFromUniversity: doc.distanceFromUniversity,
-        images: Array.isArray(doc.images) ? doc.images : [],
-        isVerified: doc.isVerified || false,
-        createdAt: doc.createdAt,
-        likesCount: Array.isArray(doc.likes) ? doc.likes.length : doc.likesCount || 0,
-        host: doc.userId
-          ? {
-              id: doc.userId._id,
-              name: `${doc.userId.firstName || ""} ${doc.userId.lastName || ""}`.trim(),
-              email: doc.userId.email,
-            }
-          : null,
-      },
-    });
-  } catch (err) {
-    console.error("GET /v2/properties/:id error:", err);
-    return res.status(500).json({ error: true, message: "Internal Server Error" });
-  }
-});
 
 
 
@@ -1057,20 +890,141 @@ app.post("/marketplace/item", authenticateToken, async (req, res) => {
 
   // Update user data API
   app.patch('/user/update', authenticateToken, async (req, res) => {
-    const { user } = req.user; // Extract user from token
-    const updates = req.body; // Fields to update
-  
-    try {
-      const updatedUser = await User.findByIdAndUpdate(user._id, updates, { new: true });
-      if (!updatedUser) {
-        return res.status(404).json({ success: false, message: 'User not found' });
-      }
-      res.json({ success: true, user: updatedUser });
-    } catch (error) {
-      console.error('Error updating user:', error);
-      res.status(500).json({ success: false, message: 'Internal Server Error' });
+  const authed = req.user?.user || req.user;
+  if (!authed?._id) return res.sendStatus(401);
+
+  // Whitelist fields you allow to update
+  const {
+    firstName, lastName, username, avatar,
+    currentLocation, hometown, birthday,
+    university, major, graduationDate,
+    schoolDepartment, cohortTerm,
+    campusLabel, campusPlaceId, campusDisplayName,
+  } = req.body || {};
+
+  // Build $set only with provided fields (avoid clobbering with undefined)
+  const $set = {};
+  const put = (k, v) => { if (typeof v !== 'undefined') $set[k] = v; };
+
+  put('firstName', firstName);
+  put('lastName',  lastName);
+  put('username',  username);
+  put('avatar',    avatar);
+
+  put('currentLocation', currentLocation);
+  put('hometown',        hometown);
+  // normalize birthday if present (accepts "", null, or ISO/string)
+  if (typeof birthday !== 'undefined') {
+    if (!birthday) {
+      $set['birthday'] = null;
+    } else {
+      const d = new Date(birthday);
+      if (!isNaN(d)) $set['birthday'] = d;
     }
-  });
+  }
+
+  put('university',     university);
+  put('major',          major);
+  put('graduationDate', graduationDate);
+
+  put('schoolDepartment',  schoolDepartment);
+  put('cohortTerm',        cohortTerm);        // e.g. "Fall 2025"
+  put('campusLabel',       campusLabel);
+  put('campusPlaceId',     campusPlaceId);     // from Places
+  put('campusDisplayName', campusDisplayName); // human-readable
+
+  try {
+    const updated = await User.findByIdAndUpdate(
+      authed._id,
+      { $set },
+      { new: true, runValidators: true }
+    ).lean();
+
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // mirror /get-user shape
+    return res.json({
+      success: true,
+      user: {
+        _id: updated._id,
+        firstName: updated.firstName,
+        lastName: updated.lastName,
+        email: updated.email,
+        username: updated.username || '',
+        avatar: updated.avatar || '',
+
+        currentLocation: updated.currentLocation || '',
+        hometown: updated.hometown || '',
+        birthday: updated.birthday || null,
+
+        university: updated.university || '',
+        major: updated.major || '',
+        graduationDate: updated.graduationDate || '',
+
+        schoolDepartment: updated.schoolDepartment || '',
+        cohortTerm: updated.cohortTerm || '',
+        campusLabel: updated.campusLabel || '',
+        campusPlaceId: updated.campusPlaceId || '',
+        campusDisplayName: updated.campusDisplayName || '',
+
+        createdOn: updated.createdOn || null,
+      }
+    });
+  } catch (err) {
+    console.error('PATCH /user/update error:', err);
+    return res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+});
+
+// --- allow PATCHing only safe, known fields ---
+const ALLOWED_USER_FIELDS = [
+  'firstName','lastName','currentLocation','hometown','birthday',
+  'university','major','graduationDate',
+  'schoolDepartment','cohortTerm','campusLabel','campusPlaceId','campusDisplayName'
+];
+
+function buildUserUpdate(body = {}) {
+  const doc = {};
+  for (const k of ALLOWED_USER_FIELDS) {
+    if (typeof body[k] !== 'undefined' && body[k] !== null) {
+      doc[k] = (k === 'birthday' && body[k]) ? new Date(body[k]) : body[k];
+    }
+  }
+  // fallback: if client sent season+year instead of cohortTerm
+  if (!doc.cohortTerm && body.cohortSeason && body.cohortYear) {
+    doc.cohortTerm = `${body.cohortSeason} ${body.cohortYear}`;
+  }
+  return doc;
+}
+
+async function updateUserHandler(req, res) {
+  try {
+    const userId = req?.user?.user?._id || req?.user?._id;  // supports both payload shapes
+    if (!userId) return res.status(401).json({ error: true, message: 'Unauthorized' });
+
+    const updateDoc = buildUserUpdate(req.body);
+    if (Object.keys(updateDoc).length === 0) {
+      return res.status(400).json({ error: true, message: 'No valid fields to update' });
+    }
+
+    const updated = await User.findByIdAndUpdate(userId, { $set: updateDoc }, { new: true });
+    if (!updated) return res.status(404).json({ error: true, message: 'User not found' });
+
+    return res.json({ error: false, user: updated });
+  } catch (err) {
+    console.error('update user error:', err);
+    return res.status(500).json({ error: true, message: 'Internal Server Error' });
+  }
+}
+
+// Keep your original route AND add aliases used by the frontend
+app.patch('/user/update', authenticateToken, updateUserHandler);   // existing canonical
+app.patch('/update-user', authenticateToken, updateUserHandler);   // alias for old FE
+app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for old FE
+
+
   
 
   // =====================
