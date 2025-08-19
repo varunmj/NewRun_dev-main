@@ -1,4 +1,4 @@
 node_modules
 openAIInstance.js
 Temp.jsx
-frontend/.env
+.env
