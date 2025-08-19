@@ -23,6 +23,8 @@ const Property = require('./models/property.model');
 const MarketplaceItem = require('./models/marketplaceItem.model');
 const Message = require('./models/message.model');
 const Conversation = require('./models/conversation.model');
+const ContactAccessRequest = require('./models/contactAccessRequest.model');
+
 
 const app = express();
 
@@ -86,6 +88,10 @@ io.on('connection', (socket) => {
   socket.on('leaveRoom', (conversationId) => {
     socket.leave(conversationId);
     console.log(`User left room: ${conversationId}`);
+  });
+
+   socket.on('registerUser', (userId) => {
+    if (userId) socket.join(`user:${userId}`);
   });
 
   socket.on('disconnect', () => {
@@ -326,8 +332,6 @@ app.get("/get-user", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to fetch user data" });
   }
 });
-
-
 
 // Image upload API:
 // Route to handle image uploads
@@ -624,27 +628,163 @@ app.get("/search-properties/",authenticateToken,async(req,res)=>{
 
 // Toggle Like API
 app.put('/property/:propertyId/like', authenticateToken, async (req, res) => {
-  const { propertyId } = req.params;
-  const userId = req.user._id;
-
   try {
-      const property = await Property.findById(propertyId);
-      if (!property) return res.status(404).json({ error: true, message: 'Property not found' });
+    const { propertyId } = req.params;
+    const userId = req.user.user?._id || req.user._id; // compat if you change middleware later
+    const property = await Property.findById(propertyId);
+    if (!property) return res.status(404).json({ error: true, message: 'Property not found' });
 
-      const alreadyLiked = property.likes.includes(userId);
+    const hasLike = (property.likes || []).some((u) => String(u) === String(userId));
 
-      if (alreadyLiked) {
-          property.likes.pull(userId); // Remove like
-      } else {
-          property.likes.push(userId); // Add like
-      }
+    if (hasLike) {
+      property.likes = property.likes.filter((u) => String(u) !== String(userId));
+    } else {
+      property.likes.push(userId);
+    }
 
-      await property.save();
-      res.json({ success: true, likes: property.likes.length });
+    await property.save();
+    return res.json({ success: true, likes: property.likes.length, liked: !hasLike });
   } catch (error) {
-      res.status(500).json({ error: true, message: 'Error toggling like' });
+    console.error('Toggle like error:', error);
+    return res.status(500).json({ error: true, message: 'Error toggling like' });
   }
 });
+
+app.post('/contact-access/request', authenticateToken, async (req, res) => {
+  try {
+    const requesterId = getAuthUserId(req);
+    const { propertyId } = req.body;
+    if (!propertyId) return res.status(400).json({ message: 'propertyId required' });
+
+    const prop = await Property.findById(propertyId).select('userId');
+    if (!prop) return res.status(404).json({ message: 'Property not found' });
+
+    if (String(prop.userId) === String(requesterId)) {
+      return res.status(400).json({ message: 'You own this property' });
+    }
+
+    const upsert = await ContactAccessRequest.findOneAndUpdate(
+      { propertyId, requesterId },
+      {
+        $setOnInsert: { ownerId: prop.userId },
+        $set: { status: 'pending', expiresAt: new Date(Date.now() + 7*24*60*60*1000) },
+      },
+      { upsert: true, new: true }
+    );
+
+    // notify host (real-time)
+    io.to(`user:${prop.userId}`).emit('contact_request:new', {
+      id: upsert._id,
+      propertyId: String(propertyId),
+      requesterId: String(requesterId),
+    });
+
+    res.json({ ok: true, pending: true });
+  } catch (e) {
+    console.error('contact-access/request', e);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+
+app.get('/contact-access/status/:propertyId', authenticateToken, async (req, res) => {
+  try {
+    const requesterId = getAuthUserId(req);
+    const { propertyId } = req.params;
+
+    const prop = await Property.findById(propertyId).select('userId contactInfo');
+    if (!prop) return res.status(404).json({ message: 'Property not found' });
+
+    const doc = await ContactAccessRequest.findOne({ propertyId, requesterId });
+
+    if (doc && doc.status === 'approved') {
+      return res.json({
+        approved: true,
+        pending: false,
+        phone: prop.contactInfo?.phone || '',
+        email: prop.contactInfo?.email || '',
+      });
+    }
+
+    return res.json({
+      approved: false,
+      pending: !!doc && doc.status === 'pending',
+    });
+  } catch (e) {
+    console.error('contact-access/status', e);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+
+app.get('/contact-access/inbox', authenticateToken, async (req, res) => {
+  try {
+    const ownerId = getAuthUserId(req);
+    const items = await ContactAccessRequest.find({ ownerId, status: 'pending' })
+      .sort('-createdAt')
+      .populate('requesterId', 'firstName lastName email')
+      .populate('propertyId', 'title');
+    res.json({ items });
+  } catch (e) {
+    console.error('contact-access/inbox', e);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.post('/contact-access/:id/approve', authenticateToken, async (req, res) => {
+  try {
+    const ownerId = getAuthUserId(req);
+    const { id } = req.params;
+
+    const doc = await ContactAccessRequest.findById(id).populate('propertyId', 'contactInfo');
+    if (!doc || String(doc.ownerId) !== String(ownerId)) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    doc.status = 'approved';
+    doc.approvedAt = new Date();
+    doc.phone = doc.propertyId?.contactInfo?.phone || '';
+    doc.email = doc.propertyId?.contactInfo?.email || '';
+    await doc.save();
+
+    io.to(`user:${doc.requesterId}`).emit('contact_request:updated', {
+      propertyId: String(doc.propertyId._id),
+      status: 'approved',
+    });
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('contact-access/approve', e);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+app.post('/contact-access/:id/deny', authenticateToken, async (req, res) => {
+  try {
+    const ownerId = getAuthUserId(req);
+    const { id } = req.params;
+
+    const doc = await ContactAccessRequest.findById(id);
+    if (!doc || String(doc.ownerId) !== String(ownerId)) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    doc.status = 'denied';
+    doc.deniedAt = new Date();
+    await doc.save();
+
+    io.to(`user:${doc.requesterId}`).emit('contact_request:updated', {
+      propertyId: String(doc.propertyId),
+      status: 'denied',
+    });
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('contact-access/deny', e);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
 
 // =====================
 // Marketplace Routes

@@ -13,6 +13,11 @@ function authenticateToken(req,res,next){
     });
 }
 
+function getAuthUserId(req) {
+  return (req.user && (req.user.user?._id || req.user._id)) || null;
+}
+
+
 module.exports ={
     authenticateToken,
 };
