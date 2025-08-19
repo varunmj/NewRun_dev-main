@@ -654,37 +654,75 @@ app.post('/contact-access/request', authenticateToken, async (req, res) => {
   try {
     const requesterId = getAuthUserId(req);
     const { propertyId } = req.body;
-    if (!propertyId) return res.status(400).json({ message: 'propertyId required' });
-
-    const prop = await Property.findById(propertyId).select('userId');
-    if (!prop) return res.status(404).json({ message: 'Property not found' });
-
-    if (String(prop.userId) === String(requesterId)) {
-      return res.status(400).json({ message: 'You own this property' });
+    if (!requesterId || !propertyId) {
+      return res.status(400).json({ error: true, message: 'Missing propertyId' });
     }
 
-    const upsert = await ContactAccessRequest.findOneAndUpdate(
-      { propertyId, requesterId },
-      {
-        $setOnInsert: { ownerId: prop.userId },
-        $set: { status: 'pending', expiresAt: new Date(Date.now() + 7*24*60*60*1000) },
-      },
-      { upsert: true, new: true }
-    );
+    const prop = await Property.findById(propertyId).select('userId contactInfo title');
+    if (!prop) return res.status(404).json({ error: true, message: 'Property not found' });
 
-    // notify host (real-time)
-    io.to(`user:${prop.userId}`).emit('contact_request:new', {
-      id: upsert._id,
-      propertyId: String(propertyId),
-      requesterId: String(requesterId),
+    const ownerId = prop.userId?._id || prop.userId;
+    if (String(ownerId) === String(requesterId)) {
+      return res.status(400).json({ error: true, message: 'Cannot request your own listing' });
+    }
+
+    // Because you have a UNIQUE index on (propertyId, requesterId),
+    // we either:
+    //  - create a new "pending" doc, or
+    //  - if a doc already exists (approved/denied/pending), we reuse it:
+    //      - if pending: return pending
+    //      - else: flip back to pending and reset timers
+    let cr = await ContactAccessRequest.findOne({ propertyId, requesterId });
+
+    if (cr) {
+      if (cr.status === 'pending') {
+        return res.json({ ok: true, status: 'pending', id: cr._id });
+      }
+      // flip denial/approval back to pending for a new cycle
+      cr.status = 'pending';
+      cr.approvedAt = undefined;
+      cr.deniedAt = undefined;
+      cr.phone = undefined;
+      cr.email = undefined;
+      // reset owner (in case listing moved) + expiry window
+      cr.ownerId = ownerId;
+      cr.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await cr.save();
+    } else {
+      cr = await ContactAccessRequest.create({
+        propertyId,
+        ownerId,
+        requesterId,
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      });
+    }
+
+    // Notify host in real time
+    io.to(`user:${ownerId}`).emit('contact_request:new', {
+      id: cr._id,
+      propertyId,
+      requesterId,
     });
 
-    res.json({ ok: true, pending: true });
+    return res.json({ ok: true, status: 'pending', id: cr._id });
   } catch (e) {
-    console.error('contact-access/request', e);
-    res.status(500).json({ message: 'Internal Server Error' });
+    // handle duplicate key race safety (E11000) by fetching existing doc
+    if (e?.code === 11000) {
+      try {
+        const requesterId = getAuthUserId(req);
+        const { propertyId } = req.body;
+        const cr = await ContactAccessRequest.findOne({ propertyId, requesterId });
+        if (cr) {
+          return res.json({ ok: true, status: cr.status, id: cr._id });
+        }
+      } catch {}
+    }
+    console.error('POST /contact-access/request', e);
+    return res.status(500).json({ error: true, message: 'Internal Server Error' });
   }
 });
+
 
 
 app.get('/contact-access/status/:propertyId', authenticateToken, async (req, res) => {
@@ -692,70 +730,81 @@ app.get('/contact-access/status/:propertyId', authenticateToken, async (req, res
     const requesterId = getAuthUserId(req);
     const { propertyId } = req.params;
 
-    const prop = await Property.findById(propertyId).select('userId contactInfo');
-    if (!prop) return res.status(404).json({ message: 'Property not found' });
+    const cr = await ContactAccessRequest.findOne({ propertyId, requesterId })
+      .sort({ createdAt: -1 });
 
-    const doc = await ContactAccessRequest.findOne({ propertyId, requesterId });
+    if (!cr) return res.json({ approved: false, pending: false });
 
-    if (doc && doc.status === 'approved') {
+    if (cr.status === 'approved') {
       return res.json({
         approved: true,
         pending: false,
-        phone: prop.contactInfo?.phone || '',
-        email: prop.contactInfo?.email || '',
+        phone: cr.phone || '',
+        email: cr.email || '',
       });
     }
-
-    return res.json({
-      approved: false,
-      pending: !!doc && doc.status === 'pending',
-    });
+    if (cr.status === 'pending') {
+      return res.json({ approved: false, pending: true });
+    }
+    // denied/expired
+    return res.json({ approved: false, pending: false });
   } catch (e) {
-    console.error('contact-access/status', e);
-    res.status(500).json({ message: 'Internal Server Error' });
+    console.error('GET /contact-access/status/:propertyId', e);
+    return res.status(500).json({ error: true, message: 'Internal Server Error' });
   }
 });
+
 
 
 app.get('/contact-access/inbox', authenticateToken, async (req, res) => {
   try {
     const ownerId = getAuthUserId(req);
-    const items = await ContactAccessRequest.find({ ownerId, status: 'pending' })
-      .sort('-createdAt')
-      .populate('requesterId', 'firstName lastName email')
-      .populate('propertyId', 'title');
-    res.json({ items });
+    const { status = 'pending' } = req.query;
+
+    const items = await ContactAccessRequest.find({ ownerId, status })
+      .sort({ createdAt: -1 })
+      .populate('propertyId', 'title images')
+      .populate('requesterId', 'firstName lastName email');
+
+    return res.json({ ok: true, items });
   } catch (e) {
-    console.error('contact-access/inbox', e);
-    res.status(500).json({ message: 'Internal Server Error' });
+    console.error('GET /contact-access/inbox', e);
+    return res.status(500).json({ error: true, message: 'Internal Server Error' });
   }
 });
+
 
 app.post('/contact-access/:id/approve', authenticateToken, async (req, res) => {
   try {
     const ownerId = getAuthUserId(req);
     const { id } = req.params;
 
-    const doc = await ContactAccessRequest.findById(id).populate('propertyId', 'contactInfo');
-    if (!doc || String(doc.ownerId) !== String(ownerId)) {
-      return res.status(404).json({ message: 'Request not found' });
-    }
+    const cr = await ContactAccessRequest.findOne({ _id: id, ownerId });
+    if (!cr) return res.status(404).json({ error: true, message: 'Request not found' });
 
-    doc.status = 'approved';
-    doc.approvedAt = new Date();
-    doc.phone = doc.propertyId?.contactInfo?.phone || '';
-    doc.email = doc.propertyId?.contactInfo?.email || '';
-    await doc.save();
+    const prop = await Property.findById(cr.propertyId).select('contactInfo');
+    const phone = prop?.contactInfo?.phone || '';
+    const email = prop?.contactInfo?.email || '';
 
-    io.to(`user:${doc.requesterId}`).emit('contact_request:updated', {
-      propertyId: String(doc.propertyId._id),
+    cr.status = 'approved';
+    cr.approvedAt = new Date();
+    cr.deniedAt = undefined;
+    cr.phone = phone;
+    cr.email = email;
+    await cr.save();
+
+    // Notify requester to flip UI immediately
+    io.to(`user:${cr.requesterId}`).emit('contact_request:updated', {
+      propertyId: cr.propertyId,
       status: 'approved',
+      phone,
+      email,
     });
 
-    res.json({ ok: true });
+    return res.json({ ok: true });
   } catch (e) {
-    console.error('contact-access/approve', e);
-    res.status(500).json({ message: 'Internal Server Error' });
+    console.error('POST /contact-access/:id/approve', e);
+    return res.status(500).json({ error: true, message: 'Internal Server Error' });
   }
 });
 
@@ -764,26 +813,28 @@ app.post('/contact-access/:id/deny', authenticateToken, async (req, res) => {
     const ownerId = getAuthUserId(req);
     const { id } = req.params;
 
-    const doc = await ContactAccessRequest.findById(id);
-    if (!doc || String(doc.ownerId) !== String(ownerId)) {
-      return res.status(404).json({ message: 'Request not found' });
-    }
+    const cr = await ContactAccessRequest.findOne({ _id: id, ownerId });
+    if (!cr) return res.status(404).json({ error: true, message: 'Request not found' });
 
-    doc.status = 'denied';
-    doc.deniedAt = new Date();
-    await doc.save();
+    cr.status = 'denied';
+    cr.deniedAt = new Date();
+    cr.approvedAt = undefined;
+    cr.phone = undefined;
+    cr.email = undefined;
+    await cr.save();
 
-    io.to(`user:${doc.requesterId}`).emit('contact_request:updated', {
-      propertyId: String(doc.propertyId),
+    io.to(`user:${cr.requesterId}`).emit('contact_request:updated', {
+      propertyId: cr.propertyId,
       status: 'denied',
     });
 
-    res.json({ ok: true });
+    return res.json({ ok: true });
   } catch (e) {
-    console.error('contact-access/deny', e);
-    res.status(500).json({ message: 'Internal Server Error' });
+    console.error('POST /contact-access/:id/deny', e);
+    return res.status(500).json({ error: true, message: 'Internal Server Error' });
   }
 });
+
 
 
 // =====================
