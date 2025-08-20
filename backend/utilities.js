@@ -1,23 +1,24 @@
-const jwt = require('jsonwebtoken')
+// backend/utilities.js
+const jwt = require('jsonwebtoken');
 
-function authenticateToken(req,res,next){
-    const authHeader = req.headers["authorization"];
-    const token = authHeader && authHeader.split(' ')[1];
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'] || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return res.sendStatus(401);
 
-    if (!token) return res.sendStatus(401);
-
-    jwt.verify(token,process.env.ACCESS_TOKEN_SECRET, (err,user)=>{
-        if(err) return res.sendStatus(401);
-        req.user = user;
-        next();
-    });
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+    if (err) return res.sendStatus(403);
+    req.user = decoded; // keep your existing shape
+    next();
+  });
 }
 
+// NEW: unify how we read the authed user's id (your JWT sometimes nests under user)
 function getAuthUserId(req) {
   return (req.user && (req.user.user?._id || req.user._id)) || null;
 }
 
-
-module.exports ={
-    authenticateToken,
+module.exports = {
+  authenticateToken,
+  getAuthUserId, // ← make sure this is exported
 };

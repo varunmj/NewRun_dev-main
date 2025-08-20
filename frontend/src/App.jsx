@@ -24,6 +24,7 @@ import MessagingPage from './pages/MessagingPage';
 import Roommate from './pages/Roommate';
 import Waitlist from "./pages/Waitlist";
 import OnboardingFlow from "./onboarding/OnboardingFlow";
+import ContactRequestsPage from "./pages/ContactRequests";
 // guards
 import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
 
@@ -134,7 +135,19 @@ const App = () => {
 
           {/* Catch-all → home (prevents blank screens) */}
           <Route path="*" element={<Navigate to="/home" replace />} />
-        </Routes>
+          
+        
+        
+          
+            
+
+           
+            <Route path="/requests" element={<ContactRequestsPage />} />
+
+            {/* Keep any catch-all LAST */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        
       </Router>
     </HeroUIProvider>
   );
