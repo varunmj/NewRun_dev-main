@@ -1,167 +1,201 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@heroui/react';
-import ItemCard from '../components/Cards/ItemCard';
-import axiosInstance from '../utils/axiosInstance';
-import Navbar from '../components/Navbar/Navbar';
-import SearchOverlay from '../components/SearchBar/SearchOverlay';
-import docsLeft from '../assets/Images/docs-left.png';
-import docsRight from '../assets/Images/docs-right.png';
-import './marketplace.css';
+// src/pages/Marketplace.jsx
+import React, { useEffect, useMemo, useState } from "react";
+import axiosInstance from "../utils/axiosInstance";
+import Navbar from "../components/Navbar/Navbar";
+import MarketplaceItemCard from "../components/Cards/MarketplaceItemCard";
+import { useNavigate } from "react-router-dom";
 
-const Marketplace = () => {
+const CATEGORIES = ["Furniture", "Electronics", "Books", "Bikes", "Kitchen", "Other"];
+const CONDITIONS = ["New", "Like New", "Good", "Fair"];
+const DELIVERY = [
+  { key: "pickup", label: "Pickup" },
+  { key: "localDelivery", label: "Local delivery" },
+  { key: "shipping", label: "Shipping" },
+];
+
+export default function Marketplace() {
+  const nav = useNavigate();
+
+  // filters
+  const [q, setQ] = useState("");
+  const [category, setCategory] = useState("");
+  const [condition, setCondition] = useState("");
+  const [campus, setCampus] = useState("");
+  const [delivery, setDelivery] = useState("");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+
+  // data
   const [items, setItems] = useState([]);
-  const [filteredItems, setFilteredItems] = useState([]);
-  const [userInfo, setUserInfo] = useState(null);
+  const [cursor, setCursor] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [favIds, setFavIds] = useState(new Set());
 
-  const navigate = useNavigate();
+  const params = useMemo(
+    () => ({ q, category, condition, campus, delivery, minPrice, maxPrice }),
+    [q, category, condition, campus, delivery, minPrice, maxPrice]
+  );
 
-  // Fetch user info
-  const getUserInfo = async () => {
+  const load = async (append = false) => {
     try {
-      const response = await axiosInstance.get('/get-user');
-      if (response.data && response.data.user) {
-        setUserInfo(response.data.user);
-      }
-    } catch (error) {
-      if (error.response && error.response.status === 401) {
-        setUserInfo(null);
-        console.log('User not logged in, allowing access to Marketplace');
-      } else {
-        console.error('Unexpected error:', error);
-      }
-    }
-  };
+      if (append) setLoadingMore(true);
+      else setLoading(true);
 
-  // Fetch marketplace items
-  const fetchItems = async () => {
-    try {
-      setLoading(true);
-      const response = await axiosInstance.get('/marketplace/items');
-      setItems(response.data.items);
-      setFilteredItems(response.data.items);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching items:', error);
-      setError('Failed to fetch marketplace items. Please try again later.');
-      setLoading(false);
-    }
-  };
-
-  // Handle item search
-  const handleSearchProperty = (query) => {
-    if (query) {
-      const filtered = items.filter(item => 
-        item.title.toLowerCase().includes(query.toLowerCase()) ||
-        item.description.toLowerCase().includes(query.toLowerCase())
+      const clean = Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v !== "" && v != null)
       );
-      setFilteredItems(filtered);
-    } else {
-      setFilteredItems(items);
+
+      const r = await axiosInstance.get("/marketplace/items", {
+        params: { ...clean, cursor: append ? cursor : undefined, limit: 24 },
+      });
+
+      setItems((prev) => (append ? [...prev, ...(r.data?.items || [])] : r.data?.items || []));
+      setCursor(r.data?.nextCursor || null);
+    } catch {
+      if (!append) setItems([]);
+      setCursor(null);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
     }
   };
 
-  // Filter by category
-  const filterItemsByCategory = (category) => {
-    if (category === 'All') {
-      setFilteredItems(items);
-    } else {
-      const filtered = items.filter(item => item.category === category);
-      setFilteredItems(filtered);
-    }
-  };
-
-  // Open search overlay
-  const openSearchOverlay = () => {
-    setIsSearchOpen(true);
-  };
-
-  // Close search overlay
-  const closeSearchOverlay = () => {
-    setIsSearchOpen(false);
-  };
-
+  // initial + on filters change
   useEffect(() => {
-    getUserInfo(); // Fetch user info
-    fetchItems();  // Fetch marketplace items
-  }, []);
+    const t = setTimeout(() => load(false), 150); // small debounce for search box
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.q, params.category, params.condition, params.campus, params.delivery, params.minPrice, params.maxPrice]);
+
+  const toggleFav = async (item) => {
+    try {
+      const r = await axiosInstance.post(`/marketplace/favorites/${item._id}`);
+      setFavIds((ids) => {
+        const next = new Set(ids);
+        if (r.data?.favored) next.add(item._id);
+        else next.delete(item._id);
+        return next;
+      });
+    } catch {}
+  };
 
   return (
-    <div>
-      <Navbar userInfo={userInfo} />
-      <div className="relative min-h-screen bg-gradient-to-b from-[#0f0f0f] to-[#2c2c2c] flex flex-col items-center py-12">
-        
-        {/* Background Gradients */}
-        <div aria-hidden="true" className="fixed hidden dark:md:block dark:opacity-70 -bottom-[40%] -left-[20%] z-0">
-          <img src={docsLeft} alt="Left Gradient Background" className="relative z-10 opacity-0 shadow-black/5 data-[loaded=true]:opacity-100 shadow-none transition-transform-opacity motion-reduce:transition-none !duration-300 rounded-large" />
-        </div>
-        <div aria-hidden="true" className="fixed hidden dark:md:block dark:opacity-70 -top-[80%] -right-[60%] 2xl:-top-[60%] 2xl:-right-[45%] z-0 rotate-12">
-          <img src={docsRight} alt="Right Gradient Background" className="relative z-10 opacity-0 shadow-black/5 data-[loaded=true]:opacity-100 shadow-none transition-transform-opacity motion-reduce:transition-none !duration-300 rounded-large" />
-        </div>
+    <div className="min-h-screen bg-[#0b0c0f] text-white">
+      <Navbar />
 
-        {/* Search Overlay */}
-        {isSearchOpen && (
-          <SearchOverlay 
-            onClose={closeSearchOverlay} 
-            onSearch={handleSearchProperty} 
+      {/* Filters */}
+      <div className="mx-auto max-w-7xl px-4 pt-6">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-6">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search items…"
+            className="md:col-span-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 outline-none placeholder:text-white/40 focus:border-sky-500"
           />
-        )}
 
-        {/* Marketplace Header */}
-        <div className="text-center mb-12 z-10">
-          <h1 className="text-5xl font-bold text-white mb-4">Marketplace</h1>
-          <p className="text-lg text-gray-400">
-            Explore our collection of student-friendly items available for sale or free.
-          </p>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 outline-none focus:border-sky-500"
+          >
+            <option value="">All categories</option>
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+
+          <select
+            value={condition}
+            onChange={(e) => setCondition(e.target.value)}
+            className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 outline-none focus:border-sky-500"
+          >
+            <option value="">Any condition</option>
+            {CONDITIONS.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+
+          <input
+            value={campus}
+            onChange={(e) => setCampus(e.target.value)}
+            placeholder="Campus (optional)"
+            className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 outline-none placeholder:text-white/40 focus:border-sky-500"
+          />
+
+          <select
+            value={delivery}
+            onChange={(e) => setDelivery(e.target.value)}
+            className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 outline-none focus:border-sky-500"
+          >
+            <option value="">Any delivery</option>
+            {DELIVERY.map((d) => (
+              <option key={d.key} value={d.key}>{d.label}</option>
+            ))}
+          </select>
         </div>
 
-        {/* Category Filter */}
-        <div className="flex justify-center gap-4 mb-8 z-10">
-          <Button color="primary" variant="ghost" onClick={() => filterItemsByCategory('All')}>
-            All
-          </Button>
-          <Button color="primary" variant="ghost" onClick={() => filterItemsByCategory('Electronics')}>
-            Electronics
-          </Button>
-          <Button color="primary" variant="ghost" onClick={() => filterItemsByCategory('Furniture')}>
-            Furniture
-          </Button>
-          <Button color="primary" variant="ghost" onClick={() => filterItemsByCategory('Books')}>
-            Books
-          </Button>
-          <Button color="primary" variant="ghost" onClick={() => filterItemsByCategory('Clothing')}>
-            Clothing
-          </Button>
+        {/* Price row */}
+        <div className="mt-3 grid grid-cols-2 gap-3 md:w-1/2">
+          <input
+            type="number"
+            min="0"
+            value={minPrice}
+            onChange={(e) => setMinPrice(e.target.value)}
+            placeholder="Min price"
+            className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 outline-none placeholder:text-white/40 focus:border-sky-500"
+          />
+          <input
+            type="number"
+            min="0"
+            value={maxPrice}
+            onChange={(e) => setMaxPrice(e.target.value)}
+            placeholder="Max price"
+            className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 outline-none placeholder:text-white/40 focus:border-sky-500"
+          />
         </div>
 
-        {/* Marketplace Container */}
-        <div className="max-w-screen-xl w-full z-10">
+        {/* Grid */}
+        <div className="mt-6">
           {loading ? (
-            <p className="text-center text-white text-xl">Loading items...</p>
-          ) : error ? (
-            <p className="text-center text-red-500">{error}</p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-4">
-              {filteredItems.map(item => (
-                <ItemCard
-                  key={item._id}
-                  title={item.title}
-                  price={item.price}
-                  description={item.description}
-                  imageUrl={item.images && item.images.length > 0 ? item.images[0] : docsRight} // Use first image or fallback
-                  id={item._id}
-                  // onClick={() => navigate(`/marketplace/item/${item._id}`)}
-                />
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="h-52 animate-pulse rounded-xl bg-white/[0.06]" />
               ))}
             </div>
+          ) : items.length === 0 ? (
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-8 text-center text-white/70">
+              No items match your filters. Try widening your search.
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                {items.map((it) => (
+                  <MarketplaceItemCard
+                    key={it._id}
+                    item={it}
+                    favored={favIds.has(it._id)}
+                    onToggleFav={toggleFav}
+                    onClick={() => nav(`/marketplace/item/${it._id}`)}
+                  />
+                ))}
+              </div>
+
+              {cursor && (
+                <div className="mt-6 grid place-items-center">
+                  <button
+                    disabled={loadingMore}
+                    onClick={() => load(true)}
+                    className="rounded-lg bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/15 disabled:opacity-60"
+                  >
+                    {loadingMore ? "Loading…" : "Load more"}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
     </div>
   );
-};
-
-export default Marketplace;
+}

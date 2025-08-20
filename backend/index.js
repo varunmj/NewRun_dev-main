@@ -805,6 +805,13 @@ app.post('/contact-access/deny', authenticateToken, async (req, res) => {
 // Marketplace Routes
 // =====================
 
+// after you initialize io:
+app.set('io', io);
+
+// require the router
+// const marketplaceRouter = require('./routes/marketplace');
+// app.use('/marketplace', marketplaceRouter);
+
 // Create a new marketplace item
 app.post("/marketplace/item", authenticateToken, async (req, res) => {
     const { user } = req.user;
@@ -854,25 +861,91 @@ app.post("/marketplace/item", authenticateToken, async (req, res) => {
   });
   
   // Get all marketplace items
-  app.get("/marketplace/items", async (req, res) => {
-    try {
-      const items = await MarketplaceItem.find({})
-        .sort({ createdAt: -1 })
-        .populate('userId', 'firstName lastName');  // Populate userId to include the user's first and last name
-  
-      return res.json({
-        error: false,
-        items,
-        message: "All marketplace items retrieved successfully",
-      });
-    } catch (error) {
-      console.error("Error retrieving marketplace items:", error);
-      return res.status(500).json({
-        error: true,
-        message: "Internal Server Error",
+  function escapeRegExp(s = '') {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+app.get('/marketplace/items', async (req, res) => {
+  try {
+    const {
+      q = '',
+      category = 'all',
+      condition = 'any',
+      campus = '',
+      delivery = '',                  // '' | pickup | localDelivery | shipping
+      min, max,                       // backend-style
+      minPrice, maxPrice,             // frontend-style
+      cursor = '',                    // ISO date string from FE
+      limit = '24',
+    } = req.query;
+
+    const lim = Math.min(60, Math.max(1, parseInt(limit, 10) || 24));
+
+    // Start lenient (show active; include legacy with no status if you want)
+    const filter = {
+      $or: [{ status: 'active' }, { status: { $exists: false } }],
+    };
+
+    // Search q (title/description)
+    if (q) {
+      (filter.$and ||= []).push({
+        $or: [
+          { title:       { $regex: q, $options: 'i' } },
+          { description: { $regex: q, $options: 'i' } },
+        ],
       });
     }
-  });
+
+    // Exact (case-insensitive) filters
+    if (category && category !== 'all') {
+      filter.category = { $regex: `^${escapeRegExp(category)}$`, $options: 'i' };
+    }
+    if (condition && condition !== 'any') {
+      filter.condition = { $regex: `^${escapeRegExp(condition)}$`, $options: 'i' };
+    }
+    if (campus) {
+      filter['location.campus'] = { $regex: `^${escapeRegExp(campus)}$`, $options: 'i' };
+    }
+
+    // Delivery booleans (delivery.pickup / delivery.localDelivery / delivery.shipping)
+    if (delivery) {
+      filter[`delivery.${delivery}`] = true;
+    }
+
+    // Price range – accept min/max or minPrice/maxPrice
+    const low  = (min ?? minPrice ?? '').toString().trim();
+    const high = (max ?? maxPrice ?? '').toString().trim();
+    if (low || high) {
+      filter.price = {};
+      if (low)  filter.price.$gte = Number(low);
+      if (high) filter.price.$lte = Number(high);
+    }
+
+    // Cursor pagination — FE sends last item's createdAt (ISO) back as cursor
+    const sort = { createdAt: -1, _id: -1 };
+    if (cursor) {
+      const before = new Date(cursor);
+      if (!isNaN(before)) {
+        (filter.$and ||= []).push({ createdAt: { $lt: before } });
+      }
+    }
+
+    const items = await MarketplaceItem
+      .find(filter)
+      .sort(sort)
+      .limit(lim)
+      .lean();
+
+    const nextCursor = items.length === lim
+      ? items[items.length - 1].createdAt
+      : null;
+
+    res.json({ items, nextCursor });
+  } catch (err) {
+    console.error('GET /marketplace/items error:', err);
+    res.status(500).json({ error: true, message: 'Internal Server Error' });
+  }
+});
   
   // Get details of a single marketplace item
   app.get("/marketplace/item/:id", authenticateToken, async (req, res) => {
@@ -898,6 +971,25 @@ app.post("/marketplace/item", authenticateToken, async (req, res) => {
             message: "Internal Server Error",
         });
     }
+});
+
+app.post('/marketplace/item/:id/view', async (req, res) => {
+  try {
+    await MarketplaceItem.findByIdAndUpdate(
+      req.params.id,
+      { $inc: { views: 1 } },
+      { new: false }
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('POST /marketplace/item/:id/view error', e);
+    res.status(200).json({ ok: false }); // keep FE happy even if it fails
+  }
+});
+
+app.post('/marketplace/favorites/:id', (req, res) => {
+  // TODO: implement real per-user favorites (e.g., User.favoriteItemIds)
+  res.json({ favored: true });
 });
   
   // Update an existing marketplace item
