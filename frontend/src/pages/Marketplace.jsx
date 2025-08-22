@@ -1,4 +1,3 @@
-// src/pages/Marketplace.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import axiosInstance from "../utils/axiosInstance";
 import Navbar from "../components/Navbar/Navbar";
@@ -39,8 +38,7 @@ export default function Marketplace() {
 
   const load = async (append = false) => {
     try {
-      if (append) setLoadingMore(true);
-      else setLoading(true);
+      append ? setLoadingMore(true) : setLoading(true);
 
       const clean = Object.fromEntries(
         Object.entries(params).filter(([, v]) => v !== "" && v != null)
@@ -52,7 +50,8 @@ export default function Marketplace() {
 
       setItems((prev) => (append ? [...prev, ...(r.data?.items || [])] : r.data?.items || []));
       setCursor(r.data?.nextCursor || null);
-    } catch {
+    } catch (e) {
+      console.error("Marketplace load error:", e?.response?.data || e.message);
       if (!append) setItems([]);
       setCursor(null);
     } finally {
@@ -61,20 +60,21 @@ export default function Marketplace() {
     }
   };
 
-  // initial + on filters change
+  // initial + on filters change (debounced)
   useEffect(() => {
-    const t = setTimeout(() => load(false), 150); // small debounce for search box
+    const t = setTimeout(() => load(false), 180);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.q, params.category, params.condition, params.campus, params.delivery, params.minPrice, params.maxPrice]);
 
   const toggleFav = async (item) => {
     try {
-      const r = await axiosInstance.post(`/marketplace/favorites/${item._id}`);
+      // You can wire this when you add favorites API
+      // const r = await axiosInstance.post(`/marketplace/favorites/${item._id}`);
       setFavIds((ids) => {
         const next = new Set(ids);
-        if (r.data?.favored) next.add(item._id);
-        else next.delete(item._id);
+        if (next.has(item._id)) next.delete(item._id);
+        else next.add(item._id);
         return next;
       });
     } catch {}
@@ -91,13 +91,13 @@ export default function Marketplace() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search items…"
-            className="md:col-span-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 outline-none placeholder:text-white/40 focus:border-sky-500"
+            className="md:col-span-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 outline-none placeholder:text-white/40 focus:border-sky-500"
           />
 
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 outline-none focus:border-sky-500"
+            className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 outline-none focus:border-sky-500"
           >
             <option value="">All categories</option>
             {CATEGORIES.map((c) => (
@@ -108,7 +108,7 @@ export default function Marketplace() {
           <select
             value={condition}
             onChange={(e) => setCondition(e.target.value)}
-            className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 outline-none focus:border-sky-500"
+            className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 outline-none focus:border-sky-500"
           >
             <option value="">Any condition</option>
             {CONDITIONS.map((c) => (
@@ -120,13 +120,13 @@ export default function Marketplace() {
             value={campus}
             onChange={(e) => setCampus(e.target.value)}
             placeholder="Campus (optional)"
-            className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 outline-none placeholder:text-white/40 focus:border-sky-500"
+            className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 outline-none placeholder:text-white/40 focus:border-sky-500"
           />
 
           <select
             value={delivery}
             onChange={(e) => setDelivery(e.target.value)}
-            className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 outline-none focus:border-sky-500"
+            className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 outline-none focus:border-sky-500"
           >
             <option value="">Any delivery</option>
             {DELIVERY.map((d) => (
@@ -143,7 +143,7 @@ export default function Marketplace() {
             value={minPrice}
             onChange={(e) => setMinPrice(e.target.value)}
             placeholder="Min price"
-            className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 outline-none placeholder:text-white/40 focus:border-sky-500"
+            className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 outline-none placeholder:text-white/40 focus:border-sky-500"
           />
           <input
             type="number"
@@ -151,7 +151,7 @@ export default function Marketplace() {
             value={maxPrice}
             onChange={(e) => setMaxPrice(e.target.value)}
             placeholder="Max price"
-            className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 outline-none placeholder:text-white/40 focus:border-sky-500"
+            className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 outline-none placeholder:text-white/40 focus:border-sky-500"
           />
         </div>
 
@@ -160,11 +160,11 @@ export default function Marketplace() {
           {loading ? (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="h-52 animate-pulse rounded-xl bg-white/[0.06]" />
+                <div key={i} className="h-52 animate-pulse rounded-2xl bg-white/[0.06]" />
               ))}
             </div>
           ) : items.length === 0 ? (
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-8 text-center text-white/70">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-8 text-center text-white/70">
               No items match your filters. Try widening your search.
             </div>
           ) : (
@@ -186,7 +186,7 @@ export default function Marketplace() {
                   <button
                     disabled={loadingMore}
                     onClick={() => load(true)}
-                    className="rounded-lg bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/15 disabled:opacity-60"
+                    className="rounded-xl bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/15 disabled:opacity-60"
                   >
                     {loadingMore ? "Loading…" : "Load more"}
                   </button>
