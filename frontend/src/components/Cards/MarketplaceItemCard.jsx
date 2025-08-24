@@ -1,63 +1,65 @@
 import React from "react";
-import { MdFavoriteBorder, MdFavorite } from "react-icons/md";
+import {
+  MdFavoriteBorder,
+  MdFavorite,
+  MdArrowForwardIos,
+} from "react-icons/md";
 
-/**
- * MarketplaceItemCard
- * Props:
- * - item        : marketplace item doc
- * - favored     : boolean
- * - onToggleFav : (item) => void
- * - onClick     : () => void
- */
-export default function MarketplaceItemCard({ item, favored, onToggleFav, onClick }) {
-  const coverIdx =
-    typeof item?.coverIndex === "number" && item.coverIndex >= 0 ? item.coverIndex : 0;
+/* ---------- helpers ---------- */
+function coverOf(item) {
+  const imgs = Array.isArray(item?.images) ? item.images : [];
+  const hasIdx = typeof item?.coverIndex === "number" && item.coverIndex >= 0;
+  return item?.coverUrl || imgs[hasIdx ? item.coverIndex : 0] || imgs[0] || item?.thumbnailUrl || "";
+}
+function chip(text) {
+  if (!text) return null;
+  return (
+    <span className="rounded-full bg-black/50 px-2 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/10 backdrop-blur">
+      {text}
+    </span>
+  );
+}
+function deliveryLabel(delivery = {}) {
+  const out = [];
+  if (delivery.pickup) out.push("Pickup");
+  if (delivery.localDelivery) out.push("Local delivery");
+  if (delivery.shipping) out.push("Shipping");
+  return out.join(" • ");
+}
 
-  const img =
-    item?.images?.[coverIdx] ||
-    item?.images?.[0] ||
-    item?.thumbnailUrl ||
-    "";
-
+/* ---------- big, rounded, image-first card ---------- */
+export default function MarketplaceItemCard({
+  item,
+  favored = false,
+  onToggleFav,
+  onClick,
+}) {
+  const cover = coverOf(item);
   const price =
     typeof item?.price === "number"
       ? `$${item.price.toLocaleString("en-US")}`
       : item?.price || "";
 
-  const condition = (item?.condition || "").toLowerCase(); // e.g., "New" | "Like New" | "Good" | "Fair"
-
   return (
-    <div
-      className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] shadow-[0_4px_20px_rgba(0,0,0,0.25)] transition hover:-translate-y-0.5 hover:bg-white/[0.06] hover:shadow-[0_8px_30px_rgba(0,0,0,0.35)]"
+    <button
+      type="button"
+      onClick={onClick}
+      className="
+        group w-full overflow-hidden rounded-3xl border border-white/10
+        bg-[#0f1115] text-left shadow-[0_12px_32px_-12px_rgba(0,0,0,.60)]
+        transition-transform hover:-translate-y-[2px] focus:outline-none focus:ring-2 focus:ring-sky-500
+      "
     >
-      {/* Favorite */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleFav?.(item);
-        }}
-        className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full bg-black/40 backdrop-blur text-white hover:bg-black/55"
-        aria-label={favored ? "Remove from favorites" : "Add to favorites"}
-      >
-        {favored ? <MdFavorite className="text-lg text-rose-400" /> : <MdFavoriteBorder className="text-lg" />}
-      </button>
-
-      {/* Condition chip */}
-      {condition && (
-        <div className="absolute left-3 top-3 z-10 rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-semibold text-black">
-          {condition}
-        </div>
-      )}
-
       {/* Media */}
-      <button onClick={onClick} className="block w-full">
-        <div className="aspect-[4/3] w-full overflow-hidden">
-          {img ? (
+      <div className="relative">
+        <div className="aspect-[16/10] w-full overflow-hidden bg-white/[0.04]">
+          {cover ? (
             <img
-              src={img}
-              alt={item?.title || "item"}
-              className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+              src={cover}
+              alt={item?.title || "Item"}
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
               loading="lazy"
+              decoding="async"
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-sm text-white/40">
@@ -65,26 +67,91 @@ export default function MarketplaceItemCard({ item, favored, onToggleFav, onClic
             </div>
           )}
         </div>
-      </button>
+
+        {/* top-left chips (condition / category) */}
+        <div className="absolute left-3 top-3 flex items-center gap-1.5">
+          {chip(String(item?.condition || "").toLowerCase())}
+          {chip(item?.category)}
+        </div>
+
+        {/* top-right favorite */}
+        <div className="absolute right-3 top-3">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFav?.(item);
+            }}
+            aria-label={favored ? "Unfavorite" : "Favorite"}
+            className="
+              grid h-9 w-9 place-items-center rounded-full bg-black/45 text-white/95
+              ring-1 ring-white/10 backdrop-blur hover:bg-black/60
+            "
+          >
+            {favored ? <MdFavorite /> : <MdFavoriteBorder />}
+          </button>
+        </div>
+      </div>
 
       {/* Body */}
-      <div className="flex items-end justify-between gap-3 p-3">
-        <div className="min-w-0">
-          <button
-            onClick={onClick}
-            className="block w-full truncate text-[15px] font-semibold text-white hover:underline"
-            title={item?.title}
-          >
+      <div className="px-5 pb-4 pt-4">
+        {/* Title + short blurb */}
+        <div className="mb-2">
+          <h3 className="line-clamp-2 text-[20px] font-semibold leading-snug text-white">
             {item?.title || "Untitled"}
-          </button>
-          <div className="mt-0.5 text-sm text-white/75">{price}</div>
+          </h3>
+          {item?.description && (
+            <p className="mt-1 line-clamp-2 text-[13.5px] leading-relaxed text-white/70">
+              {item.description}
+            </p>
+          )}
         </div>
-        {item?.location?.campus && (
-          <div className="shrink-0 rounded-full bg-white/8 px-2 py-1 text-xs text-white/60">
-            {item.location.campus}
+
+        {/* Divider */}
+        <div className="my-3 h-px w-full bg-white/8" />
+
+        {/* Meta row 1: Campus (or owner)  •  Price */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0 text-[13px] text-white/75">
+            {item?.location?.campus ? (
+              <span className="line-clamp-1">Campus: {item.location.campus}</span>
+            ) : (
+              <span className="line-clamp-1">{item?.category || "Item"}</span>
+            )}
           </div>
-        )}
+
+          {price && (
+            <div className="shrink-0 rounded-full bg-white/8 px-3 py-1 text-[13px] font-semibold text-white">
+              {price}
+            </div>
+          )}
+        </div>
+
+        {/* Meta row 2: Delivery • Condition • Arrow */}
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[12px] text-white/60">
+            {deliveryLabel(item?.delivery) && (
+              <span className="rounded-full bg-white/5 px-2 py-0.5">
+                {deliveryLabel(item.delivery)}
+              </span>
+            )}
+            {item?.condition && (
+              <span className="rounded-full bg-white/5 px-2 py-0.5 capitalize">
+                {String(item.condition).toLowerCase()}
+              </span>
+            )}
+          </div>
+
+          <span
+            className="
+              grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/8 text-white/85
+              transition-colors group-hover:bg-white/12
+            "
+          >
+            <MdArrowForwardIos className="text-[14px]" />
+          </span>
+        </div>
       </div>
-    </div>
+    </button>
   );
 }

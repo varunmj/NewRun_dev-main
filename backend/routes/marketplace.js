@@ -12,6 +12,9 @@ const { authenticateToken, getAuthUserId } = require('../utilities');
 // Small helper
 const toNum = (v) => (v === undefined ? undefined : Number(v));
 
+const marketplaceRouter = require('./routes/marketplace');
+app.use('/marketplace', marketplaceRouter);
+
 // ------------------------------------------------------------------
 // LIST + SEARCH
 // GET /marketplace/items

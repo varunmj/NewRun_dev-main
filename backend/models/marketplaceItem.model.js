@@ -1,4 +1,4 @@
-// backend/models/MarketplaceItem.js
+// backend/models/MarketplaceItem.model.js
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
