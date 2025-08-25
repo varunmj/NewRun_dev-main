@@ -71,7 +71,7 @@
   opacity:.6;
 }
 /* keep all children above the page dots */
-.nr-dots-page > *{ position:relative; z-index:0; }
+.nr-dots-page > *{ position:relative;}
 
 /* =============== LOCAL DOTS FADE (for a section like FeatureSplit) =============== */
 .nr-dots-fade{
