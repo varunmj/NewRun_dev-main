@@ -356,11 +356,10 @@ app.post("/upload-images", upload.array("images", 5), async (req, res) => {
 });
 
 // Add Property API:
-// Add Property API:
 app.post('/add-property', authenticateToken, async (req, res) => {
   const {
     title,
-    content,
+    content,                     // keep accepting if you still use it anywhere
     tags,
     price,
     bedrooms,
@@ -376,31 +375,38 @@ app.post('/add-property', authenticateToken, async (req, res) => {
 
   const { user } = req.user;
 
-  if (!title || !content) {
-    return res.status(400).json({ error: true, message: 'Title and Content are required' });
+  // ✅ NEW: realistic required fields for a listing
+  if (!title || !address || typeof price === 'undefined') {
+    return res.status(400).json({
+      error: true,
+      message: 'title, address and price are required'
+    });
   }
 
   try {
     const property = new Property({
       title,
-      content,
+      content: content || '',           // optional
       tags: tags || [],
-      price,
-      bedrooms,
-      bathrooms,
-      distanceFromUniversity,
+      price: Number(price) || 0,
+      bedrooms: Number(bedrooms) || 0,
+      bathrooms: Number(bathrooms) || 0,
+      distanceFromUniversity: Number(distanceFromUniversity) || 0,
       address,
-      availabilityStatus,
-      images: images || [],
-      contactInfo,
-      description,
-      isFeatured: isFeatured || false,
+      availabilityStatus: availabilityStatus || 'available',
+      images: images || [],             // expects array of URLs (from /upload-images)
+      contactInfo: contactInfo || {},
+      description: description || '',
+      isFeatured: Boolean(isFeatured),
       userId: user._id,
+      // optional: copy user.university onto the property for future scoping
+      // university: user.university || ''
     });
 
     await property.save();
     return res.json({ error: false, property, message: 'Property added successfully' });
   } catch (error) {
+    console.error('POST /add-property error:', error);
     return res.status(500).json({ error: true, message: 'Internal Server Error' });
   }
 });
@@ -535,7 +541,7 @@ app.delete("/delete-property/:propertyId",authenticateToken,async(req,res)=>{
 });
 
 //API for // Find the property by ID
-app.get("/properties/:id", authenticateToken, async (req, res) => {
+app.get("/properties/:id", async (req, res) => {
   const propertyId = req.params.id;
 
   try {
@@ -1414,21 +1420,95 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
 
   // Endpoint to get the count of unread messages
   app.get('/messages/unread-count', authenticateToken, async (req, res) => {
-    const userId = req.user.user._id; // Get the user ID from the authenticated token
-
+    const userId = req.user.user._id;
     try {
-      // Find all unread messages where the user is the receiver
-      const unreadCount = await Message_NewRUN.countDocuments({
+      const unreadCount = await Message.countDocuments({
         receiverId: userId,
         isRead: false
       });
-
       res.status(200).json({ success: true, count: unreadCount });
     } catch (error) {
       console.error('Error fetching unread message count:', error);
       res.status(500).json({ success: false, message: 'Failed to fetch unread message count' });
     }
   });
+
+// =====================
+// Dashboard Overview (NEW)
+// =====================
+  app.get('/dashboard/overview', authenticateToken, async (req, res) => {
+    try {
+      const authed = req.user?.user || req.user;
+      const userId = authed?._id;
+
+      // latest 6 of each, owned by user
+      const [properties, marketplace, conversations] = await Promise.all([
+        Property.find({ userId }).sort({ createdAt: -1 }).limit(6).lean(),
+        MarketplaceItem.find({ userId }).sort({ createdAt: -1 }).limit(6).lean(),
+        Conversation.find({ participants: userId })
+          .sort({ lastUpdated: -1 })
+          .limit(3)
+          .populate({
+            path: 'lastMessage',
+            select: 'content timestamp senderId',
+            populate: { path: 'senderId', select: 'firstName lastName' }
+          })
+          .lean(),
+      ]);
+
+      // simple needs-attention rules on properties
+      const needsAttention = [];
+      for (const p of properties) {
+        if (!p.images || p.images.length === 0)
+          needsAttention.push({ type: 'missingImages', targetType: 'property', targetId: String(p._id), label: `Add images to "${p.title}"` });
+        if (!p.description || !p.description.trim())
+          needsAttention.push({ type: 'missingDescription', targetType: 'property', targetId: String(p._id), label: `Add description to "${p.title}"` });
+        if (!p.address || !p.address.trim())
+          needsAttention.push({ type: 'missingAddress', targetType: 'property', targetId: String(p._id), label: `Add address to "${p.title}"` });
+      }
+
+      // campus pulse v1: latest public marketplace items (can later filter by campus/university)
+      const campusPulse = await MarketplaceItem.find({})
+        .sort({ createdAt: -1 })
+        .limit(6)
+        .select('title price thumbnailUrl createdAt')
+        .lean();
+
+      const payload = {
+        userSummary: {
+          firstName: authed.firstName,
+          university: authed.university || '',
+          digest: `${conversations.length} recent chats • ${properties.length} properties • ${marketplace.length} items`,
+        },
+        myListings: {
+          counts: { propertiesCount: properties.length, marketplaceCount: marketplace.length },
+          properties,
+          marketplace,
+        },
+        needsAttention,
+        messagesPreview: conversations.map(c => ({
+          id: String(c._id),
+          lastUpdated: c.lastUpdated,
+          lastMessage: c.lastMessage ? {
+            content: c.lastMessage.content,
+            timestamp: c.lastMessage.timestamp,
+            sender: c.lastMessage.senderId ? `${c.lastMessage.senderId.firstName} ${c.lastMessage.senderId.lastName}` : 'Someone'
+          } : null,
+          participants: (c.participants || []).map(String),
+        })),
+        campusPulse,
+        tasks: [], // can fill later
+        profileProgress: { percent: 60, steps: [{ key: 'avatar', done: Boolean(authed.avatar) }] },
+      };
+
+      res.json(payload);
+    } catch (err) {
+      console.error('GET /dashboard/overview error:', err);
+      res.status(500).json({ error: true, message: 'Internal Server Error' });
+    }
+  });
+
+
 
   server.listen(8000, () => {
     console.log('Server is running on port 8000');
