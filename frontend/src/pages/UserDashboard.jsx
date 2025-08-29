@@ -1,5 +1,5 @@
 // src/pages/UserDashboard.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Modal from "react-modal";
 import { MdAdd, MdClose } from "react-icons/md";
@@ -16,13 +16,12 @@ import AddPropertyImg from "../assets/Images/add-proprty.svg";
 import NoDataImg from "../assets/Images/no-data.svg";
 import axiosInstance from "../utils/axiosInstance";
 
-import "../styles/newrun-hero.css"; // same background style used in Marketplace
+import "../styles/newrun-hero.css"; // same dotted/hero background as Marketplace
 
-/* ------------------------------ helpers ------------------------------ */
+/* ------------------------------ tiny helpers ------------------------------ */
 function classNames(...s) {
   return s.filter(Boolean).join(" ");
 }
-
 function StatChip({ children }) {
   return (
     <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur">
@@ -31,21 +30,18 @@ function StatChip({ children }) {
   );
 }
 
-/* Glassy quick-create sheet (no NextUI) */
+/* ----------------------- glassy quick-create sheet ----------------------- */
 function CreateSheet({ open, onClose, onChoose }) {
   if (!open) return null;
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-end p-6"
-      onClick={onClose}
-    >
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+    <div className="fixed inset-0 z-50" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/45 backdrop-blur-sm" />
       <div
-        className="relative z-10 w-full max-w-sm rounded-3xl border border-white/10 bg-[#0f1115]/80 p-4 shadow-[0_20px_60px_-12px_rgba(0,0,0,.6)]"
+        className="absolute bottom-6 right-6 w-[min(92vw,360px)] rounded-3xl border border-white/10 bg-[#0f1115]/85 p-4 shadow-[0_24px_64px_-12px_rgba(0,0,0,.6)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-white">Create</h3>
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-white">Create</h3>
           <button
             className="grid h-8 w-8 place-items-center rounded-full bg-white/10 text-white hover:bg-white/15"
             onClick={onClose}
@@ -79,8 +75,8 @@ function CreateSheet({ open, onClose, onChoose }) {
   );
 }
 
-/* =============================== Page =============================== */
-const UserDashboard = () => {
+/* ================================= Page ================================== */
+export default function UserDashboard() {
   const nav = useNavigate();
 
   // modal for actual create/edit
@@ -91,7 +87,7 @@ const UserDashboard = () => {
     modalType: "", // 'property' | 'item'
   });
 
-  // sheet under + button
+  // sheet for the floating + button
   const [showCreateSheet, setShowCreateSheet] = useState(false);
 
   // toast
@@ -106,16 +102,16 @@ const UserDashboard = () => {
   const [allItems, setAllItems] = useState([]);
   const [userInfo, setUserInfo] = useState(null);
   const [isSearch, setIsSearch] = useState(false);
-  const [viewMode, setViewMode] = useState("properties");
+  const [viewMode, setViewMode] = useState("properties"); // "properties" | "items"
 
   const pCount = allProperties.length;
   const mCount = allItems.length;
 
-  // ---------- API calls ----------
+  /* ------------------------------ API calls ------------------------------ */
   const getUserInfo = async () => {
     try {
-      const r = await axiosInstance.get("/get-user");
-      if (r?.data?.user) setUserInfo(r.data.user);
+      const response = await axiosInstance.get("/get-user");
+      if (response?.data?.user) setUserInfo(response.data.user);
     } catch (error) {
       if (error?.response?.status === 401) {
         localStorage.clear();
@@ -126,8 +122,8 @@ const UserDashboard = () => {
 
   const getAllProperties = async () => {
     try {
-      const r = await axiosInstance.get("/get-all-property-user");
-      setAllProperties(r?.data?.properties || []);
+      const response = await axiosInstance.get("/get-all-property-user");
+      setAllProperties(response?.data?.properties || []);
     } catch {
       setAllProperties([]);
     }
@@ -135,17 +131,16 @@ const UserDashboard = () => {
 
   const getAllItems = async () => {
     try {
-      const r = await axiosInstance.get("/marketplace/items-user");
-      setAllItems(r?.data?.items || []);
+      const response = await axiosInstance.get("/marketplace/items-user");
+      setAllItems(response?.data?.items || []);
     } catch {
       setAllItems([]);
     }
   };
 
   const deleteProperty = async (data) => {
-    const id = data._id;
     try {
-      const r = await axiosInstance.delete(`/delete-property/${id}`);
+      const r = await axiosInstance.delete(`/delete-property/${data._id}`);
       if (r?.data && !r.data.error) {
         showToast("Property Deleted Successfully", "delete");
         getAllProperties();
@@ -154,9 +149,8 @@ const UserDashboard = () => {
   };
 
   const deleteItem = async (data) => {
-    const id = data._id;
     try {
-      const r = await axiosInstance.delete(`/marketplace/item/${id}`);
+      const r = await axiosInstance.delete(`/marketplace/item/${data._id}`);
       if (r?.data && !r.data.error) {
         showToast("Marketplace Item Deleted Successfully", "delete");
         getAllItems();
@@ -173,7 +167,6 @@ const UserDashboard = () => {
 
   const showToast = (message, type) =>
     setShowToastMsg({ isShown: true, message, type });
-
   const handleCloseToast = () =>
     setShowToastMsg({ isShown: false, message: "" });
 
@@ -201,22 +194,22 @@ const UserDashboard = () => {
     });
   };
 
-  // ---------- UI ----------
+  /* --------------------------------- UI ---------------------------------- */
   return (
     <div className="nr-dots-page min-h-screen text-white">
       <Navbar userInfo={userInfo} handleClearSearch={handleClearSearch} />
 
-      {/* HERO (light lift from Marketplace vibe) */}
-      <header className="mx-auto max-w-7xl px-4 pt-6">
-        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0f1115] px-5 py-6 shadow-[0_16px_48px_-12px_rgba(0,0,0,.55)]">
+      {/* HERO — mirrors Marketplace vibe */}
+      <section className="mx-auto max-w-7xl px-4 pt-6">
+        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0f1115] px-6 py-6 shadow-[0_16px_48px_-12px_rgba(0,0,0,.55)]">
           <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(1200px_400px_at_right_-200px,rgba(99,102,241,0.18),transparent),radial-gradient(800px_320px_at_left_-160px,rgba(59,130,246,0.16),transparent)]" />
-          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">
-                Welcome back{userInfo?.firstName ? `, ${userInfo.firstName}` : ""} 👋
+              <h1 className="text-3xl font-bold tracking-tight">
+                Welcome Back {userInfo?.firstName ? `, ${userInfo.firstName}` : ""} ✨
               </h1>
               <p className="mt-1 text-white/70">
-                Your hub for properties, marketplace, and quick actions.
+                Manage your properties and marketplace listings in one place.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -225,60 +218,60 @@ const UserDashboard = () => {
             </div>
           </div>
         </div>
-      </header>
+      </section>
 
-      {/* TOGGLE */}
-      <div className="mt-6 flex justify-center px-4">
-        <div className="inline-flex overflow-hidden rounded-xl border border-white/10 bg-white/[0.06] p-0.5">
+      {/* VIEW TOGGLE — pill chips like Marketplace toolbar */}
+      <section className="mx-auto mt-6 flex justify-center px-4">
+        <div className="inline-flex overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06] p-0.5">
           <button
             onClick={() => setViewMode("properties")}
             className={classNames(
               "px-4 py-2 text-sm font-medium transition-colors",
               viewMode === "properties"
-                ? "rounded-lg bg-white text-black"
+                ? "rounded-xl bg-white text-black"
                 : "text-white/85 hover:bg-white/10"
             )}
           >
-            View Properties
+            Properties
           </button>
           <button
             onClick={() => setViewMode("items")}
             className={classNames(
               "px-4 py-2 text-sm font-medium transition-colors",
               viewMode === "items"
-                ? "rounded-lg bg-white text-black"
+                ? "rounded-xl bg-white text-black"
                 : "text-white/85 hover:bg-white/10"
             )}
           >
-            View Marketplace Items
+            Marketplace
           </button>
         </div>
-      </div>
+      </section>
 
       {/* GRID */}
       <main className="container mx-auto mt-8 px-4 pb-24">
         {viewMode === "properties" ? (
-          allProperties.length > 0 ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {allProperties.map((it) => (
+          allProperties.length ? (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+              {allProperties.map((p) => (
                 <PropertyCard
-                  key={it._id}
-                  _id={it._id}
-                  title={it.title}
-                  date={it.createdOn}
-                  content={it.content}
-                  tags={it.tags}
-                  isPinned={it.isPinned}
-                  price={it.price}
-                  bedrooms={it.bedrooms}
-                  bathrooms={it.bathrooms}
-                  distanceFromUniversity={it.distanceFromUniversity}
-                  address={it.address}
-                  availabilityStatus={it.availabilityStatus}
-                  description={it.description}
-                  isFeatured={it.isFeatured}
-                  onEdit={() => handleEdit(it, "property")}
-                  onDelete={() => deleteProperty(it)}
+                  key={p._id}
+                  _id={p._id}
+                  title={p.title}
+                  date={p.createdOn}
+                  content={p.content}
+                  tags={p.tags}
+                  isPinned={p.isPinned}
+                  price={p.price}
+                  bedrooms={p.bedrooms}
+                  bathrooms={p.bathrooms}
+                  distanceFromUniversity={p.distanceFromUniversity}
+                  address={p.address}
+                  availabilityStatus={p.availabilityStatus}
+                  description={p.description}
+                  isFeatured={p.isFeatured}
+                  onEdit={() => handleEdit(p, "property")}
+                  onDelete={() => deleteProperty(p)}
                 />
               ))}
             </div>
@@ -287,22 +280,26 @@ const UserDashboard = () => {
               imgSrc={isSearch ? NoDataImg : AddPropertyImg}
               message={
                 isSearch
-                  ? `No properties found.`
-                  : `No properties. Add one to get started.`
+                  ? "No properties found."
+                  : "No properties. Add one to get started."
               }
             />
           )
-        ) : allItems.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {allItems.map((item) => (
+        ) : allItems.length ? (
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+            {allItems.map((it) => (
               <MarketplaceItemCard
-                key={item._id}
-                item={item}
-                onClick={() => nav(`/marketplace/item/${item._id}`)}
-                onToggleFav={async () => {
-                  try {
-                    await axiosInstance.post(`/marketplace/favorites/${item._id}`);
-                  } catch {}
+                key={it._id}
+                item={it}
+                onClick={() => {
+                  // Open edit for owner directly; or navigate to details (your choice)
+                  // nav(`/marketplace/item/${it._id}`);
+                  setOpenAddEditModal({
+                    isShown: true,
+                    type: "edit",
+                    data: it,
+                    modalType: "item",
+                  });
                 }}
               />
             ))}
@@ -312,14 +309,14 @@ const UserDashboard = () => {
             imgSrc={isSearch ? NoDataImg : AddPropertyImg}
             message={
               isSearch
-                ? `No marketplace items found.`
-                : `No items. Add one to get started.`
+                ? "No marketplace items found."
+                : "No items. Add one to get started."
             }
           />
         )}
       </main>
 
-      {/* FLOATING + BUTTON */}
+      {/* FLOATING “+” BUTTON (same position/feel, opens glass sheet) */}
       <button
         className="fixed right-8 bottom-8 grid h-16 w-16 place-items-center rounded-full bg-sky-600 text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-sky-700"
         onClick={() => setShowCreateSheet(true)}
@@ -328,24 +325,35 @@ const UserDashboard = () => {
         <MdAdd className="text-[32px]" />
       </button>
 
-      {/* QUICK-CREATE SHEET */}
+      {/* QUICK CREATE SHEET */}
       <CreateSheet
         open={showCreateSheet}
         onClose={() => setShowCreateSheet(false)}
         onChoose={(key) => {
           setShowCreateSheet(false);
-          handleAddNewItem(key);
+          // open the main modal with chosen type
+          setOpenAddEditModal({
+            isShown: true,
+            type: "add",
+            data: null,
+            modalType: key === "property" ? "property" : "item",
+          });
         }}
       />
 
-      {/* MAIN MODAL (react-modal, same style as your project) */}
+      {/* MAIN MODAL (react-modal, same translucent overlay you like) */}
       <Modal
         isOpen={openAddEditModal.isShown}
         onRequestClose={() =>
-          setOpenAddEditModal({ isShown: false, type: "add", data: null, modalType: "" })
+          setOpenAddEditModal({
+            isShown: false,
+            type: "add",
+            data: null,
+            modalType: "",
+          })
         }
         overlayClassName="fixed inset-0 bg-black/30 backdrop-blur-sm"
-        className="w-[min(720px,92vw)] max-h-[88vh] overflow-auto rounded-2xl border border-white/10 bg-white p-5 text-black shadow-2xl outline-none mx-auto mt-14"
+        className="w-[min(760px,92vw)] max-h-[88vh] overflow-auto rounded-2xl border border-white/10 bg-white p-5 text-black shadow-2xl outline-none mx-auto mt-14"
         contentLabel=""
       >
         {openAddEditModal.modalType === "property" ? (
@@ -353,7 +361,12 @@ const UserDashboard = () => {
             type={openAddEditModal.type}
             propertyData={openAddEditModal.data}
             onClose={() =>
-              setOpenAddEditModal({ isShown: false, type: "add", data: null, modalType: "" })
+              setOpenAddEditModal({
+                isShown: false,
+                type: "add",
+                data: null,
+                modalType: "",
+              })
             }
             getAllProperties={getAllProperties}
             showToastMessage={showToast}
@@ -363,7 +376,12 @@ const UserDashboard = () => {
             type={openAddEditModal.type}
             itemData={openAddEditModal.data}
             onClose={() =>
-              setOpenAddEditModal({ isShown: false, type: "add", data: null, modalType: "" })
+              setOpenAddEditModal({
+                isShown: false,
+                type: "add",
+                data: null,
+                modalType: "",
+              })
             }
             getAllItems={getAllItems}
             showToastMessage={showToast}
@@ -380,6 +398,4 @@ const UserDashboard = () => {
       />
     </div>
   );
-};
-
-export default UserDashboard;
+}
