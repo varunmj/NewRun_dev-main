@@ -249,3 +249,71 @@
 .nr-art-violet  { --nr-tint: 196, 181, 253; } /* Career */
 .nr-art-rose    { --nr-tint: 244, 114, 182; } /* City Life / Culture */
 .nr-art-cyan    { --nr-tint: 34, 211, 238;  } /* Communication / misc */
+
+
+/* --- Global starfield + dotted grid background for NewRun --- */
+/* Usage: wrap pages with <div class="nr-dots-page"> ... */
+
+:root { --nr-bg: #0f1115; }
+
+.nr-dots-page {
+  min-height: 100vh;
+  background: var(--nr-bg);
+  position: relative;
+  color: #fff;
+  isolation: isolate; /* keep overlays behind content */
+}
+
+/* Soft colored glows, like the screenshot */
+.nr-dots-page::before {
+  content: "";
+  position: fixed;
+  inset: -1px;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 380px at 110% -10%, rgba(99,102,241,.22), transparent 60%),
+    radial-gradient(700px 300px at -10% 110%, rgba(59,130,246,.18), transparent 60%),
+    radial-gradient(1200px 600px at 50% -20%, rgba(255,255,255,.06), transparent 70%);
+  mix-blend-mode: screen;
+  z-index: -1;
+}
+
+/* Tiny stars + faint grid lines */
+.nr-dots-page::after {
+  content: "";
+  position: fixed;
+  inset: -1px;
+  pointer-events: none;
+  background-image:
+    radial-gradient(rgba(255,255,255,.12) 1px, transparent 1.2px),
+    radial-gradient(rgba(255,255,255,.08) 1px, transparent 1.2px),
+    linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+  background-size:
+    64px 64px,            /* star layer A */
+    64px 64px,            /* star layer B (offset) */
+    120px 120px,          /* grid horizontal */
+    120px 120px;          /* grid vertical */
+  background-position:
+    0 0,
+    32px 32px,
+    0 0,
+    0 0;
+  opacity: .35;
+  z-index: -1;
+}
+
+/* Optional: subtle star twinkle at the very top only */
+.nr-hero-starry {
+  position: relative;
+}
+.nr-hero-starry::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(800px 300px at 60% -80px, rgba(255,255,255,.12), transparent 60%);
+  opacity: .6;
+  mix-blend-mode: screen;
+}

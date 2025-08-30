@@ -1508,6 +1508,111 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
     }
   });
 
+  // ========= Solve Threads (Housing) =========
+app.post('/solve/housing', authenticateToken, async (req, res) => {
+  try {
+    const { prompt = "" } = req.body || {};
+    const authedUser = req?.user?.user || req?.user || {};
+    const campus = authedUser?.campusLabel || authedUser?.university || "";
+
+    // 1) Use LLM to extract criteria (price, beds, distance, timing, keywords)
+    const sys = `You extract structured JSON search criteria for student housing.
+Return only JSON with keys:
+{
+  "maxPrice": number|null,
+  "bedrooms": number|null,
+  "bathrooms": number|null,
+  "distanceMiles": number|null,
+  "moveIn": string|null,   // ISO or raw
+  "keywords": string[]     // tokens or phrases
+}`;
+    const userMsg = `Campus: ${campus || "unknown"}\nRequest: ${prompt}`;
+
+    const aiResp = await axios.post('https://api.openai.com/v1/chat/completions', {
+      model: "gpt-3.5-turbo",
+      temperature: 0.2,
+      messages: [
+        { role: "system", content: sys },
+        { role: "user", content: userMsg }
+      ]
+    }, {
+      headers: {
+        Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    let extracted = {};
+    try {
+      const txt = aiResp?.data?.choices?.[0]?.message?.content || "{}";
+      // be tolerant to non-JSON; try to find {...}
+      const m = txt.match(/\{[\s\S]*\}/);
+      extracted = m ? JSON.parse(m[0]) : {};
+    } catch (e) { extracted = {}; }
+
+    // 2) Build a Property query
+    const filter = { };
+    // Only show Live if you have it; else remove this line:
+    // filter.status = 'Live';
+
+    // price
+    if (Number.isFinite(Number(extracted.maxPrice))) {
+      filter.price = { $lte: Number(extracted.maxPrice) };
+    }
+    // bedrooms/bathrooms
+    if (Number.isFinite(Number(extracted.bedrooms))) {
+      filter.bedrooms = { $gte: Number(extracted.bedrooms) };
+    }
+    if (Number.isFinite(Number(extracted.bathrooms))) {
+      filter.bathrooms = { $gte: Number(extracted.bathrooms) };
+    }
+    // campus keyword targeting (loose, since we don't have geo here)
+    const kw = Array.isArray(extracted.keywords) ? extracted.keywords.join("|") : "";
+    if (kw) {
+      filter.$or = [
+        { title:       { $regex: kw, $options: 'i' } },
+        { description: { $regex: kw, $options: 'i' } },
+        { address:     { $regex: kw, $options: 'i' } },
+      ];
+    }
+    // optional campus label if you store it on property; comment out if not present
+    // if (campus) filter.campusLabel = { $regex: `^${campus}$`, $options: 'i' };
+
+    // 3) Query candidates
+    const candidates = await Property.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(12)
+      .select('title price bedrooms bathrooms images address distanceFromUniversity description createdAt')
+      .lean();
+
+    // 4) A short plan for the UI to show
+    const plan = [
+      "We parsed your request into search criteria.",
+      "Here are matching listings — select ones you like.",
+      "Tap Request contact to ask owners (uses SafeContact).",
+      "We’ll ping you when owners approve."
+    ];
+
+    return res.json({
+      criteria: {
+        maxPrice: extracted.maxPrice ?? null,
+        bedrooms: extracted.bedrooms ?? null,
+        bathrooms: extracted.bathrooms ?? null,
+        distanceMiles: extracted.distanceMiles ?? null,
+        moveIn: extracted.moveIn ?? null,
+        keywords: Array.isArray(extracted.keywords) ? extracted.keywords : [],
+        campus,
+      },
+      candidates,
+      plan,
+    });
+  } catch (err) {
+    console.error("POST /solve/housing error:", err);
+    res.status(500).json({ error: true, message: "Failed to run Solve Thread" });
+  }
+});
+
+
 
 
   server.listen(8000, () => {
