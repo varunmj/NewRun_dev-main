@@ -112,6 +112,14 @@ function ProfileMenu({ onLogout }) {
           >
             <MdSettings className="text-white/60" /> Settings
           </Link>
+          <Link
+            to="/Dashboard"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/90 hover:bg-white/5"
+          >
+            <MdSettings className="text-white/60" /> Dashboard
+          </Link>
 
           <div className="my-1 h-px bg-white/10" />
 

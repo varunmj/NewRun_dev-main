@@ -12,6 +12,7 @@ const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const { Upload } = require("@aws-sdk/lib-storage");
 const axios = require('axios');
 const { authenticateToken, getAuthUserId } = require('./utilities');
+const Thread = require('./models/thread.model');
 
 
 
@@ -24,6 +25,7 @@ const MarketplaceItem = require('./models/marketplaceItem.model');
 const Message = require('./models/message.model');
 const Conversation = require('./models/conversation.model');
 const ContactAccessRequest = require('./models/contactAccessRequest.model');
+const { extractHousingCriteria } = require('./services/newrun-llm/newrunLLM');
 
 
 const app = express();
@@ -1508,14 +1510,14 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
     }
   });
 
-  // ========= Solve Threads (Housing) =========
+// ========= Solve Threads (Housing) =========
 app.post('/solve/housing', authenticateToken, async (req, res) => {
   try {
     const { prompt = "" } = req.body || {};
     const authedUser = req?.user?.user || req?.user || {};
     const campus = authedUser?.campusLabel || authedUser?.university || "";
 
-    // 1) Use LLM to extract criteria (price, beds, distance, timing, keywords)
+    // 1) Ask LLM to extract criteria
     const sys = `You extract structured JSON search criteria for student housing.
 Return only JSON with keys:
 {
@@ -1523,69 +1525,104 @@ Return only JSON with keys:
   "bedrooms": number|null,
   "bathrooms": number|null,
   "distanceMiles": number|null,
-  "moveIn": string|null,   // ISO or raw
-  "keywords": string[]     // tokens or phrases
+  "moveIn": string|null,
+  "keywords": string[]
 }`;
     const userMsg = `Campus: ${campus || "unknown"}\nRequest: ${prompt}`;
 
-    const aiResp = await axios.post('https://api.openai.com/v1/chat/completions', {
-      model: "gpt-3.5-turbo",
-      temperature: 0.2,
-      messages: [
-        { role: "system", content: sys },
-        { role: "user", content: userMsg }
-      ]
-    }, {
-      headers: {
-        Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
+    const aiResp = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: "gpt-3.5-turbo",
+        temperature: 0.2,
+        messages: [
+          { role: "system", content: sys },
+          { role: "user", content: userMsg }
+        ]
       },
-    });
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
     let extracted = {};
     try {
       const txt = aiResp?.data?.choices?.[0]?.message?.content || "{}";
-      // be tolerant to non-JSON; try to find {...}
       const m = txt.match(/\{[\s\S]*\}/);
       extracted = m ? JSON.parse(m[0]) : {};
-    } catch (e) { extracted = {}; }
+    } catch { extracted = {}; }
 
-    // 2) Build a Property query
-    const filter = { };
-    // Only show Live if you have it; else remove this line:
-    // filter.status = 'Live';
+    // Build filters
+    const strictFilter = {};
+    const lenientFilter = {};
 
-    // price
-    if (Number.isFinite(Number(extracted.maxPrice))) {
-      filter.price = { $lte: Number(extracted.maxPrice) };
-    }
-    // bedrooms/bathrooms
-    if (Number.isFinite(Number(extracted.bedrooms))) {
-      filter.bedrooms = { $gte: Number(extracted.bedrooms) };
-    }
-    if (Number.isFinite(Number(extracted.bathrooms))) {
-      filter.bathrooms = { $gte: Number(extracted.bathrooms) };
-    }
-    // campus keyword targeting (loose, since we don't have geo here)
-    const kw = Array.isArray(extracted.keywords) ? extracted.keywords.join("|") : "";
-    if (kw) {
-      filter.$or = [
-        { title:       { $regex: kw, $options: 'i' } },
-        { description: { $regex: kw, $options: 'i' } },
-        { address:     { $regex: kw, $options: 'i' } },
-      ];
-    }
-    // optional campus label if you store it on property; comment out if not present
-    // if (campus) filter.campusLabel = { $regex: `^${campus}$`, $options: 'i' };
+    const toNum = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 
-    // 3) Query candidates
-    const candidates = await Property.find(filter)
+    const maxPrice = toNum(extracted.maxPrice);
+    const minBeds  = toNum(extracted.bedrooms);
+    const minBaths = toNum(extracted.bathrooms);
+
+    // price / beds / baths go to BOTH strict & lenient queries
+    if (maxPrice !== null) {
+      strictFilter.price = { $lte: maxPrice };
+      lenientFilter.price = { $lte: maxPrice };
+    }
+    if (minBeds !== null) {
+      strictFilter.bedrooms = { $gte: minBeds };
+      lenientFilter.bedrooms = { $gte: minBeds };
+    }
+    if (minBaths !== null) {
+      strictFilter.bathrooms = { $gte: minBaths };
+      lenientFilter.bathrooms = { $gte: minBaths };
+    }
+
+    // Optional keyword filter (strict only) — ignore generic words
+    const stop = /^(near|around|close|campus|the|a|an|for|in|at|to|under|less|than|with|and|or|of|me|room|apartment|apt)$/i;
+    const tokens = (Array.isArray(extracted.keywords) ? extracted.keywords : [])
+      .map(s => String(s || "").trim())
+      .filter(s => s && !stop.test(s) && s.length >= 3);
+
+    if (tokens.length) {
+      // Build AND-of-ORs: each token must appear in title OR description
+      strictFilter.$and = tokens.map(t => ({
+        $or: [
+          { title:       { $regex: t, $options: 'i' } },
+          { description: { $regex: t, $options: 'i' } },
+          // don't regex the address object; uncomment if you store a string address:
+          // { address:     { $regex: t, $options: 'i' } },
+        ]
+      }));
+    }
+
+    // Query strict first
+    let candidates = await Property.find(strictFilter)
       .sort({ createdAt: -1 })
       .limit(12)
       .select('title price bedrooms bathrooms images address distanceFromUniversity description createdAt')
       .lean();
 
-    // 4) A short plan for the UI to show
+    // Fallback to lenient if strict returns nothing
+    if (!candidates.length) {
+      candidates = await Property.find(lenientFilter)
+        .sort({ createdAt: -1 })
+        .limit(12)
+        .select('title price bedrooms bathrooms images address distanceFromUniversity description createdAt')
+        .lean();
+    }
+
+    const criteria = {
+      maxPrice: maxPrice ?? null,
+      bedrooms: minBeds ?? null,
+      bathrooms: minBaths ?? null,
+      distanceMiles: extracted.distanceMiles ?? null,
+      moveIn: extracted.moveIn ?? null,
+      keywords: Array.isArray(extracted.keywords) ? extracted.keywords : [],
+      campus,
+    };
+
     const plan = [
       "We parsed your request into search criteria.",
       "Here are matching listings — select ones you like.",
@@ -1593,18 +1630,25 @@ Return only JSON with keys:
       "We’ll ping you when owners approve."
     ];
 
+    // Save a thread snapshot
+    const threadDoc = await Thread.create({
+      userId: authedUser._id,
+      kind: 'housing',
+      prompt,
+      criteria,
+      plan,
+      candidatesSnapshot: candidates,
+      status: 'active',
+      meta: { campus }
+    });
+
     return res.json({
-      criteria: {
-        maxPrice: extracted.maxPrice ?? null,
-        bedrooms: extracted.bedrooms ?? null,
-        bathrooms: extracted.bathrooms ?? null,
-        distanceMiles: extracted.distanceMiles ?? null,
-        moveIn: extracted.moveIn ?? null,
-        keywords: Array.isArray(extracted.keywords) ? extracted.keywords : [],
-        campus,
-      },
+      ok: true,
+      criteria,
       candidates,
       plan,
+      thread: threadDoc,
+      threadId: String(threadDoc._id),
     });
   } catch (err) {
     console.error("POST /solve/housing error:", err);
@@ -1612,6 +1656,18 @@ Return only JSON with keys:
   }
 });
 
+
+app.get('/threads/:id', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req.user?.user || req.user)?._id;
+    const t = await Thread.findOne({ _id: req.params.id, userId }).lean();
+    if (!t) return res.status(404).json({ error: true, message: 'Thread not found' });
+    res.json({ thread: t });
+  } catch (e) {
+    console.error('GET /threads/:id error', e);
+    res.status(500).json({ error: true, message: 'Internal Server Error' });
+  }
+});
 
 
 
