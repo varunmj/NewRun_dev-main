@@ -1,5 +1,5 @@
 // src/pages/UserDashboard.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Modal from "react-modal";
 import {
@@ -251,14 +251,32 @@ function SolveHousingPanel({ initialText, onCreateProperty, onClose }) {
     distanceMiles: undefined,
   });
 
+  // --- Pagination constants & state (Batch 3) ---
+  const PAGE_SIZE = 12;
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+
+  // build a clean filter object from current chip state
+  const cleanFilters = () => {
+    const out = {};
+    if (typeof filters.maxPrice === "number" && filters.maxPrice > 0) out.maxPrice = filters.maxPrice;
+    if (filters.moveIn) out.moveIn = filters.moveIn;
+    if (typeof filters.distanceMiles === "number" && filters.distanceMiles > 0) out.distanceMiles = filters.distanceMiles;
+    return out;
+  };
+
+
   // which editor is open
   const [openEditor, setOpenEditor] = useState(null); // 'budget' | 'date' | 'distance' | null
 
   const fetchSolve = async (opts = {}) => {
     try {
       setLoading(true);
+
       const body = {
         prompt: initialText || "",
+        page: opts.page ?? 1,
+        limit: PAGE_SIZE,
       };
       if (opts.filters) body.filters = opts.filters;
 
@@ -266,17 +284,23 @@ function SolveHousingPanel({ initialText, onCreateProperty, onClose }) {
 
       setThreadId(data?.threadId || null);
       setCriteria(data?.criteria || null);
-      setCands(Array.isArray(data?.candidates) ? data.candidates : []);
       setPlan(Array.isArray(data?.plan) ? data.plan : []);
 
-      // initialize filters from criteria only when not set yet
+      const next = Array.isArray(data?.candidates) ? data.candidates : [];
+
+      // append or replace
+      setCands((prev) => (opts.append ? [...prev, ...next] : next));
+
+      // compute hasMore (server flag preferred, fallback to page size)
+      setHasMore(Boolean(data?.hasMore) || next.length === PAGE_SIZE);
+      setPage(body.page);
+
+      // initialize filters from criteria only when not set yet (keep your logic)
       setFilters((prev) => ({
         maxPrice:
           prev.maxPrice !== undefined
             ? prev.maxPrice
-            : (typeof data?.criteria?.maxPrice === "number"
-                ? data.criteria.maxPrice
-                : undefined),
+            : (typeof data?.criteria?.maxPrice === "number" ? data.criteria.maxPrice : undefined),
         moveIn:
           prev.moveIn !== undefined
             ? prev.moveIn
@@ -284,20 +308,51 @@ function SolveHousingPanel({ initialText, onCreateProperty, onClose }) {
         distanceMiles:
           prev.distanceMiles !== undefined
             ? prev.distanceMiles
-            : (typeof data?.criteria?.distanceMiles === "number"
-                ? data.criteria.distanceMiles
-                : undefined),
+            : (typeof data?.criteria?.distanceMiles === "number" ? data.criteria.distanceMiles : undefined),
       }));
     } catch {
-      setCands([]);
+      if (!opts.append) setCands([]);
       setPlan([]);
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
   };
+  // restore from localStorage on mount
+    useEffect(() => {
+      // filters
+      const raw = localStorage.getItem("solve:filters");
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          setFilters((f) => ({ ...f, ...parsed }));
+          // optional: immediately refetch using restored filters
+          fetchSolve({ filters: {
+            ...(typeof parsed.maxPrice === "number" && parsed.maxPrice > 0 ? { maxPrice: parsed.maxPrice } : {}),
+            ...(parsed.moveIn ? { moveIn: parsed.moveIn } : {}),
+            ...(typeof parsed.distanceMiles === "number" && parsed.distanceMiles > 0 ? { distanceMiles: parsed.distanceMiles } : {}),
+          }, page: 1, append: false });
+        } catch {}
+      }
+
+      // threadId
+      const t = localStorage.getItem("solve:threadId");
+      if (t) setThreadId(t);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // persist on change
+    useEffect(() => {
+      localStorage.setItem("solve:filters", JSON.stringify(filters));
+    }, [filters]);
+
+    useEffect(() => {
+      if (threadId) localStorage.setItem("solve:threadId", threadId);
+    }, [threadId]);
+
 
   useEffect(() => {
-    fetchSolve();
+    fetchSolve({ page: 1, append: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialText]);
 
@@ -309,13 +364,7 @@ function SolveHousingPanel({ initialText, onCreateProperty, onClose }) {
 
 
   const applyFilters = async () => {
-    const clean = {};
-    if (typeof filters.maxPrice === "number" && filters.maxPrice > 0)
-      clean.maxPrice = filters.maxPrice;
-    if (filters.moveIn) clean.moveIn = filters.moveIn;
-    if (typeof filters.distanceMiles === "number" && filters.distanceMiles > 0)
-      clean.distanceMiles = filters.distanceMiles;
-    await fetchSolve({ filters: clean });
+    await fetchSolve({ filters: cleanFilters(), page: 1, append: false });
     setOpenEditor(null);
   };
 
@@ -411,6 +460,32 @@ function SolveHousingPanel({ initialText, onCreateProperty, onClose }) {
   }, [cands]);
 
 
+  // ArrowLeft / ArrowRight in the details drawer
+    useEffect(() => {
+      if (!detailFor) return;
+      const onKey = (e) => {
+        const imgs = collectAllImages(detailFull, detailFor);
+        if (!imgs.length) return;
+        if (e.key === "ArrowLeft") {
+          setDetailPhotoIndex((i) => (i - 1 + imgs.length) % imgs.length);
+        }
+        if (e.key === "ArrowRight") {
+          setDetailPhotoIndex((i) => (i + 1) % imgs.length);
+        }
+      };
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    }, [detailFor, detailFull]);
+
+    useEffect(() => {
+      if (!detailFor) return;
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => { document.body.style.overflow = prev; };
+    }, [detailFor]);
+
+
+
     // Batch 2: bulk request
   const bulkRequest = async () => {
     if (!selected.size) return;
@@ -431,17 +506,53 @@ function SolveHousingPanel({ initialText, onCreateProperty, onClose }) {
     { requested: 0, approved: 0 }
   );
 
+  // --- Live status sync (Batch 3) ---
+  useEffect(() => {
+    // ids we still care about
+    const ids = cands
+      .map((p) => p._id)
+      .filter((id) => ["requesting", "pending"].includes(reqState[id]));
+
+    if (!ids.length) return;
+
+    let cancelled = false;
+
+    const tick = async () => {
+      try {
+        const { data } = await axiosInstance.post("/contact-access/status", { ids });
+        if (cancelled || !data?.statuses) return;
+
+        setReqState((prev) => {
+          const next = { ...prev };
+          for (const s of data.statuses) {
+            const { id, status, self } = s || {};
+            if (!id) continue;
+            next[id] =
+              self ? "self" :
+              status === "approved" ? "approved" :
+              status === "pending" ? "pending" :
+              status === "requesting" ? "requesting" :
+              prev[id];
+          }
+          return next;
+        });
+      } catch {
+        /* ignore polling errors */
+      }
+    };
+
+    tick(); // immediate
+    const iv = setInterval(tick, 8000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [cands, reqState]);
+
+
   const selectableSelectedCount = [...selected].filter(id => canSelect(reqState[id])).length;
 
 
   // Change this to match your backend route if different
   const PROPERTY_DETAILS_ENDPOINT = (id) => `/properties/${id}`;
 
-  const collectAllImages = (obj = {}) => {
-    // merge arrays from both lightweight cand and full detail
-    const a = collectImages(obj);
-    return Array.from(new Set(a)); // dedupe
-  };
 
   const openDetails = async (cand) => {
     setDetailFor(cand);
@@ -623,419 +734,372 @@ function SolveHousingPanel({ initialText, onCreateProperty, onClose }) {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {cands.map((p) => {
-            const img = primaryImageUrl(p);
-            const state = reqState[p._id];
-            const posted = daysAgo(p?.createdAt);
-            let distance = null;
+  <>
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {cands.map((p) => {
+        const img = primaryImageUrl(p);
+        const state = reqState[p._id];
+        const posted = daysAgo(p?.createdAt);
+        let distance = null;
 
-            // prefer backend-provided distance if any
-            if (typeof p?.distanceMiles === "number") {
-              distance = p.distanceMiles;
-            } else if (
-              campusPoint &&
-              p?.location?.coordinates &&
-              Array.isArray(p.location.coordinates) &&
-              p.location.coordinates.length === 2
-            ) {
-              const [lng, lat] = p.location.coordinates;
-              const d = distanceMilesBetween(campusPoint, { lat, lng });
-              if (d) distance = d;
-            }
+        if (typeof p?.distanceMiles === "number") {
+          distance = p.distanceMiles;
+        } else if (
+          campusPoint &&
+          p?.location?.coordinates &&
+          Array.isArray(p.location.coordinates) &&
+          p.location.coordinates.length === 2
+        ) {
+          const [lng, lat] = p.location.coordinates;
+          const d = distanceMilesBetween(campusPoint, { lat, lng });
+          if (d) distance = d;
+        }
 
-            return (
-              <div key={p._id} className="overflow-hidden rounded-xl border border-black/10 bg-white">
-                <div className="aspect-[16/10] w-full bg-black/5">
-                  {img ? (
-                    <img
-                      src={img}
-                      alt={p.title}
-                      className="h-full w-full object-cover"
-                      onError={(e) => { e.currentTarget.style.display = "none"; }}
-                    />
-                  ) : null}
+        return (
+          <div key={p._id} className="overflow-hidden rounded-xl border border-black/10 bg-white">
+            <div className="aspect-[16/10] w-full bg-black/5">
+              {img ? (
+                <img
+                  src={img}
+                  alt={p.title}
+                  className="h-full w-full object-cover"
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                />
+              ) : null}
+            </div>
+            <div className="p-3">
+              {/* title row with checkbox */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    aria-label="Select listing"
+                    checked={selected.has(p._id)}
+                    disabled={!canSelect(state)}
+                    onChange={() => toggleSelect(p._id, !canSelect(state))}
+                    className={`h-4 w-4 accent-black ${!canSelect(state) ? "opacity-50 cursor-not-allowed" : ""}`}
+                  />
+                  <h4 className="line-clamp-1 font-semibold">{p.title}</h4>
                 </div>
-                <div className="p-3">
-                  {/* title row with checkbox */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        aria-label="Select listing"
-                        checked={selected.has(p._id)}
-                        disabled={!canSelect(state)}
-                        onChange={() => toggleSelect(p._id, !canSelect(state))}
-                        className={`h-4 w-4 accent-black ${!canSelect(state) ? "opacity-50 cursor-not-allowed" : ""}`}
-                      />
-                      <h4 className="line-clamp-1 font-semibold">{p.title}</h4>
-                    </div>
-                    {typeof p.price === "number" && (
-                      <span className="rounded-full bg-black/5 px-2.5 py-0.5 text-sm font-medium">
-                        {fmtMoney(p.price)}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* meta row (you already compute `posted` and `distance` above) */}
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-black/60">
-                    {posted && <span>Posted {posted}</span>}
-                    {typeof distance === "number" && <span>· {distance} mi to campus</span>}
-                  </div>
-
-                  <p className="mt-1 line-clamp-2 text-[13.5px] text-black/70">
-                    {p.address?.street || p.address || p.description || ""}
-                  </p>
-
-                  {/* state chip */}
-                  {state && (
-                    <div
-                      className={cx(
-                        "mt-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                        state === "approved"
-                          ? "bg-emerald-600 text-white"
-                          : state === "pending"
-                          ? "bg-amber-400 text-black"
-                          : state === "self"
-                          ? "bg-black text-white"
-                          : state === "error"
-                          ? "bg-rose-600 text-white"
-                          : "bg-black/5 text-black/70"
-                      )}
-                    >
-                      {buttonLabel(state)}
-                    </div>
-                  )}
-
-                  <div className="mt-3 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => requestContact(p._id)}
-                        disabled={isDisabled(state)}
-                        aria-busy={state === "requesting"}
-                        className={cx(
-                          "rounded-lg px-3 py-1.5 text-sm font-medium",
-                          state === "approved"
-                            ? "bg-emerald-600 text-white"
-                            : state === "pending"
-                            ? "bg-amber-500 text-black"
-                            : state === "self"
-                            ? "bg-black text-white opacity-70"
-                            : state === "error"
-                            ? "bg-rose-600 text-white"
-                            : "bg-black text-white hover:bg-black/90"
-                        )}
-                      >
-                        {buttonLabel(state)}
-                      </button>
-
-                      <button
-                        onClick={() => openDetails(p)}
-                        className="rounded-lg bg-black/5 px-3 py-1.5 text-sm hover:bg-black/10"
-                      >
-                        View details
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            );
-          })}
-        </div>
-      )}
-        {/* Details peek (right drawer) */}
-        {detailFor && (
-          <div
-            className="fixed inset-0 z-40 flex items-start justify-end bg-black/30 backdrop-blur-sm"
-            onClick={() => setDetailFor(null)}
-            role="dialog"
-            aria-modal="true"
-          >
-            <div
-                className="h-full w-[min(640px,92vw)] overflow-auto bg-white p-4 text-black shadow-2xl"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div className="mb-3 flex items-start justify-between">
-                  <div className="min-w-0">
-                    <h4 className="text-lg font-semibold truncate">
-                      {detailFull?.title || detailFor?.title || "Listing"}
-                    </h4>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
-                      {typeof (detailFull?.price ?? detailFor?.price) === "number" && (
-                        <span className="rounded-full bg-black/5 px-2.5 py-0.5 font-medium">
-                          {fmtMoney(detailFull?.price ?? detailFor?.price)}
-                        </span>
-                      )}
-                      {(() => {
-                        const posted = daysAgo(detailFull?.createdAt || detailFor?.createdAt);
-                        return posted ? <span className="text-black/60">Posted {posted}</span> : null;
-                      })()}
-                    </div>
-                  </div>
-                  <button
-                    className="rounded-md bg-black/5 px-2 py-1 text-sm"
-                    onClick={() => { setDetailFor(null); setDetailFull(null); }}
-                  >
-                    Close
-                  </button>
-                </div>
-
-                {/* Gallery */}
-                <div className="relative">
-                  <div className="relative aspect-[16/10] w-full overflow-hidden rounded-lg bg-black/5">
-                    {(() => {
-                      const imgs = collectAllImages(detailFull, detailFor);
-                      const hero = imgs?.[detailPhotoIndex];
-                      if (!imgs?.length) {
-                        return (
-                          <div className="grid h-full w-full place-items-center text-sm text-black/50">
-                            {detailLoading ? "Loading photos…" : "No photos yet"}
-                          </div>
-                        );
-                      }
-                      return (
-                        <img
-                          src={hero}
-                          alt={detailFull?.title || detailFor?.title}
-                          className="h-full w-full object-cover"
-                          onError={(e) => { e.currentTarget.style.display = "none"; }}
-                        />
-                      );
-                    })()}
-                  </div>
-
-                  {/* Gallery controls */}
-                  {(() => {
-                    const imgs = collectAllImages(detailFull) || collectAllImages(detailFor);
-                    if (!imgs?.length) return null;
-                    const prev = () =>
-                      setDetailPhotoIndex((i) => (i - 1 + imgs.length) % imgs.length);
-                    const next = () =>
-                      setDetailPhotoIndex((i) => (i + 1) % imgs.length);
-                    return (
-                      <div className="mt-2 flex items-center justify-between">
-                        <button onClick={prev} className="rounded-md bg-black/5 px-2 py-1 text-sm hover:bg-black/10">Prev</button>
-                        <div className="text-xs text-black/60">
-                          {detailPhotoIndex + 1} / {imgs.length}
-                        </div>
-                        <button onClick={next} className="rounded-md bg-black/5 px-2 py-1 text-sm hover:bg-black/10">Next</button>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                {/* Key facts */}
-                <div className="mt-4 grid grid-cols-2 gap-3 text-[14px] sm:grid-cols-3">
-                  {(() => {
-                    const src = detailFull || detailFor || {};
-                    const facts = [
-                      { icon: <MdKingBed />, label: "Bedrooms", value: src.bedrooms },
-                      { icon: <MdBathtub />, label: "Bathrooms", value: src.bathrooms },
-                      { icon: <MdSquareFoot />, label: "Sq Ft", value: src.sqft || src.squareFeet },
-                      { icon: <MdCalendarToday />, label: "Move-in", value: src.moveIn || src.availableFrom },
-                      { icon: <MdLocalLaundryService />, label: "Laundry", value: src.laundry || (src.inUnitLaundry ? "In-unit" : src.onSiteLaundry ? "On-site" : null) },
-                      { icon: <MdLocalParking />, label: "Parking", value: src.parking || (src.parkingAvailable ? "Available" : null) },
-                      { icon: <MdPets />, label: "Pets", value: src.pets || (src.petsAllowed ? "Allowed" : src.pets ? src.pets : null) },
-                      { icon: <MdLocationOn />, label: "Distance", value: (() => {
-                          // compute distance if possible
-                          let d = src.distanceMiles;
-                          if (!d && campusPoint && src?.location?.coordinates?.length === 2) {
-                            const [lng, lat] = src.location.coordinates;
-                            d = distanceMilesBetween(campusPoint, { lat, lng });
-                          }
-                          return typeof d === "number" ? `${d} mi to campus` : null;
-                        })(),
-                      },
-                    ].filter(f => f.value !== undefined && f.value !== null && f.value !== "");
-
-                    if (!facts.length) return null;
-                    return facts.map((f, i) => (
-                      <div key={i} className="flex items-center gap-2 rounded-lg border border-black/10 bg-black/[0.03] px-2.5 py-2">
-                        <div className="text-[18px] text-black/70">{f.icon}</div>
-                        <div className="min-w-0">
-                          <div className="text-[12px] uppercase tracking-wide text-black/50">{f.label}</div>
-                          <div className="truncate">{f.value}</div>
-                        </div>
-                      </div>
-                    ));
-                  })()}
-                </div>
-
-                {/* Amenities */}
-                {(() => {
-                  const src = detailFull || detailFor || {};
-                  const list =
-                    (Array.isArray(src.amenities) && src.amenities) ||
-                    (Array.isArray(src.features) && src.features) ||
-                    [];
-                  if (!list.length) return null;
-                  return (
-                    <div className="mt-4">
-                      <div className="mb-1 text-sm font-semibold">Amenities</div>
-                      <div className="flex flex-wrap gap-2">
-                        {list.map((a, i) => (
-                          <span key={i} className="rounded-full bg-black/5 px-2.5 py-1 text-[13px]">{a}</span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Pricing & terms */}
-                {(() => {
-                  const src = detailFull || detailFor || {};
-                  const deposit = src.deposit || src.securityDeposit;
-                  const fees = src.fees || src.applicationFee;
-                  const lease = src.lease || src.leaseLength;
-                  const utilities =
-                    (Array.isArray(src.utilitiesIncluded) && src.utilitiesIncluded.length
-                      ? src.utilitiesIncluded.join(", ")
-                      : null) ||
-                    (src.utilities && typeof src.utilities === "string" ? src.utilities : null);
-
-                  if (!deposit && !fees && !lease && !utilities) return null;
-                  return (
-                    <div className="mt-4 space-y-1">
-                      <div className="text-sm font-semibold">Pricing & Terms</div>
-                      <ul className="list-disc pl-5 text-[14px]">
-                        {lease && <li>Lease: {lease}</li>}
-                        {deposit && <li>Security deposit: {fmtMoney(Number(deposit)) || deposit}</li>}
-                        {fees && <li>Application fee: {fmtMoney(Number(fees)) || fees}</li>}
-                        {utilities && <li>Utilities included: {utilities}</li>}
-                      </ul>
-                    </div>
-                  );
-                })()}
-
-                {/* Description */}
-                {(() => {
-                  const desc = detailFull?.description || detailFor?.description;
-                  if (!desc) return null;
-                  return (
-                    <div className="mt-4">
-                      <div className="mb-1 text-sm font-semibold">About this place</div>
-                      <p className="whitespace-pre-wrap text-[14px] text-black/80">{desc}</p>
-                    </div>
-                  );
-                })()}
-
-                {/* Address */}
-                {(() => {
-                  const addr = detailFull?.address?.street || detailFull?.address || detailFor?.address?.street || detailFor?.address;
-                  if (!addr) return null;
-                  return (
-                    <div className="mt-4 text-[14px]">
-                      <div className="mb-1 text-sm font-semibold">Address</div>
-                      <div className="text-black/80">{addr}</div>
-                    </div>
-                  );
-                })()}
-
-                {/* CTA */}
-                <div className="mt-6">
-                  {(() => {
-                    const state = reqState[detailFor._id];
-                    return (
-                      <button
-                        onClick={() => requestContact(detailFor._id)}
-                        disabled={isDisabled(state)}
-                        className={cx(
-                          "rounded-lg px-3 py-1.5 text-sm font-medium",
-                          state === "approved"
-                            ? "bg-emerald-600 text-white"
-                            : state === "pending"
-                            ? "bg-amber-500 text-black"
-                            : state === "self"
-                            ? "bg-black text-white opacity-70"
-                            : state === "error"
-                            ? "bg-rose-600 text-white"
-                            : "bg-black text-white hover:bg-black/90"
-                        )}
-                      >
-                        {buttonLabel(state)}
-                      </button>
-                    );
-                  })()}
-                  {detailLoading && (
-                    <div className="mt-2 text-xs text-black/60">Loading more details…</div>
-                  )}
-                </div>
-              </div>
-
-
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                {typeof detailFor.price === "number" && (
-                  <span className="rounded-full bg-black/5 px-2.5 py-0.5 font-medium">
-                    {fmtMoney(detailFor.price)}
+                {typeof p.price === "number" && (
+                  <span className="rounded-full bg-black/5 px-2.5 py-0.5 text-sm font-medium">
+                    {fmtMoney(p.price)}
                   </span>
                 )}
-                {daysAgo(detailFor?.createdAt) && (
-                  <span className="text-black/60">Posted {daysAgo(detailFor?.createdAt)}</span>
-                )}
               </div>
 
-              <div className="mt-3">
-                <div className="relative aspect-[16/10] w-full overflow-hidden rounded-lg bg-black/5">
+              {/* meta row */}
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-black/60">
+                {posted && <span>Posted {posted}</span>}
+                {typeof distance === "number" && <span>· {distance} mi to campus</span>}
+              </div>
+
+              <p className="mt-1 line-clamp-2 text-[13.5px] text-black/70">
+                {p.address?.street || p.address || p.description || ""}
+              </p>
+
+              {/* state chip */}
+              {state && (
+                <div
+                  className={cx(
+                    "mt-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                    state === "approved"
+                      ? "bg-emerald-600 text-white"
+                      : state === "pending"
+                      ? "bg-amber-400 text-black"
+                      : state === "self"
+                      ? "bg-black text-white"
+                      : state === "error"
+                      ? "bg-rose-600 text-white"
+                      : "bg-black/5 text-black/70"
+                  )}
+                >
+                  {buttonLabel(state)}
+                </div>
+              )}
+
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => requestContact(p._id)}
+                    disabled={isDisabled(state)}
+                    aria-busy={state === "requesting"}
+                    className={cx(
+                      "rounded-lg px-3 py-1.5 text-sm font-medium",
+                      state === "approved"
+                        ? "bg-emerald-600 text-white"
+                        : state === "pending"
+                        ? "bg-amber-500 text-black"
+                        : state === "self"
+                        ? "bg-black text-white opacity-70"
+                        : state === "error"
+                        ? "bg-rose-600 text-white"
+                        : "bg-black text-white hover:bg-black/90"
+                    )}
+                  >
+                    {buttonLabel(state)}
+                  </button>
+
+                  <button
+                    onClick={() => openDetails(p)}
+                    className="rounded-lg bg-black/5 px-3 py-1.5 text-sm hover:bg-black/10"
+                  >
+                    View details
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+
+    {!loading && hasMore && (
+      <div className="mt-3 flex justify-center">
+        <button
+          onClick={() =>
+            fetchSolve({
+              filters: cleanFilters(),
+              page: page + 1,
+              append: true,
+            })
+          }
+          disabled={loading}
+          className="rounded-md bg-black px-4 py-2 text-white hover:bg-black/90 disabled:opacity-60"
+        >
+          Load more results
+        </button>
+      </div>
+    )}
+  </>
+)
+}
+        {/* Details peek (right drawer) */}
+        {detailFor && (
+        <div
+          className="fixed inset-0 z-40 flex items-start justify-end bg-black/30 backdrop-blur-sm"
+          onClick={() => { setDetailFor(null); setDetailFull(null); }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="h-full w-[min(560px,92vw)] overflow-auto bg-white p-4 text-black shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="mb-3 flex items-start justify-between">
+              <div className="min-w-0">
+                <h4 className="truncate text-lg font-semibold">
+                  {detailFull?.title || detailFor?.title || "Listing"}
+                </h4>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+                  {typeof (detailFull?.price ?? detailFor?.price) === "number" && (
+                    <span className="rounded-full bg-black/5 px-2.5 py-0.5 font-medium">
+                      {fmtMoney(detailFull?.price ?? detailFor?.price)}
+                    </span>
+                  )}
                   {(() => {
-                    const imgs = collectImages(detailFor);
-                    const hero = imgs[0];
-                    return hero ? (
+                    const posted = daysAgo(detailFull?.createdAt || detailFor?.createdAt);
+                    return posted ? <span className="text-black/60">Posted {posted}</span> : null;
+                  })()}
+                </div>
+              </div>
+              <button
+                className="rounded-md bg-black/5 px-2 py-1 text-sm"
+                onClick={() => { setDetailFor(null); setDetailFull(null); }}
+              >
+                Close
+              </button>
+            </div>
+
+            {/* Gallery (height-capped) */}
+            <div className="relative">
+              <div className="w-full overflow-hidden rounded-lg bg-black/5">
+                <div className="h-[260px] sm:h-[300px] md:h-[340px] lg:h-[380px] max-h-[62vh]">
+                  {(() => {
+                    const imgs = collectAllImages(detailFull, detailFor);
+                    const hero = imgs?.[detailPhotoIndex];
+                    if (!imgs?.length) {
+                      return (
+                        <div className="grid h-full w-full place-items-center text-sm text-black/50">
+                          {detailLoading ? "Loading photos…" : "No photos yet"}
+                        </div>
+                      );
+                    }
+                    return (
                       <img
                         src={hero}
-                        alt={detailFor.title}
+                        alt={detailFull?.title || detailFor?.title}
                         className="h-full w-full object-cover"
+                        draggable={false}
                         onError={(e) => { e.currentTarget.style.display = "none"; }}
                       />
-                    ) : (
-                      <div className="grid h-full w-full place-items-center text-sm text-black/50">
-                        No photos yet
-                      </div>
                     );
                   })()}
                 </div>
               </div>
 
-              <div className="mt-3 space-y-1 text-[14px]">
-                {(detailFor.address?.street || detailFor.address) && (
-                  <div className="text-black/70">
-                    {detailFor.address?.street || detailFor.address}
-                  </div>
-                )}
-                {detailFor.description && (
-                  <p className="text-black/80">{detailFor.description}</p>
-                )}
-              </div>
-
-              <div className="mt-4">
-                {(() => {
-                  const state = reqState[detailFor._id];
-                  return (
-                    <button
-                      onClick={() => requestContact(detailFor._id)}
-                      disabled={isDisabled(state)}
-                      className={cx(
-                        "rounded-lg px-3 py-1.5 text-sm font-medium",
-                        state === "approved"
-                          ? "bg-emerald-600 text-white"
-                          : state === "pending"
-                          ? "bg-amber-500 text-black"
-                          : state === "self"
-                          ? "bg-black text-white opacity-70"
-                          : state === "error"
-                          ? "bg-rose-600 text-white"
-                          : "bg-black text-white hover:bg-black/90"
-                      )}
-                    >
-                      {buttonLabel(state)}
+              {/* Gallery controls */}
+              {(() => {
+                const imgs = collectAllImages(detailFull, detailFor);
+                if (!imgs?.length) return null;
+                const prev = () => setDetailPhotoIndex((i) => (i - 1 + imgs.length) % imgs.length);
+                const next = () => setDetailPhotoIndex((i) => (i + 1) % imgs.length);
+                return (
+                  <div className="mt-2 flex items-center justify-between">
+                    <button onClick={prev} className="rounded-md bg-black/5 px-2 py-1 text-sm hover:bg-black/10">
+                      Prev
                     </button>
-                  );
-                })()}
-              </div>
+                    <div className="text-xs text-black/60">
+                      {detailPhotoIndex + 1} / {imgs.length}
+                    </div>
+                    <button onClick={next} className="rounded-md bg-black/5 px-2 py-1 text-sm hover:bg-black/10">
+                      Next
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
-          
-        )}
+
+            {/* Key facts */}
+            <div className="mt-4 grid grid-cols-2 gap-3 text-[14px] sm:grid-cols-3">
+              {(() => {
+                const src = detailFull || detailFor || {};
+                const facts = [
+                  { icon: <MdKingBed />, label: "Bedrooms", value: src.bedrooms },
+                  { icon: <MdBathtub />, label: "Bathrooms", value: src.bathrooms },
+                  { icon: <MdSquareFoot />, label: "Sq Ft", value: src.sqft || src.squareFeet },
+                  { icon: <MdCalendarToday />, label: "Move-in", value: src.moveIn || src.availableFrom },
+                  { icon: <MdLocalLaundryService />, label: "Laundry", value: src.laundry || (src.inUnitLaundry ? "In-unit" : src.onSiteLaundry ? "On-site" : null) },
+                  { icon: <MdLocalParking />, label: "Parking", value: src.parking || (src.parkingAvailable ? "Available" : null) },
+                  { icon: <MdPets />, label: "Pets", value: src.pets || (src.petsAllowed ? "Allowed" : src.pets ? src.pets : null) },
+                  { icon: <MdLocationOn />, label: "Distance", value: (() => {
+                      let d = src.distanceMiles;
+                      if (!d && campusPoint && src?.location?.coordinates?.length === 2) {
+                        const [lng, lat] = src.location.coordinates;
+                        d = distanceMilesBetween(campusPoint, { lat, lng });
+                      }
+                      return typeof d === "number" ? `${d} mi to campus` : null;
+                    })(),
+                  },
+                ].filter(f => f.value !== undefined && f.value !== null && f.value !== "");
+                if (!facts.length) return null;
+                return facts.map((f, i) => (
+                  <div key={i} className="flex items-center gap-2 rounded-lg border border-black/10 bg-black/[0.03] px-2.5 py-2">
+                    <div className="text-[18px] text-black/70">{f.icon}</div>
+                    <div className="min-w-0">
+                      <div className="text-[12px] uppercase tracking-wide text-black/50">{f.label}</div>
+                      <div className="truncate">{f.value}</div>
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            {/* Amenities */}
+            {(() => {
+              const src = detailFull || detailFor || {};
+              const list =
+                (Array.isArray(src.amenities) && src.amenities) ||
+                (Array.isArray(src.features) && src.features) ||
+                [];
+              if (!list.length) return null;
+              return (
+                <div className="mt-4">
+                  <div className="mb-1 text-sm font-semibold">Amenities</div>
+                  <div className="flex flex-wrap gap-2">
+                    {list.map((a, i) => (
+                      <span key={i} className="rounded-full bg-black/5 px-2.5 py-1 text-[13px]">{a}</span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Pricing & terms */}
+            {(() => {
+              const src = detailFull || detailFor || {};
+              const deposit = src.deposit || src.securityDeposit;
+              const fees = src.fees || src.applicationFee;
+              const lease = src.lease || src.leaseLength;
+              const utilities =
+                (Array.isArray(src.utilitiesIncluded) && src.utilitiesIncluded.length
+                  ? src.utilitiesIncluded.join(", ")
+                  : null) ||
+                (src.utilities && typeof src.utilities === "string" ? src.utilities : null);
+              if (!deposit && !fees && !lease && !utilities) return null;
+              return (
+                <div className="mt-4 space-y-1">
+                  <div className="text-sm font-semibold">Pricing & Terms</div>
+                  <ul className="list-disc pl-5 text-[14px]">
+                    {lease && <li>Lease: {lease}</li>}
+                    {deposit && <li>Security deposit: {fmtMoney(Number(deposit)) || deposit}</li>}
+                    {fees && <li>Application fee: {fmtMoney(Number(fees)) || fees}</li>}
+                    {utilities && <li>Utilities included: {utilities}</li>}
+                  </ul>
+                </div>
+              );
+            })()}
+
+            {/* Description */}
+            {(() => {
+              const desc = detailFull?.description || detailFor?.description;
+              if (!desc) return null;
+              return (
+                <div className="mt-4">
+                  <div className="mb-1 text-sm font-semibold">About this place</div>
+                  <p className="whitespace-pre-wrap text-[14px] text-black/80">{desc}</p>
+                </div>
+              );
+            })()}
+
+            {/* Address */}
+            {(() => {
+              const addr =
+                detailFull?.address?.street || detailFull?.address ||
+                detailFor?.address?.street || detailFor?.address;
+              if (!addr) return null;
+              return (
+                <div className="mt-4 text-[14px]">
+                  <div className="mb-1 text-sm font-semibold">Address</div>
+                  <div className="text-black/80">{addr}</div>
+                </div>
+              );
+            })()}
+
+            {/* CTA */}
+            <div className="mt-6">
+              {(() => {
+                const state = reqState[detailFor._id];
+                return (
+                  <button
+                    onClick={() => requestContact(detailFor._id)}
+                    disabled={isDisabled(state)}
+                    className={cx(
+                      "rounded-lg px-3 py-1.5 text-sm font-medium",
+                      state === "approved"
+                        ? "bg-emerald-600 text-white"
+                        : state === "pending"
+                        ? "bg-amber-500 text-black"
+                        : state === "self"
+                        ? "bg-black text-white opacity-70"
+                        : state === "error"
+                        ? "bg-rose-600 text-white"
+                        : "bg-black text-white hover:bg-black/90"
+                    )}
+                  >
+                    {buttonLabel(state)}
+                  </button>
+                );
+              })()}
+              {detailLoading && (
+                <div className="mt-2 text-xs text-black/60">Loading more details…</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
 
         {/* Bulk selection bar */}
         {selected.size > 0 && (
