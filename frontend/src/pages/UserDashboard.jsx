@@ -5,8 +5,10 @@ import Modal from "react-modal";
 import {
   MdClose, MdArrowForwardIos, MdMicNone, MdTune,
   MdKingBed, MdBathtub, MdSquareFoot, MdPets,
-  MdLocalParking, MdLocalLaundryService, MdCalendarToday, MdLocationOn
+  MdLocalParking, MdLocalLaundryService, MdCalendarToday, MdLocationOn,
+  MdFavoriteBorder, MdFavorite, MdVisibilityOff, MdInfoOutline
 } from "react-icons/md";
+
 
 import Navbar from "../components/Navbar/Navbar";
 import AddEditProperty from "../pages/AddEditProperty";
@@ -468,6 +470,13 @@ function SolveHousingPanel({ initialText, onCreateProperty, onClose }) {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailPhotoIndex, setDetailPhotoIndex] = useState(0);
 
+  // Shortlist / hide / why-open / notes
+  const [favorites, setFavorites] = useState(new Set());     // Set<string>
+  const [hidden, setHidden] = useState(new Set());           // Set<string>
+  const [whyOpen, setWhyOpen] = useState(new Set());         // Set<string>
+  const [notes, setNotes] = useState({});                    // { [id]: string }
+  const [shortlistOnly, setShortlistOnly] = useState(false); // UI filter
+
   // local editable filters (chips)
   const [filters, setFilters] = useState({
     maxPrice: undefined,
@@ -556,7 +565,8 @@ const buildDefaultMessages = (data) => {
 
   // which editor is open
   const [openEditor, setOpenEditor] = useState(null); // 'budget' | 'date' | 'distance' | null
-
+  const [showCompare, setShowCompare] = useState(false);
+  
   const fetchSolve = async (opts = {}) => {
     try {
       setLoading(true);
@@ -664,6 +674,39 @@ const buildDefaultMessages = (data) => {
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+
+    // Load from localStorage on mount
+    useEffect(() => {
+      try {
+        const favRaw = JSON.parse(localStorage.getItem("solve:favs") || "[]");
+        const hidRaw = JSON.parse(localStorage.getItem("solve:hidden") || "[]");
+        const nRaw = JSON.parse(localStorage.getItem("solve:notes") || "{}");
+        const sOnly = JSON.parse(localStorage.getItem("solve:shortlistOnly") || "false");
+        setFavorites(new Set(Array.isArray(favRaw) ? favRaw : []));
+        setHidden(new Set(Array.isArray(hidRaw) ? hidRaw : []));
+        setNotes(typeof nRaw === "object" && nRaw ? nRaw : {});
+        setShortlistOnly(Boolean(sOnly));
+      } catch {}
+    }, []);
+
+  // Persist when they change
+    useEffect(() => {
+      localStorage.setItem("solve:favs", JSON.stringify([...favorites]));
+    }, [favorites]);
+
+    useEffect(() => {
+      localStorage.setItem("solve:hidden", JSON.stringify([...hidden]));
+    }, [hidden]);
+
+    useEffect(() => {
+      localStorage.setItem("solve:notes", JSON.stringify(notes));
+    }, [notes]);
+
+    useEffect(() => {
+      localStorage.setItem("solve:shortlistOnly", JSON.stringify(shortlistOnly));
+    }, [shortlistOnly]);
+
+
     // persist on change
     useEffect(() => {
       localStorage.setItem("solve:filters", JSON.stringify(filters));
@@ -763,6 +806,8 @@ const buildDefaultMessages = (data) => {
       return s;
     });
   };
+
+    const selectedList = cands.filter((p) => selected.has(p._id)).slice(0, 4);
 
   useEffect(() => {
     setSelected(prev => {
@@ -1478,6 +1523,106 @@ const buildDefaultMessages = (data) => {
         </div>
       )}
 
+      {showCompare && (
+        <div
+          className="fixed inset-0 z-40 flex items-start justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowCompare(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="mt-6 max-h-[85vh] w-[min(980px,96vw)] overflow-auto rounded-2xl bg-white p-4 text-black shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="text-lg font-semibold">Compare {selectedList.length} places</h4>
+              <button
+                className="rounded-md bg-black/5 px-2 py-1 text-sm"
+                onClick={() => setShowCompare(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="grid auto-cols-[minmax(220px,1fr)] grid-flow-col gap-3">
+              {selectedList.map((p) => {
+                const img = primaryImageUrl(p);
+                const state = reqState[p._id];
+
+                const facts = [];
+                if (typeof p.price === "number") facts.push(["Price", fmtMoney(p.price)]);
+                if (typeof p.matchScore === "number") facts.push(["Match", `${Math.round(p.matchScore)}%`]);
+                if (typeof p.bedrooms === "number") facts.push(["Bedrooms", p.bedrooms]);
+                if (typeof p.bathrooms === "number") facts.push(["Bathrooms", p.bathrooms]);
+                if (typeof p.sqft === "number" || p.squareFeet) facts.push(["Sq Ft", p.sqft || p.squareFeet]);
+                if (p.moveIn) facts.push(["Move-in", p.moveIn]);
+                if (typeof p.distanceMiles === "number") facts.push(["Distance", `${p.distanceMiles} mi`]);
+                if (p.laundry || p.inUnitLaundry || p.onSiteLaundry) {
+                  facts.push([
+                    "Laundry",
+                    p.laundry || (p.inUnitLaundry ? "In-unit" : p.onSiteLaundry ? "On-site" : "")
+                  ]);
+                }
+                if (p.parking || p.parkingAvailable) {
+                  facts.push(["Parking", p.parking || (p.parkingAvailable ? "Available" : "")]);
+                }
+                if (p.pets || p.petsAllowed) {
+                  facts.push(["Pets", p.pets || (p.petsAllowed ? "Allowed" : "")]);
+                }
+
+                return (
+                  <div key={p._id} className="rounded-xl border border-black/10 bg-black/[0.02]">
+                    <div className="aspect-[16/10] w-full overflow-hidden rounded-t-xl bg-black/5">
+                      {img && (
+                        <img
+                          src={img}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          onError={(e) => { e.currentTarget.style.display = "none"; }}
+                        />
+                      )}
+                    </div>
+                    <div className="p-3">
+                      <div className="mb-1 line-clamp-1 font-semibold">{p.title}</div>
+                      <div className="mb-2 line-clamp-2 text-[13px] text-black/60">
+                        {p.address?.street || p.address || ""}
+                      </div>
+
+                      <dl className="space-y-1 text-[13px]">
+                        {facts.map(([k, v], i) => (
+                          <div key={i} className="flex justify-between gap-2">
+                            <dt className="text-black/60">{k}</dt>
+                            <dd className="font-medium text-right">{v}</dd>
+                          </div>
+                        ))}
+                      </dl>
+
+                      <div className="mt-3">
+                        <button
+                          onClick={() => requestContact(p._id)}
+                          disabled={isDisabled(state)}
+                          className={cx(
+                            "w-full rounded-md px-3 py-1.5 text-sm",
+                            state === "approved" ? "bg-emerald-600 text-white"
+                            : state === "pending" ? "bg-amber-500 text-black"
+                            : state === "self" ? "bg-black text-white opacity-70"
+                            : state === "error" ? "bg-rose-600 text-white"
+                            : "bg-black text-white hover:bg-black/90"
+                          )}
+                        >
+                          {buttonLabel(state)}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+
 
         {/* Bulk selection bar */}
         {selected.size > 0 && (
@@ -1496,6 +1641,17 @@ const buildDefaultMessages = (data) => {
                 Clear
               </button>
               <button
+                onClick={() => setShowCompare(true)}
+                disabled={selectedList.length < 2}
+                className={`rounded-md px-3 py-1.5 ${
+                  selectedList.length < 2
+                    ? "bg-black/30 text-white/70 cursor-not-allowed"
+                    : "bg-black text-white hover:bg-black/90"
+                }`}
+              >
+                Compare selected ({selectedList.length})
+              </button>
+              <button
                 onClick={bulkRequest}
                 disabled={selectableSelectedCount === 0}
                 className={`rounded-md px-3 py-1.5 ${
@@ -1509,6 +1665,7 @@ const buildDefaultMessages = (data) => {
             </div>
           </div>
         )}
+
 
 
       <div className="flex justify-end gap-2 pt-2">
