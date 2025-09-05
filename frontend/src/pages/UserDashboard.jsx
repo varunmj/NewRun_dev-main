@@ -653,6 +653,8 @@ const buildDefaultMessages = (data) => {
   const diffDistance = typeof filters.distanceMiles === "number" && filters.distanceMiles !== criteria?.distanceMiles;
   const filtersOverrideParsed = diffBudget || diffMoveIn || diffDistance;
 
+  const didInitialFetch = useRef(false);
+
   // restore from localStorage on mount
     useEffect(() => {
       // filters
@@ -662,6 +664,7 @@ const buildDefaultMessages = (data) => {
           const parsed = JSON.parse(raw);
           setFilters((f) => ({ ...f, ...parsed }));
           // optional: immediately refetch using restored filters
+          didInitialFetch.current = true;
           fetchSolve({
             filters: {
               ...(typeof parsed.maxPrice === "number" && parsed.maxPrice > 0 ? { maxPrice: parsed.maxPrice } : {}),
@@ -682,8 +685,6 @@ const buildDefaultMessages = (data) => {
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-
-    const didInitialFetch = useRef(false);
 
       // didInitialFetch.current = true;
 
