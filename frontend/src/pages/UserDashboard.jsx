@@ -143,6 +143,61 @@ function Nudge({ children, onClick }) {
 
 
 
+/* ---------- Agent thread UI ---------- */
+function AgentThread({ agent, onAnswer, loading }) {
+  if (!agent) return null;
+  return (
+    <div className="space-y-2">
+      {(agent.messages || []).map((m, i) => (
+        <div
+          key={i}
+          className={
+            m.role === "assistant"
+              ? "rounded-lg bg-black/[0.04] p-3 text-sm"
+              : "rounded-lg border border-black/10 p-3 text-sm"
+          }
+        >
+          {m.text}
+        </div>
+      ))}
+
+      {loading && (
+        <div className="rounded-lg bg-black/[0.03] p-3 text-sm text-black/60">
+          Working… searching sources and ranking matches.
+        </div>
+      )}
+
+      {!!(agent.questions || []).length && (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 items-start">
+          {(agent.questions || []).map((q, qi) => (
+            <div
+              key={qi}
+              className="h-full rounded-lg border border-black/10 bg-white px-3 py-2"
+            >
+              <div className="mb-1 text-xs font-semibold text-black/70">{q.text}</div>
+              <div className="flex flex-wrap gap-2">
+                {(q.options || []).map((opt, oi) => (
+                  <button
+                    key={oi}
+                    className="rounded-full bg-black/5 px-3 py-1 text-sm hover:bg-black/10"
+                    onClick={() => onAnswer?.(opt)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+
+
+
 /* ============================ HERO ============================ */
 function SolveHero({
   firstName,
@@ -152,6 +207,158 @@ function SolveHero({
   onNewProperty,
   onNewItem,
 }) {
+
+      // --- Voice input (Web Speech API) ---
+    const recRef = React.useRef(null);
+    const [listening, setListening] = useState(false);
+    
+    const baseTextRef = useRef("");        // text present before we started listening
+    const [autoSubmitFromMic, setAutoSubmitFromMic] = useState(false);
+
+    function ToolsPopover({ onPickTemplate, getValue, onAutoMicChanged }) {
+      const [open, setOpen] = React.useState(false);
+      const [autoMic, setAutoMic] = React.useState(false);
+      const rootRef = React.useRef(null);
+
+      React.useEffect(() => onAutoMicChanged?.(autoMic), [autoMic, onAutoMicChanged]);
+
+      // Close on outside click or Esc
+      React.useEffect(() => {
+        if (!open) return;
+        const onDocClick = (e) => {
+          if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+        };
+        const onEsc = (e) => e.key === "Escape" && setOpen(false);
+        document.addEventListener("mousedown", onDocClick);
+        document.addEventListener("keydown", onEsc);
+        return () => {
+          document.removeEventListener("mousedown", onDocClick);
+          document.removeEventListener("keydown", onEsc);
+        };
+      }, [open]);
+
+      const templates = [
+        "Find me a room near campus under $900 for October",
+        "2BR within 1 mile under $1200, in-unit laundry",
+        "Short-term sublease Oct–Dec, budget $800",
+      ];
+
+      return (
+        <div ref={rootRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            className="inline-flex items-center gap-1 rounded-md bg-white/10 px-2.5 py-1 text-xs hover:bg-white/15"
+          >
+            <MdTune className="text-sm" /> Tools
+          </button>
+
+          {open && (
+            <div className="absolute left-0 top-[115%] z-20 w-[min(520px,92vw)] rounded-xl border border-white/10 bg-black/70 p-3 text-white/90 shadow-lg backdrop-blur">
+              <div className="mb-1 text-[11px] uppercase tracking-wide text-white/60">Templates</div>
+              <div className="flex flex-wrap gap-2">
+                {templates.map((t, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => { onPickTemplate?.(t); setOpen(false); }}
+                    className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-sm hover:bg-white/20"
+                  >
+                    {t}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => { onPickTemplate?.((getValue?.() || '') + ' near campus'); setOpen(false); }}
+                  className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-sm hover:bg-white/20"
+                  title="Quick nudge"
+                >
+                  + near campus
+                </button>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={autoMic}
+                    onChange={(e) => setAutoMic(e.target.checked)}
+                    className="h-4 w-4 accent-white/80"
+                  />
+                  Auto-run after voice input
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="rounded-md bg-white/10 px-2 py-1 text-xs hover:bg-white/20"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+
+
+    // tidy up on unmount
+    useEffect(() => () => {
+      try { recRef.current?.abort?.(); } catch {}
+    }, []);
+
+    const toggleMic = () => {
+      if (listening) {
+        try { recRef.current?.stop?.(); } catch {}
+        return;
+      }
+
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) {
+        alert("Speech recognition isn’t supported in this browser. Try Chrome or Edge.");
+        return;
+      }
+
+      const rec = new SR();
+      rec.lang = "en-US";
+      rec.interimResults = true;   // show words as you speak
+      rec.continuous = false;      // one utterance per click (change to true if you want)
+
+      rec.onstart = () => {
+        baseTextRef.current = value || "";
+        setListening(true);
+      };
+
+      rec.onresult = (e) => {
+        // Combine all results from the current session
+        let spoken = "";
+        for (let i = 0; i < e.results.length; i++) {
+          spoken += e.results[i][0].transcript;
+        }
+        spoken = spoken.trim();
+
+        const prefix = baseTextRef.current.trim();
+        // Keep the original text, then live-update with the speech
+        setValue(prefix ? `${prefix} ${spoken}` : spoken);
+      };
+
+      rec.onerror = () => {
+        setListening(false);
+        recRef.current = null;
+      };
+
+      rec.onend = () => {
+        setListening(false);
+        recRef.current = null;
+        // if (autoSubmitFromMic) onSubmit?.();   // <- submit after voice
+      };
+
+      recRef.current = rec;
+      rec.start();
+    };
+
   return (
     <section className="nr-hero-bg nr-hero-starry">
       <div className="mx-auto max-w-7xl px-4 pt-16 pb-10">
@@ -175,27 +382,44 @@ function SolveHero({
 
         <div className="mx-auto mt-6 max-w-3xl">
           <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-2 backdrop-blur">
+            {/* Tools button + popover */}
             <div className="flex items-center justify-between px-2 pb-2 text-white/70">
-              <span className="inline-flex items-center gap-1 text-xs">
-                <MdTune /> Tools
-              </span>
+              <ToolsPopover
+                onPickTemplate={(t) => setValue(t)}
+                getValue={() => value}
+                onAutoMicChanged={(v) => setAutoSubmitFromMic(v)}
+              />
             </div>
 
             <div className="flex items-center gap-2 px-1 pb-1">
               <input
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    onSubmit?.();
+                  }
+                }}
                 placeholder='Try: "Find me a room near campus under $900 for October"'
                 className="flex-1 rounded-xl bg-transparent px-4 py-3 text-[15px] text-white outline-none placeholder:text-white/40"
               />
               <button
                 type="button"
-                className="grid h-10 w-10 place-items-center rounded-xl bg-white/10 text-white hover:bg-white/15"
-                aria-label="Voice"
-                title="Voice"
+                onClick={toggleMic}
+                className={
+                  "grid h-10 w-10 place-items-center rounded-xl text-white transition " +
+                  (listening
+                    ? "bg-white/20 ring-2 ring-amber-500 animate-pulse"
+                    : "bg-white/10 hover:bg-white/15")
+                }
+                aria-label={listening ? "Stop voice input" : "Start voice input"}
+                aria-pressed={listening}
+                title={listening ? "Listening… click to stop" : "Voice"}
               >
                 <MdMicNone />
               </button>
+
               <button
                 onClick={() => onSubmit?.()}
                 className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2.5 text-sm font-semibold text-black hover:opacity-95"
@@ -256,6 +480,70 @@ function SolveHousingPanel({ initialText, onCreateProperty, onClose }) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
 
+  const [agent, setAgent] = useState({
+    messages: [],
+    questions: [],
+    relaxations: [],
+  });
+
+  // Build default messages if backend doesn't send them yet
+const buildDefaultMessages = (data) => {
+  const msgs = [];
+  const c = data?.criteria || {};
+  const bits = [];
+  if (typeof c.maxPrice === "number") bits.push(`≤ ${fmtMoney(c.maxPrice)}`);
+  if (c.moveIn) bits.push(`move-in ${c.moveIn}`);
+  if (typeof c.distanceMiles === "number") bits.push(`${c.distanceMiles} mi`);
+  if (c.campus) bits.push(c.campus);
+  msgs.push({
+    role: "assistant",
+    text: `I parsed your request${bits.length ? `: ${bits.join(" · ")}` : ""}.`,
+  });
+
+  const plan = Array.isArray(data?.plan) ? data.plan : [];
+  if (plan[0]) msgs.push({ role: "assistant", text: plan[0] });
+  return msgs;
+};
+
+// Build default clarifying questions if backend doesn't send them yet
+  const buildDefaultQuestions = (data) => {
+    const qs = [];
+    const c = data?.criteria || {};
+    if (!c.moveIn) {
+      const today = new Date().toISOString().slice(0, 10);
+      qs.push({
+        id: "moveIn",
+        text: "Do you have a move-in date?",
+        options: [
+          { label: "Oct 1", key: "moveIn", value: today },
+          { label: "This month", key: "moveIn", value: today },
+          { label: "Skip", key: null, value: null },
+        ],
+      });
+    }
+    if (typeof c.distanceMiles !== "number") {
+      qs.push({
+        id: "distanceMiles",
+        text: "How close to campus?",
+        options: [
+          { label: "≤ 0.5 mi", key: "distanceMiles", value: 0.5 },
+          { label: "≤ 1 mi", key: "distanceMiles", value: 1 },
+          { label: "≤ 2 mi", key: "distanceMiles", value: 2 },
+        ],
+      });
+    }
+    return qs;
+  };
+
+  // When user taps a question option, apply to filters and refetch
+  const handleQuestionAnswer = (opt) => {
+    if (!opt || !opt.key) return;
+    const next = { ...cleanFilters(), [opt.key]: opt.value };
+    setFilters((f) => ({ ...f, [opt.key]: opt.value }));
+    fetchSolve({ filters: next, page: 1, append: false });
+  };
+
+
   // build a clean filter object from current chip state
   const cleanFilters = () => {
     const out = {};
@@ -288,6 +576,15 @@ function SolveHousingPanel({ initialText, onCreateProperty, onClose }) {
 
       const next = Array.isArray(data?.candidates) ? data.candidates : [];
 
+      // NEW: agent wiring (backward-compatible)
+      setAgent({
+        messages: Array.isArray(data?.messages) && data.messages.length
+          ? data.messages
+          : buildDefaultMessages(data),
+        questions: Array.isArray(data?.questions) ? data.questions : buildDefaultQuestions(data),
+        relaxations: Array.isArray(data?.suggestedRelaxations) ? data.suggestedRelaxations : [],
+      });
+
       // append or replace
       setCands((prev) => (opts.append ? [...prev, ...next] : next));
 
@@ -318,6 +615,32 @@ function SolveHousingPanel({ initialText, onCreateProperty, onClose }) {
       setLoading(false);
     }
   };
+
+
+  // inside SolveHousingPanel
+  const cleanFrom = (obj = {}) => {
+    const out = {};
+    if (typeof obj.maxPrice === "number" && obj.maxPrice > 0) out.maxPrice = obj.maxPrice;
+    if (obj.moveIn) out.moveIn = obj.moveIn;
+    if (typeof obj.distanceMiles === "number" && obj.distanceMiles > 0) out.distanceMiles = obj.distanceMiles;
+    return out;
+  };
+
+  const resetToParsed = () => {
+    const next = {
+      maxPrice: typeof criteria?.maxPrice === "number" ? criteria.maxPrice : undefined,
+      moveIn: criteria?.moveIn || undefined,
+      distanceMiles: typeof criteria?.distanceMiles === "number" ? criteria.distanceMiles : undefined,
+    };
+    setFilters(next);
+    fetchSolve({ filters: cleanFrom(next), page: 1, append: false });
+  };
+
+  const diffBudget   = typeof filters.maxPrice === "number"    && filters.maxPrice !== criteria?.maxPrice;
+  const diffMoveIn   = !!filters.moveIn                        && filters.moveIn   !== criteria?.moveIn;
+  const diffDistance = typeof filters.distanceMiles === "number" && filters.distanceMiles !== criteria?.distanceMiles;
+  const filtersOverrideParsed = diffBudget || diffMoveIn || diffDistance;
+
   // restore from localStorage on mount
     useEffect(() => {
       // filters
@@ -618,15 +941,28 @@ function SolveHousingPanel({ initialText, onCreateProperty, onClose }) {
         <Chip onClick={() => setOpenEditor(openEditor === "budget" ? null : "budget")}>
           <span className="text-xs uppercase text-black/60">Budget:</span>
           <span className="font-medium">{safeMoney(filters.maxPrice)}</span>
+          {diffBudget && <span className="text-xs text-black/50 ml-1">(saved)</span>}
         </Chip>
         <Chip onClick={() => setOpenEditor(openEditor === "date" ? null : "date")}>
           <span className="text-xs uppercase text-black/60">Move-in:</span>
           <span className="font-medium">{filters.moveIn || "Not set"}</span>
+          {diffMoveIn && <span className="text-xs text-black/50 ml-1">(saved)</span>}
         </Chip>
         <Chip onClick={() => setOpenEditor(openEditor === "distance" ? null : "distance")}>
           <span className="text-xs uppercase text-black/60">Distance:</span>
           <span className="font-medium">{filters.distanceMiles ? `${filters.distanceMiles} mi` : "Not set"}</span>
+          {diffDistance && <span className="text-xs text-black/50 ml-1">(saved)</span>}
         </Chip>
+        {filtersOverrideParsed && (
+          <div className="ml-auto flex items-center gap-2">
+            <span className="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-xs">
+              Filters override parsed
+            </span>
+            <button onClick={resetToParsed} className="text-xs underline text-black/70 hover:text-black">
+              Use parsed
+            </button>
+          </div>
+        )}
       </div>
 
       {openEditor === "budget" && (
@@ -659,6 +995,13 @@ function SolveHousingPanel({ initialText, onCreateProperty, onClose }) {
         />
       )}
 
+      {/* Agent thread (messages + questions) */}
+      <AgentThread
+        agent={agent}
+        onAnswer={handleQuestionAnswer}
+        loading={loading && cands.length === 0}
+      />
+
       {/* Criteria & plan boxes */}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-black/10 bg-black/[0.03] p-3 text-sm">
@@ -675,6 +1018,7 @@ function SolveHousingPanel({ initialText, onCreateProperty, onClose }) {
             {criteria?.campus && <li>Campus: {criteria.campus}</li>}
             {typeof criteria?.bedrooms === "number" && <li>Bedrooms: {criteria.bedrooms}+</li>}
             {typeof criteria?.bathrooms === "number" && <li>Bathrooms: {criteria.bathrooms}+</li>}
+            
           </ul>
         </div>
 
@@ -767,6 +1111,19 @@ function SolveHousingPanel({ initialText, onCreateProperty, onClose }) {
                 />
               ) : null}
             </div>
+            {/* <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-black/60">
+              {posted && <span>Posted {posted}</span>}
+              {typeof distance === "number" && <span>· {distance} mi to campus</span>}
+              {(Array.isArray(p.why) && p.why.length > 0) && (
+                <button
+                  type="button"
+                  className="underline decoration-dotted underline-offset-2"
+                  title={p.why.join("\n")}
+                >
+                  Why?
+                </button>
+              )}
+            </div> */}
             <div className="p-3">
               {/* title row with checkbox */}
               <div className="flex items-center justify-between gap-2">
@@ -781,9 +1138,21 @@ function SolveHousingPanel({ initialText, onCreateProperty, onClose }) {
                   />
                   <h4 className="line-clamp-1 font-semibold">{p.title}</h4>
                 </div>
+                {/* {typeof p.price === "number" && (
+                  <span className="rounded-full bg-black/5 px-2.5 py-0.5 text-sm font-medium">
+                    {fmtMoney(p.price)}
+                  </span>
+                )} */}
+                {/* existing price badge stays */}
                 {typeof p.price === "number" && (
                   <span className="rounded-full bg-black/5 px-2.5 py-0.5 text-sm font-medium">
                     {fmtMoney(p.price)}
+                  </span>
+                )}
+                {/* NEW: match score badge, if present */}
+                {typeof p.matchScore === "number" && (
+                  <span className="rounded-full bg-black/5 px-2 py-0.5 text-[11px] text-black/70">
+                    {Math.round(p.matchScore)}% match
                   </span>
                 )}
               </div>
@@ -792,6 +1161,15 @@ function SolveHousingPanel({ initialText, onCreateProperty, onClose }) {
               <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-black/60">
                 {posted && <span>Posted {posted}</span>}
                 {typeof distance === "number" && <span>· {distance} mi to campus</span>}
+                {(Array.isArray(p.why) && p.why.length > 0) && (
+                   <button
+                     type="button"
+                     className="underline decoration-dotted underline-offset-2"
+                     title={p.why.join("\n")}
+                   >
+                     Why?
+                   </button>
+                 )}
               </div>
 
               <p className="mt-1 line-clamp-2 text-[13.5px] text-black/70">
