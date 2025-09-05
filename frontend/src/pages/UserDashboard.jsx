@@ -64,6 +64,9 @@ const collectAllImages = (...objs) => {
 
 
 /* ---------- new helpers (Batch 1) ---------- */
+const formatYMD = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 const daysAgo = (iso) => {
   if (!iso) return null;
   const d = new Date(iso);
@@ -519,11 +522,9 @@ const buildDefaultMessages = (data) => {
     const qs = [];
     const c = data?.criteria || {};
     if (!c.moveIn) {
-      const today = new Date().toISOString().slice(0, 10);
       const now = new Date();
-      const oct1 = new Date(now.getFullYear(), 9, 1) // month is 0-indexed
-          .toISOString()
-          .slice(0, 10);
+      const today = formatYMD(now);
+      const oct1 = formatYMD(new Date(now.getFullYear(), 9, 1)); // Oct = 9
       qs.push({
         id: "moveIn",
         text: "Do you have a move-in date?",
@@ -1161,7 +1162,7 @@ const buildDefaultMessages = (data) => {
               onClick={() =>
                 setFilters((f) => ({
                   ...f,
-                  moveIn: f.moveIn || new Date().toISOString().slice(0, 10),
+                  moveIn: f.moveIn || formatYMD(new Date()),
                 }))
               }
             >
@@ -1489,7 +1490,7 @@ const buildDefaultMessages = (data) => {
                   { icon: <MdPets />, label: "Pets", value: src.pets || (src.petsAllowed ? "Allowed" : src.pets ? src.pets : null) },
                   { icon: <MdLocationOn />, label: "Distance", value: (() => {
                       let d = src.distanceMiles;
-                      if (!d && campusPoint && src?.location?.coordinates?.length === 2) {
+                      if (d == null && campusPoint && src?.location?.coordinates?.length === 2) {
                         const [lng, lat] = src.location.coordinates;
                         d = distanceMilesBetween(campusPoint, { lat, lng });
                       }
