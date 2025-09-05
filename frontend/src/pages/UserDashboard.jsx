@@ -580,6 +580,8 @@ const buildDefaultMessages = (data) => {
 
       const { data } = await axiosInstance.post("/solve/housing", body);
 
+      
+
       setThreadId(data?.threadId || null);
       setCriteria(data?.criteria || null);
       setPlan(Array.isArray(data?.plan) ? data.plan : []);
@@ -660,11 +662,17 @@ const buildDefaultMessages = (data) => {
           const parsed = JSON.parse(raw);
           setFilters((f) => ({ ...f, ...parsed }));
           // optional: immediately refetch using restored filters
-          fetchSolve({ filters: {
-            ...(typeof parsed.maxPrice === "number" && parsed.maxPrice > 0 ? { maxPrice: parsed.maxPrice } : {}),
-            ...(parsed.moveIn ? { moveIn: parsed.moveIn } : {}),
-            ...(typeof parsed.distanceMiles === "number" && parsed.distanceMiles > 0 ? { distanceMiles: parsed.distanceMiles } : {}),
-          }, page: 1, append: false });
+          fetchSolve({
+            filters: {
+              ...(typeof parsed.maxPrice === "number" && parsed.maxPrice > 0 ? { maxPrice: parsed.maxPrice } : {}),
+              ...(parsed.moveIn ? { moveIn: parsed.moveIn } : {}),
+              ...(typeof parsed.distanceMiles === "number" && parsed.distanceMiles > 0 ? { distanceMiles: parsed.distanceMiles } : {}),
+            },
+            page: 1,
+            append: false,
+          }).finally(() => {
+            didInitialFetch.current = true; // mark hydrated if we fetched here
+          });
         } catch {}
       }
 
@@ -673,6 +681,17 @@ const buildDefaultMessages = (data) => {
       if (t) setThreadId(t);
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+
+    const didInitialFetch = useRef(false);
+
+      // didInitialFetch.current = true;
+
+      useEffect(() => {
+        if (didInitialFetch.current) return;
+        fetchSolve({ page: 1, append: false });
+        didInitialFetch.current = true;
+      }, [initialText]);
 
 
     // Load from localStorage on mount
@@ -716,11 +735,6 @@ const buildDefaultMessages = (data) => {
       if (threadId) localStorage.setItem("solve:threadId", threadId);
     }, [threadId]);
 
-
-  useEffect(() => {
-    fetchSolve({ page: 1, append: false });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialText]);
 
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && setDetailFor(null);
@@ -777,6 +791,42 @@ const buildDefaultMessages = (data) => {
   const canSelect = (state) =>
     !(state === "requesting" || state === "pending" || state === "approved" || state === "self");
 
+
+  const toggleFavorite = (id) => {
+    setFavorites(prev => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id); else s.add(id);
+      return s;
+    });
+  };
+
+  const hideListing = (id) => {
+    setHidden(prev => {
+      const s = new Set(prev);
+      s.add(id);
+      return s;
+    });
+  };
+
+  const toggleWhy = (id) => {
+    setWhyOpen(prev => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id); else s.add(id);
+      return s;
+    });
+  };
+
+  const saveNote = (id, text) => {
+    setNotes(prev => ({ ...prev, [id]: text }));
+  };
+
+
+  const visibleCands = cands.filter(p => {
+    if (hidden.has(p._id)) return false;
+    if (shortlistOnly && !favorites.has(p._id)) return false;
+    return true;
+  });
+
   
 
   const toggleSelect = (id, disabled) => {
@@ -791,9 +841,14 @@ const buildDefaultMessages = (data) => {
 
   const clearSelection = () => setSelected(new Set());
 
-  const allSelectableIds = cands
+  const allSelectableIds = visibleCands
     .filter((p) => canSelect(reqState[p._id]))
     .map((p) => p._id);
+
+  useEffect(() => {
+    const visible = new Set(visibleCands.map(p => p._id));
+    setSelected(prev => new Set([...prev].filter(id => visible.has(id))));
+  }, [visibleCands]);
 
   const allSelected =
     allSelectableIds.length > 0 && allSelectableIds.every((id) => selected.has(id));
@@ -807,7 +862,7 @@ const buildDefaultMessages = (data) => {
     });
   };
 
-    const selectedList = cands.filter((p) => selected.has(p._id)).slice(0, 4);
+    const selectedList = visibleCands.filter(p => selected.has(p._id)).slice(0, 4);
 
   useEffect(() => {
     setSelected(prev => {
@@ -819,13 +874,7 @@ const buildDefaultMessages = (data) => {
     });
   }, [reqState]);
 
-  useEffect(() => {
-    const visible = new Set(cands.map(p => p._id));
-    setSelected(prev => {
-      const kept = new Set([...prev].filter(id => visible.has(id)));
-      return kept;
-    });
-  }, [cands]);
+  
 
 
   // ArrowLeft / ArrowRight in the details drawer
@@ -998,6 +1047,10 @@ const buildDefaultMessages = (data) => {
           <span className="font-medium">{filters.distanceMiles ? `${filters.distanceMiles} mi` : "Not set"}</span>
           {diffDistance && <span className="text-xs text-black/50 ml-1">(saved)</span>}
         </Chip>
+        <Chip onClick={() => setShortlistOnly(v => !v)}>
+          <span className="text-xs uppercase text-black/60">Shortlist:</span>
+          <span className="font-medium">{shortlistOnly ? "On" : "Off"}</span>
+        </Chip>
         {filtersOverrideParsed && (
           <div className="ml-auto flex items-center gap-2">
             <span className="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-xs">
@@ -1091,7 +1144,7 @@ const buildDefaultMessages = (data) => {
             <div key={i} className="h-40 animate-pulse rounded-xl bg-black/5" />
           ))}
         </div>
-      ) : cands.length === 0 ? (
+      ) : visibleCands.length === 0 ? (
         <div className="rounded-xl border border-black/10 bg-black/[0.03] p-6 text-center text-black/80 space-y-3">
           <div>{emptyReason()}</div>
           <div className="flex flex-wrap justify-center gap-2">
@@ -1125,7 +1178,7 @@ const buildDefaultMessages = (data) => {
       ) : (
   <>
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      {cands.map((p) => {
+      {visibleCands.map((p) => {
         const img = primaryImageUrl(p);
         const state = reqState[p._id];
         const posted = daysAgo(p?.createdAt);
@@ -1200,26 +1253,59 @@ const buildDefaultMessages = (data) => {
                     {Math.round(p.matchScore)}% match
                   </span>
                 )}
+                {/* Favorite toggle */}
+              <button
+                type="button"
+                onClick={() => toggleFavorite(p._id)}
+                className="grid h-8 w-8 place-items-center rounded-md bg-black/5 hover:bg-black/10"
+                title={favorites.has(p._id) ? "Remove from shortlist" : "Add to shortlist"}
+                aria-pressed={favorites.has(p._id)}
+              >
+                {favorites.has(p._id) ? <MdFavorite className="text-rose-600" /> : <MdFavoriteBorder />}
+              </button>
+
+              {/* Hide listing */}
+              <button
+                type="button"
+                onClick={() => hideListing(p._id)}
+                className="grid h-8 w-8 place-items-center rounded-md bg-black/5 hover:bg-black/10"
+                title="Hide this listing"
+              >
+                <MdVisibilityOff />
+              </button>
               </div>
+              
 
               {/* meta row */}
               <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-black/60">
                 {posted && <span>Posted {posted}</span>}
                 {typeof distance === "number" && <span>· {distance} mi to campus</span>}
-                {(Array.isArray(p.why) && p.why.length > 0) && (
-                   <button
-                     type="button"
-                     className="underline decoration-dotted underline-offset-2"
-                     title={p.why.join("\n")}
-                   >
-                     Why?
-                   </button>
-                 )}
+                {Array.isArray(p.why) && p.why.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => toggleWhy(p._id)}
+                    className="inline-flex items-center gap-1 underline decoration-dotted underline-offset-2"
+                    title="Why this matched?"
+                  >
+                    <MdInfoOutline /> Why?
+                  </button>
+                )}
               </div>
 
               <p className="mt-1 line-clamp-2 text-[13.5px] text-black/70">
                 {p.address?.street || p.address || p.description || ""}
+                
               </p>
+              {whyOpen.has(p._id) && Array.isArray(p.why) && p.why.length > 0 && (
+                <div className="mt-2 rounded-lg border border-black/10 bg-black/[0.03] p-2">
+                  <div className="mb-1 text-xs font-semibold text-black/60">Why this match</div>
+                  <ul className="list-disc pl-5 text-[13px] text-black/80">
+                    {p.why.map((r, i) => (
+                      <li key={i}>{r}</li>
+                    ))}
+                  </ul>
+                </div>
+            )}
 
               {/* state chip */}
               {state && (
@@ -1335,6 +1421,8 @@ const buildDefaultMessages = (data) => {
               </button>
             </div>
 
+            
+
             {/* Gallery (height-capped) */}
             <div className="relative">
               <div className="w-full overflow-hidden rounded-lg bg-black/5">
@@ -1419,6 +1507,8 @@ const buildDefaultMessages = (data) => {
               })()}
             </div>
 
+            
+
             {/* Amenities */}
             {(() => {
               const src = detailFull || detailFor || {};
@@ -1489,6 +1579,17 @@ const buildDefaultMessages = (data) => {
                 </div>
               );
             })()}
+
+            <div className="mt-4">
+              <div className="mb-1 text-sm font-semibold">Your notes</div>
+              <textarea
+                rows={3}
+                value={notes[detailFor._id] || ""}
+                onChange={(e) => saveNote(detailFor._id, e.target.value)}
+                className="w-full rounded-md border border-black/10 bg-white p-2 text-[14px] outline-none"
+                placeholder="e.g., Ask about utilities, FaceTime tour at 5pm, roommate likes cats…"
+              />
+            </div>
 
             {/* CTA */}
             <div className="mt-6">
