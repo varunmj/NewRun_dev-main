@@ -520,11 +520,15 @@ const buildDefaultMessages = (data) => {
     const c = data?.criteria || {};
     if (!c.moveIn) {
       const today = new Date().toISOString().slice(0, 10);
+      const now = new Date();
+      const oct1 = new Date(now.getFullYear(), 9, 1) // month is 0-indexed
+          .toISOString()
+          .slice(0, 10);
       qs.push({
         id: "moveIn",
         text: "Do you have a move-in date?",
         options: [
-          { label: "Oct 1", key: "moveIn", value: today },
+          { label: "Oct 1", key: "moveIn", value: oct1 },
           { label: "This month", key: "moveIn", value: today },
           { label: "Skip", key: null, value: null },
         ],
@@ -673,8 +677,6 @@ const buildDefaultMessages = (data) => {
             },
             page: 1,
             append: false,
-          }).finally(() => {
-            didInitialFetch.current = true; // mark hydrated if we fetched here
           });
         } catch {}
       }
@@ -1195,7 +1197,7 @@ const buildDefaultMessages = (data) => {
         ) {
           const [lng, lat] = p.location.coordinates;
           const d = distanceMilesBetween(campusPoint, { lat, lng });
-          if (d) distance = d;
+          if (typeof d === "number") distance = d;
         }
 
         return (
