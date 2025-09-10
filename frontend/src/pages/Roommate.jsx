@@ -3,6 +3,19 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import axiosInstance from "../utils/axiosInstance";
 import Navbar from "../components/Navbar/Navbar";
 import "../styles/newrun-hero.css";
+import {
+  Languages,
+  MapPin,
+  CalendarClock,
+  Route,
+  Moon,
+  Sparkles,
+  Utensils,
+  PartyPopper,
+  PawPrint,
+  OctagonX,
+  CheckCircle2,
+} from "lucide-react";
 
 /* =============================== */
 /* Laptop-first layout constants   */
@@ -43,7 +56,7 @@ function Chip({ active, children, onClick, disabled }) {
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 active:translate-y-[1px]",
         active
           ? "border-transparent bg-gradient-to-r from-amber-400 to-orange-500 text-black shadow-[0_8px_18px_rgba(255,153,0,.25)] hover:brightness-110"
-          : "border-white/12 bg-white/[0.06] text-white/75 hover:bg-white/[0.12] hover:border-white/25",
+          : "border-white/12 bg-white/[0.06] text-white/75 hover:bg-white/[0.12] hover:border-white/90",
         disabled ? "opacity-40 cursor-not-allowed" : "",
       ].join(" ")}
     >
@@ -226,21 +239,55 @@ async function loadCities(countryName, stateName) {
   return cities.map((c) => ({ value: c, label: c }));
 }
 
+const ICONS = {
+  language: Languages,
+  home: MapPin,
+  moveBudget: CalendarClock,
+  commute: Route,
+  sleep: Moon,
+  clean: Sparkles,
+  diet: Utensils,
+  habits: PartyPopper,
+  pets: PawPrint,
+  dealbreakers: OctagonX,
+  finish: CheckCircle2,
+};
+
+function Icon({ kind, className = "h-5 w-5" }) {
+  const Cmp = ICONS[kind];
+  return Cmp ? <Cmp className={className + " text-white/80"} strokeWidth={1.8} /> : null;
+}
+
+
 /* =============================== */
 /* Step meta (headlines)           */
 /* =============================== */
+// const STEP_META = [
+//   { icon: "🗣️", pre: "Which", highlight: "language", post: "do you use most day-to-day?", sub: "Choose one. Add others if you’re comfortable." },
+//   { icon: "🗺️", pre: "Where do you call", highlight: "home", post: "?", sub: "Pick your country, then state/region. City is optional." },
+//   { icon: "📅💸", pre: "When are you moving and what’s your", highlight: "monthly budget", post: "?", sub: "Used only to filter obvious mismatches." },
+//   { icon: "📍🚶", pre: "How far from campus is okay, and how will you", highlight: "commute", post: "?", sub: "Pick a distance and one or more modes." },
+//   { icon: "🌙🔇", pre: "What’s your", highlight: "sleep style", post: "and quiet hours?", sub: "We show compatibility bands, not exact times." },
+//   { icon: "🧽",   pre: "How", highlight: "tidy", post: "do you like shared spaces?", sub: "Rate 1–5 for expectations." },
+//   { icon: "🍽️",  pre: "Tell us your", highlight: "diet", post: "and cooking rhythm.", sub: "Match what you do most weeks." },
+//   { icon: "⚡",   pre: "A few lifestyle", highlight: "habits", post: "to set expectations.", sub: "Smoking, drinking, parties." },
+//   { icon: "🐾",   pre: "Any", highlight: "pets or allergies", post: "?", sub: "Helps avoid conflicts." },
+//   { icon: "⛔",   pre: "Pick up to 3", highlight: "deal-breakers", post: ".", sub: "We’ll flag conflicts transparently." },
+//   { icon: "✅",   pre: "All set —", highlight: "Synapse", post: "is ready.", sub: "Badges now power housing & approvals." },
+// ];
+
 const STEP_META = [
-  { icon: "🗣️", pre: "Which", highlight: "language", post: "do you use most day-to-day?", sub: "Choose one. Add others if you’re comfortable." },
-  { icon: "🗺️", pre: "Where do you call", highlight: "home", post: "?", sub: "Pick your country, then state/region. City is optional." },
-  { icon: "📅💸", pre: "When are you moving and what’s your", highlight: "monthly budget", post: "?", sub: "Used only to filter obvious mismatches." },
-  { icon: "📍🚶", pre: "How far from campus is okay, and how will you", highlight: "commute", post: "?", sub: "Pick a distance and one or more modes." },
-  { icon: "🌙🔇", pre: "What’s your", highlight: "sleep style", post: "and quiet hours?", sub: "We show compatibility bands, not exact times." },
-  { icon: "🧽",   pre: "How", highlight: "tidy", post: "do you like shared spaces?", sub: "Rate 1–5 for expectations." },
-  { icon: "🍽️",  pre: "Tell us your", highlight: "diet", post: "and cooking rhythm.", sub: "Match what you do most weeks." },
-  { icon: "⚡",   pre: "A few lifestyle", highlight: "habits", post: "to set expectations.", sub: "Smoking, drinking, parties." },
-  { icon: "🐾",   pre: "Any", highlight: "pets or allergies", post: "?", sub: "Helps avoid conflicts." },
-  { icon: "⛔",   pre: "Pick up to 3", highlight: "deal-breakers", post: ".", sub: "We’ll flag conflicts transparently." },
-  { icon: "✅",   pre: "All set —", highlight: "Synapse", post: "is ready.", sub: "Badges now power housing & approvals." },
+  { iconKey: "language",   pre: "Which", highlight: "language", post: "do you use most day-to-day?", sub: "Choose one. Add others if you’re comfortable." },
+  { iconKey: "home",       pre: "Where do you call", highlight: "home", post: "?", sub: "Pick your country, then state/region. City is optional." },
+  { iconKey: "moveBudget", pre: "When are you moving and what’s your", highlight: "monthly budget", post: "?", sub: "Used only to filter obvious mismatches." },
+  { iconKey: "commute",    pre: "How far from campus is okay, and how will you", highlight: "commute", post: "?", sub: "Pick a distance and one or more modes." },
+  { iconKey: "sleep",      pre: "What’s your", highlight: "sleep style", post: "and quiet hours?", sub: "We show compatibility bands, not exact times." },
+  { iconKey: "clean",      pre: "How", highlight: "tidy", post: "do you like shared spaces?", sub: "Rate 1–5 for expectations." },
+  { iconKey: "diet",       pre: "Tell us your", highlight: "diet", post: "and cooking rhythm.", sub: "Match what you do most weeks." },
+  { iconKey: "habits",     pre: "A few lifestyle", highlight: "habits", post: "to set expectations.", sub: "Smoking, drinking, parties." },
+  { iconKey: "pets",       pre: "Any", highlight: "pets or allergies", post: "?", sub: "Helps avoid conflicts." },
+  { iconKey: "dealbreakers", pre: "Pick up to 3", highlight: "deal-breakers", post: ".", sub: "We’ll flag conflicts transparently." },
+  { iconKey: "finish",     pre: "All set —", highlight: "Synapse", post: "is ready.", sub: "Badges now power housing & approvals." },
 ];
 
 /* =============================== */
@@ -342,10 +389,11 @@ function Stepper({ steps, current, onJump, meta = {} }) {
 /* =============================== */
 /* Centered, clamped question card */
 /* =============================== */
-// Centered, clamped question card
 function QuestionCard({ step, total, title, sub, icon = null, loading = false }) {
   return (
-    <div className="relative nr-panel h-full p-0 overflow-hidden">
+    <div className="relative nr-panel h-full p-0 overflow-hidden
+                ring-1 ring-white/5
+                shadow-[0_28px_80px_rgba(0,0,0,.55),0_8px_24px_rgba(0,0,0,.28)]">
       {/* ambient */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -inset-24 rounded-[28px] bg-[radial-gradient(ellipse_at_25%_20%,rgba(255,163,26,.12),transparent_55%),radial-gradient(ellipse_at_80%_80%,rgba(255,255,255,.05),transparent_50%)]" />
@@ -355,10 +403,16 @@ function QuestionCard({ step, total, title, sub, icon = null, loading = false })
       <div className="grid h-full place-items-center px-8 text-center">
         <div className="max-w-[760px] xl:max-w-[820px]">
           {icon ? (
-            <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full border border-white/15 bg-white/[0.05] ring-1 ring-white/10 shadow-[0_0_18px_rgba(255,153,0,.14)]">
+            <div
+              className="mx-auto mb-4 grid h-14 w-14 place-items-center
+                        rounded-full border border-white/15 bg-white/[0.05]
+                        ring-1 ring-white/10 shadow-[0_0_18px_rgba(255,153,0,.14)]
+                        transform-gpu scale-[1.5]"
+            >
               <span className="text-2xl">{icon}</span>
             </div>
           ) : null}
+
 
           {loading ? (
             <div className="text-white/90 text-base">
@@ -372,10 +426,10 @@ function QuestionCard({ step, total, title, sub, icon = null, loading = false })
             <>
               {/* Bigger but safe: scales with width AND a bit with height */}
               <h2
-                className="font-black tracking-tight text-white leading-[1.05]
-                           text-[clamp(30px,min(3.4vw,5.4vh),48px)]
-                           xl:text-[clamp(32px,min(3.1vw,5.6vh),54px)]
-                           [text-wrap:balance] [text-shadow:0_8px_24px_rgba(255,153,0,.12)]"
+                className="font-black tracking-tight text-white leading-[1.03]
+                          text-[clamp(34px,min(4vw,6.2vh),60px)]
+                          xl:text-[clamp(36px,min(3.6vw,6.6vh),64px)]
+                          [text-wrap:balance] [text-shadow:0_10px_28px_rgba(255,153,0,.14)]"
               >
                 {title}
               </h2>
@@ -478,28 +532,49 @@ export default function Roommate() {
   /* =============================== */
   /* STEP 1: Language                */
   /* =============================== */
-  const LANG_PRESETS = [
-    { code: "en", label: "English" }, { code: "es", label: "Spanish" }, { code: "hi", label: "Hindi" },
-    { code: "ta", label: "Tamil" },   { code: "zh", label: "Mandarin" }, { code: "ar", label: "Arabic" },
-    { code: "fr", label: "French" },  { code: "bn", label: "Bengali" },
-  ];
+const LANG_PRESETS = [
+  { code: "en", label: "English" },
+  { code: "es", label: "Spanish" },
+  { code: "hi", label: "Hindi" },
+
+  // South India
+  { code: "ta", label: "Tamil" },
+  { code: "te", label: "Telugu" },
+  { code: "kn", label: "Kannada" },
+  { code: "ml", label: "Malayalam" },
+
+  { code: "zh", label: "Mandarin" },
+  { code: "ar", label: "Arabic" },
+  { code: "fr", label: "French" },
+  { code: "bn", label: "Bengali" },
+];
 
   const StepLanguage = () => (
-    <div>
-      <div className="mb-2 flex items-center gap-2">
-        <span className="text-sm md:text-[15px] font-semibold text-white/90">Daily language</span>
-        <Pill>Used for vibe only</Pill>
-      </div>
+  <div>
+    {/* Label + pill: slight gap and baseline align */}
+    <div className="mb-2 flex items-baseline gap-[10px]">
+      <span className="text-sm md:text-[15px] font-semibold text-white/90">Daily language</span>
+      <Pill className="translate-y-[1px]">Used for vibe only</Pill>
+    </div>
+
+    {/* Chip grid + 'Other' share the same width so input doesn't span the card */}
+    <div className="max-w-[640px]">
       <div className="flex flex-wrap gap-2">
         {LANG_PRESETS.map((l) => (
-          <Chip key={l.code} active={prefs.culture.primaryLanguage === l.code} onClick={() => setCulture({ primaryLanguage: l.code })}>
+          <Chip
+            key={l.code}
+            active={prefs.culture.primaryLanguage === l.code}
+            onClick={() => setCulture({ primaryLanguage: l.code })}
+          >
             {l.label}
           </Chip>
         ))}
       </div>
 
-      <div className="mt-2">
+      {/* Compact 'Other' input aligned with chips */}
+      <div className="mt-3">
         <Input
+          className="w-full max-w-[520px] md:max-w-[560px]"
           placeholder="Other (type and Enter)"
           onKeyDown={(e) => {
             if (e.key === "Enter" && e.currentTarget.value.trim()) {
@@ -510,42 +585,52 @@ export default function Roommate() {
           }}
         />
       </div>
-
-      <Divider />
-      <div className="mb-2 text-[13px] font-semibold">Also comfortable with… (optional)</div>
-      <div className="flex flex-wrap gap-2">
-        {LANG_PRESETS.map((l) => {
-          const arr = prefs.culture.otherLanguages || [];
-          const on = arr.includes(l.code);
-          return (
-            <Chip
-              key={l.code}
-              active={on}
-              onClick={() =>
-                setCulture({ otherLanguages: on ? arr.filter((x) => x !== l.code) : [...arr, l.code] })
-              }
-            >
-              {l.label}
-            </Chip>
-          );
-        })}
-      </div>
-
-      <Divider />
-      <div className="mb-2 text-[13px] font-semibold">Language comfort with roommates</div>
-      <div className="flex flex-wrap gap-2">
-        {[
-          { k: "same", t: "Prefer same language" },
-          { k: "either", t: "Either is fine" },
-          { k: "learn", t: "Happy to learn/teach" },
-        ].map((o) => (
-          <Chip key={o.k} active={prefs.culture.languageComfort === o.k} onClick={() => setCulture({ languageComfort: o.k })}>
-            {o.t}
-          </Chip>
-        ))}
-      </div>
     </div>
-  );
+
+    <Divider />
+
+    <div className="mb-2 text-[13px] font-semibold">Also comfortable with… (optional)</div>
+    <div className="flex flex-wrap gap-2 max-w-[640px]">
+      {LANG_PRESETS.map((l) => {
+        const arr = prefs.culture.otherLanguages || [];
+        const on = arr.includes(l.code);
+        return (
+          <Chip
+            key={l.code}
+            active={on}
+            onClick={() =>
+              setCulture({
+                otherLanguages: on ? arr.filter((x) => x !== l.code) : [...arr, l.code],
+              })
+            }
+          >
+            {l.label}
+          </Chip>
+        );
+      })}
+    </div>
+
+    <Divider />
+
+    <div className="mb-2 text-[13px] font-semibold">Language comfort with roommates</div>
+    <div className="flex flex-wrap gap-2 max-w-[640px]">
+      {[
+        { k: "same", t: "Prefer same language" },
+        { k: "either", t: "Either is fine" },
+        { k: "learn", t: "Happy to learn/teach" },
+      ].map((o) => (
+        <Chip
+          key={o.k}
+          active={prefs.culture.languageComfort === o.k}
+          onClick={() => setCulture({ languageComfort: o.k })}
+        >
+          {o.t}
+        </Chip>
+      ))}
+    </div>
+  </div>
+);
+
 
   /* =============================== */
   /* STEP 2: Country / State / City  */
@@ -946,7 +1031,7 @@ export default function Roommate() {
 
       {/* Three-pane overlay */}
       <section
-        className="mx-auto max-w-7xl px-4"
+        className="mx-auto pl-4 pr-2 xl:pr-4 max-w-[88rem] 2xl:max-w-[96rem]"
         style={{
           position: "absolute",
           top: PANES_TOP,
@@ -956,11 +1041,12 @@ export default function Roommate() {
         }}
       >
         <div
+          id="roommateGrid"
           className="grid h-full items-start"
-          style={{ gridTemplateColumns: "320px 1fr 1.25fr", gap: GRID_GAP }}
+          style={{ gridTemplateColumns: "1fr 1.35fr 1.75fr", gap: GRID_GAP }}
         >
           {/* Left: Stepper */}
-          <aside className="hidden lg:block h-full min-h-0">
+          <aside className="hidden lg:block h-full min-h-0 -ml-8 xl:-ml-12 2xl:-ml-16">
             <Stepper steps={STEPS} current={step} onJump={goToStep} meta={STEP_META} />
           </aside>
 
@@ -970,7 +1056,7 @@ export default function Roommate() {
               step={step}
               total={STEPS.length}
               loading={typing}
-              icon={<span className="text-2xl">{STEP_META[step]?.icon}</span>}
+              icon={<Icon kind={STEP_META[step]?.iconKey} className="h-8 w-8 md:h-9 md:w-9 text-white/80" />}
               title={
                 <>
                   {STEP_META[step]?.pre}{" "}

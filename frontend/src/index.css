@@ -93,4 +93,21 @@ body { background-color: #0b0c10; }
 }
 
 
+#roommateGrid {
+  /* Left rail shrinks, center grows, right trims a bit */
+  grid-template-columns: clamp(220px,14.5vw,280px) 1.55fr 1.05fr;
+}
 
+/* Wider laptops: give even more to the center */
+@media (min-width: 1440px) {
+  #roommateGrid {
+    grid-template-columns: clamp(230px,14vw,275px) 1.7fr 0.95fr;
+  }
+}
+
+/* Smaller laptops: keep things comfy */
+@media (max-width: 1180px) {
+  #roommateGrid {
+    grid-template-columns: clamp(210px,16vw,260px) 1.4fr 1.05fr;
+  }
+}
