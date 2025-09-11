@@ -20,9 +20,13 @@ import {
 /* =============================== */
 /* Laptop-first layout constants   */
 /* =============================== */
-const PANES_TOP = 156;            // where the 3-pane overlay starts (from viewport top)
+const PANES_TOP = 220;            // where the 3-pane overlay starts (from viewport top)
 const PANES_VPAD = 16;            // breathing room at the bottom
 const GRID_GAP = "1.5rem";        // horizontal gap between columns
+
+// Collapsing hero: expanded vs. collapsed heights
+const HERO_EXPANDED = 240;        // px  (welcome size)
+const HERO_COLLAPSED = 84;        // px  (context bar)
 
 /* =============================== */
 /* Small helpers / atoms           */
@@ -395,9 +399,10 @@ function QuestionCard({ step, total, title, sub, icon = null, loading = false })
                 ring-1 ring-white/5
                 shadow-[0_28px_80px_rgba(0,0,0,.55),0_8px_24px_rgba(0,0,0,.28)]">
       {/* ambient */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -inset-24 rounded-[28px] bg-[radial-gradient(ellipse_at_25%_20%,rgba(255,163,26,.12),transparent_55%),radial-gradient(ellipse_at_80%_80%,rgba(255,255,255,.05),transparent_50%)]" />
-      </div>
+      {/* <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -inset-24 rounded-[28px]
+                bg-[radial-gradient(ellipse_at_25%_20%,rgba(255,163,26,.16),transparent_60%),radial-gradient(ellipse_at_80%_80%,rgba(255,255,255,.07),transparent_55%)]" />
+      </div> */}
 
       {/* centered content */}
       <div className="grid h-full place-items-center px-8 text-center">
