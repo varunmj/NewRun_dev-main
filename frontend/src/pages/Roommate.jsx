@@ -15,6 +15,7 @@ import {
   PawPrint,
   OctagonX,
   CheckCircle2,
+  Timer, Cigarette, CigaretteOff, Wine, Heart, Ban, Plus,
 } from "lucide-react";
 
 /* =============================== */
@@ -47,7 +48,88 @@ const Em = ({ children }) => (
   </span>
 );
 
-function Chip({ active, children, onClick, disabled }) {
+// Small “add” pill for suggested allergies
+function SuggestChip({ children, onClick, disabled }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={[
+        "inline-flex items-center gap-1 rounded-full border px-2.5 py-1",
+        "text-[12px] font-medium transition",
+        "border-white/12 bg-white/[0.06] text-white/80 hover:bg-white/[0.12]",
+        disabled ? "opacity-40 cursor-not-allowed" : "",
+      ].join(" ")}
+    >
+      <Plus className="h-3.5 w-3.5" />
+      {children}
+    </button>
+  );
+}
+
+// Destructive-looking tag used for active allergies (click to remove)
+function AllergyTag({ label, onRemove }) {
+  return (
+    <button
+      type="button"
+      onClick={onRemove}
+      className="inline-flex items-center gap-1.5 rounded-full
+                 bg-rose-500/15 border border-rose-400/40 text-rose-200
+                 px-2.5 py-1 text-[12px] hover:bg-rose-500/25"
+      title="Remove"
+    >
+      {label}
+      <span className="text-rose-200/80">✕</span>
+    </button>
+  );
+}
+
+/* ===== celebratory confetti (no libs) ===== */
+function ConfettiBurst({ n = 36, duration = 1800 }) {
+  const pieces = Array.from({ length: n }).map((_, i) => {
+    const left = Math.random() * 100;             // start X %
+    const drift = -60 + Math.random() * 120;      // end X px
+    const rot = Math.floor(Math.random() * 360);  // base rotation
+    const delay = Math.random() * 180;            // ms
+    const size = 6 + Math.random() * 7;           // px
+    const colors = ["#F59E0B", "#22C55E", "#60A5FA", "#F472B6", "#34D399", "#FDE68A"];
+    const color = colors[i % colors.length];
+    return { i, left, drift, rot, delay, size, color };
+  });
+
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      {pieces.map(({ i, left, drift, rot, delay, size, color }) => (
+        <span
+          key={i}
+          className="nr-confetti"
+          style={{
+            left: `${left}%`,
+            width: size,
+            height: size * 0.65,
+            background: color,
+            animationDuration: `${duration}ms`,
+            animationDelay: `${delay}ms`,
+            // css vars used by keyframes:
+            "--tx": `${drift}px`,
+            "--r": `${rot}deg`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+
+function Chip({ active, children, onClick, disabled, size = "md", className = "" }) {
+  const sizeCls =
+    size === "lg"
+      ? "px-4 py-2 text-[15px] rounded-2xl"
+      : size === "sm"
+      ? "px-2.5 py-1 text-[12px] rounded-full"
+      : "px-3.5 py-1.5 text-[13px] rounded-full"; // md (default)
+
   return (
     <button
       type="button"
@@ -55,13 +137,14 @@ function Chip({ active, children, onClick, disabled }) {
       disabled={disabled}
       aria-pressed={active}
       className={[
-        "inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5",
-        "text-[13px] font-semibold transition duration-150",
+        "inline-flex items-center gap-2 border font-semibold transition duration-150",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 active:translate-y-[1px]",
+        sizeCls,
         active
           ? "border-transparent bg-gradient-to-r from-amber-400 to-orange-500 text-black shadow-[0_8px_18px_rgba(255,153,0,.25)] hover:brightness-110"
           : "border-white/12 bg-white/[0.06] text-white/75 hover:bg-white/[0.12] hover:border-white/90",
         disabled ? "opacity-40 cursor-not-allowed" : "",
+        className,
       ].join(" ")}
     >
       {active && <span className="text-black/80">✓</span>}
@@ -69,18 +152,20 @@ function Chip({ active, children, onClick, disabled }) {
     </button>
   );
 }
-function Input({ className = "", ...props }) {
-  return (
-    <input
-      {...props}
-      className={[
-        "w-full rounded-xl border border-white/12 bg-white/[0.05] px-3 py-2",
-        "text-sm text-white placeholder-white/40 outline-none focus:border-white/30 focus:bg-white/[0.07]",
-        className,
-      ].join(" ")}
-    />
-  );
-}
+
+const Input = React.forwardRef(({ className = "", ...props }, ref) => (
+  <input
+    ref={ref}
+    {...props}
+    className={[
+      "w-full rounded-xl border border-white/12 bg-white/[0.05] px-3 py-2",
+      "text-sm text-white placeholder-white/40 outline-none focus:border-white/30 focus:bg-white/[0.07]",
+      className,
+    ].join(" ")}
+  />
+));
+
+Input.displayName = "Input";
 const Divider = () => (
   <div className="my-3 h-px w-full bg-gradient-to-r from-transparent via-white/15 to-transparent" />
 );
@@ -515,7 +600,13 @@ export default function Roommate() {
       visibility: { showAvatarInPreviews: false, shareCultureInPreviews: "banded" },
     },
     logistics: { moveInMonth: null, leaseMonths: 12, budgetMax: null, maxDistanceMiles: 2, commuteMode: [] },
-    lifestyle: { sleepPattern: "", quietAfter: "22:00", quietUntil: "07:00", cleanliness: 3 },
+    lifestyle: {
+      sleepPattern: "",
+      quietAfter: "22:00",
+      quietUntil: "07:00",
+      cleanliness: 3,
+      cleanlinessDetail: { bathroom: 3, kitchen: 3, dishes: 3, trash: 3 }, // NEW
+    },
     habits: { diet: "", cookingFreq: "sometimes", smoking: "no", drinking: "social", partying: "occasionally" },
     pets: { hasPets: false, okWithPets: true, allergies: [] },
     dealbreakers: [],
@@ -820,37 +911,128 @@ const StepLanguage = () => {
   /* =============================== */
   const monthISO = (d) => (d ? d.slice(0, 7) : null);
 
-  const StepMoveBudget = () => (
-    <div>
-      <div className="mb-2 text-[13px] font-semibold">Move-in month & lease length</div>
-      <div className="grid gap-3 md:grid-cols-2">
-        <Input type="month" value={prefs.logistics.moveInMonth || ""} onChange={(e) => setLogistics({ moveInMonth: monthISO(e.target.value) })} />
-        <div className="flex flex-wrap items-center gap-2">
-          <Chip active={prefs.logistics.leaseMonths === 6} onClick={() => setLogistics({ leaseMonths: 6 })}>6–9 mo</Chip>
+  // STEP 3: Move-in & Budget
+const StepMoveBudget = () => {
+  const monthRef = useRef(null);
+
+  // NEW: budget input stays focused while typing
+  const budgetRef = useRef(null);
+  const [draftBudget, setDraftBudget] = useState(
+    prefs.logistics.budgetMax != null ? String(prefs.logistics.budgetMax) : ""
+  );
+
+  // Keep draft in sync with server/state changes, but don't overwrite while typing
+  useEffect(() => {
+    if (document.activeElement !== budgetRef.current) {
+      setDraftBudget(prefs.logistics.budgetMax != null ? String(prefs.logistics.budgetMax) : "");
+    }
+  }, [prefs.logistics.budgetMax]);
+
+  const commitBudget = () => {
+    const cleaned = draftBudget.replace(/[^\d]/g, "");
+    const n = cleaned === "" ? null : Number(cleaned);
+    setLogistics({ budgetMax: n });
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Block 1 — Move-in month */}
+      <div>
+        <div className="mb-2 flex items-baseline gap-2">
+          <span className="text-[15px] md:text-[16px] font-semibold text-white">Move-in month</span>
+          <span className="text-[12px] text-white/60">Used only to match timing</span>
+        </div>
+
+        <div className="relative max-w-[540px]">
+          <Input
+            ref={monthRef}
+            type="month"
+            className="nr-month pr-12"
+            value={prefs.logistics.moveInMonth || ""}
+            onChange={(e) => setLogistics({ moveInMonth: (e.target.value || "").slice(0, 7) })}
+          />
+          {/* clickable calendar button that opens the native picker */}
+          <button
+            type="button"
+            aria-label="Open month picker"
+            onClick={() => {
+              const el = monthRef.current;
+              if (!el) return;
+              if (typeof el.showPicker === "function") el.showPicker();
+              else el.focus(); // Safari fallback
+            }}
+            className="absolute inset-y-0 right-1 my-[4px] mr-[4px] grid place-items-center rounded-lg px-2
+                       text-white/80 hover:text-white focus-visible:outline-none focus-visible:ring-2
+                       focus-visible:ring-amber-400/60"
+          >
+            <CalendarClock size={18} />
+          </button>
+        </div>
+      </div>
+
+      {/* Block 2 — Lease length */}
+      <div>
+        <div className="mb-2 text-[15px] md:text-[16px] font-semibold text-white">Lease length</div>
+        <div className="flex flex-wrap gap-2">
+          <Chip active={prefs.logistics.leaseMonths === 6}  onClick={() => setLogistics({ leaseMonths: 6  })}>6–9 mo</Chip>
           <Chip active={prefs.logistics.leaseMonths === 12} onClick={() => setLogistics({ leaseMonths: 12 })}>10–12 mo</Chip>
           <Chip active={prefs.logistics.leaseMonths === 15} onClick={() => setLogistics({ leaseMonths: 15 })}>12+ mo</Chip>
         </div>
       </div>
 
-      <Divider />
-      <div className="mb-2 text-[13px] font-semibold">Max monthly budget (USD)</div>
-      <div className="grid gap-3 md:grid-cols-2">
-        <Input
-          type="number"
-          placeholder="e.g., 900"
-          value={prefs.logistics.budgetMax ?? ""}
-          onChange={(e) => setLogistics({ budgetMax: e.target.value ? Number(e.target.value) : null })}
-        />
-        <div className="flex flex-wrap gap-2">
-          {[600, 800, 1000, 1200].map((v) => (
-            <Chip key={v} active={prefs.logistics.budgetMax === v} onClick={() => setLogistics({ budgetMax: v })}>
-              ≤ ${v}
-            </Chip>
-          ))}
+      {/* Block 3 — Budget */}
+        <div>
+          <div className="mb-2 text-[15px] md:text-[16px] font-semibold text-white">
+            Max monthly budget (USD)
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2 items-start">
+            {/* Input with $ prefix; commit on blur/Enter */}
+            <div className="relative max-w-[540px]">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/55">$</span>
+              <Input
+                ref={budgetRef}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                className="pl-7"
+                placeholder="e.g., 900"
+                value={draftBudget}
+                onChange={(e) => setDraftBudget(e.target.value.replace(/[^\d]/g, ""))}
+                onBlur={commitBudget}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitBudget();
+                    e.currentTarget.blur();
+                  }
+                }}
+                aria-label="Maximum monthly budget in USD"
+              />
+            </div>
+
+            {/* Quick picks also update the draft immediately */}
+            <div className="flex flex-wrap gap-2">
+              {[600, 800, 1000, 1200].map((v) => (
+                <Chip
+                  key={v}
+                  active={prefs.logistics.budgetMax === v}
+                  onClick={() => {
+                    setDraftBudget(String(v));
+                    setLogistics({ budgetMax: v });
+                  }}
+                >
+                  ≤ ${v}
+                </Chip>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
     </div>
   );
+};
+
+
 
   const StepDistanceCommute = () => (
     <div>
@@ -908,186 +1090,575 @@ const StepLanguage = () => {
     </div>
   );
 
-  const StepCleanliness = () => (
-    <div>
-      <div className="mb-2 text-[13px] font-semibold">Cleanliness level</div>
-      <input
-        type="range"
-        min={1}
-        max={5}
-        step={1}
-        value={prefs.lifestyle.cleanliness}
-        onChange={(e) => setLifestyle({ cleanliness: Number(e.target.value) })}
-        className="w-full accent-white/90"
-      />
-      <div className="mt-2 text-sm text-white/80">Preference: {prefs.lifestyle.cleanliness}</div>
+  const FieldHeading = ({ children, hint }) => (
+  <div className="mb-1.5 flex items-baseline gap-2">
+    <span className="text-[16px] md:text-[18px] font-semibold text-white/95">
+      {children}
+    </span>
+    {hint ? <span className="text-[11px] text-white/55">{hint}</span> : null}
+  </div>
+);
+
+// Small 0/3 meter
+function LimitMeter({ count = 0, limit = 3 }) {
+  return (
+    <div className="flex items-center gap-1">
+      {Array.from({ length: limit }).map((_, i) => (
+        <span
+          key={i}
+          className={[
+            "inline-block h-2.5 w-2.5 rounded-full",
+            i < count ? "bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,.55)]" : "bg-white/18"
+          ].join(" ")}
+        />
+      ))}
     </div>
   );
+}
+
+// Base icon with an optional "ban" overlay
+function DBIcon({ Base, banned, size = "md" }) {
+  const baseCls = size === "lg" ? "h-5 w-5" : "h-4 w-4";
+  const banCls  = size === "lg" ? "h-4 w-4 -right-1 -bottom-1.5" : "h-3.5 w-3.5 -right-1 -bottom-1";
+   return (
+    <span className="relative inline-grid place-items-center">
+      <Base className="h-4 w-4 text-white/85" />
+      {banned && (<Ban className={`absolute ${banCls} text-rose-400 drop-shadow`} />)}
+    </span>
+  );
+}
+
+
+
+
+  // helper (place above StepCleanliness or near other small atoms)
+function SliderRow({ label, value, onChange, left = "Low", right = "High" }) {
+  return (
+    <div className="mb-5">
+      <div className="mb-1 text-[14px] md:text-[15px] font-semibold text-white">{label}</div>
+      <div className="flex items-center gap-3">
+        <span className="w-32 shrink-0 text-[12px] text-white/55">{left}</span>
+        <input
+          type="range"
+          min={1}
+          max={5}
+          step={1}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="nr-range"                       // NEW
+          style={{ "--pct": `${((value - 1) / 4) * 100}%` }} // NEW: fill up to thumb
+        />
+        <span className="w-32 shrink-0 text-right text-[12px] text-white/55">{right}</span>
+      </div>
+      <div className="mt-1 text-[12px] text-white/60 flex items-center gap-2">
+        Preference: <PrefBadge value={value} />
+      </div>
+    </div>
+  );
+}
+
+function prefScale(v) {
+  // 1 (relaxed) → 5 (meticulous)
+  switch (v) {
+    case 1: return { text: "text-rose-300",     bg: "bg-rose-500/10",     ring: "ring-rose-400/30",     dot: "bg-rose-400",     label: "Very relaxed" };
+    case 2: return { text: "text-orange-300",   bg: "bg-orange-500/10",   ring: "ring-orange-400/30",   dot: "bg-orange-400",   label: "Relaxed" };
+    case 3: return { text: "text-amber-300",    bg: "bg-amber-500/10",    ring: "ring-amber-400/30",    dot: "bg-amber-400",    label: "Moderate" };
+    case 4: return { text: "text-lime-300",     bg: "bg-lime-500/10",     ring: "ring-lime-400/30",     dot: "bg-lime-400",     label: "High" };
+    default:
+    case 5: return { text: "text-emerald-300",  bg: "bg-emerald-500/10",  ring: "ring-emerald-400/30",  dot: "bg-emerald-400",  label: "Very high" };
+  }
+}
+
+function PrefBadge({ value }) {
+  const t = prefScale(Number(value) || 0);
+  return (
+    <span
+      title={t.label}
+      className={[
+        "inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-[2px]",
+        "text-[12px] font-semibold ring-1",
+        t.text, t.bg, t.ring,
+      ].join(" ")}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${t.dot}`} />
+      {value}
+    </span>
+  );
+}
+
+function CompactSliderRow({
+  label,
+  minLabel,
+  maxLabel,
+  value = 3,
+  onChange,
+  className = "",
+}) {
+  return (
+    <div className={`py-1 ${className}`}>
+      {/* Title + colored badge inline to save vertical space */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[14px] md:text-[15px] font-semibold text-white">
+          {label}
+        </div>
+        <PrefBadge value={value} />
+      </div>
+
+      {/* Slider + tiny endpoints */}
+      <div className="mt-1">
+        <input
+          type="range"
+          min={1}
+          max={5}
+          step={1}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="w-full accent-white"
+        />
+        <div className="mt-1 flex justify-between text-[11px] text-white/55 leading-none">
+          <span className="truncate pr-2">{minLabel}</span>
+          <span className="truncate pl-2">{maxLabel}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+const StepCleanliness = () => {
+  const L = prefs.lifestyle || {};
+  return (
+    <div className="max-w-[820px]">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+        {/* Full-width first row */}
+        <CompactSliderRow
+          className="md:col-span-2"
+          label="Overall cleanliness"
+          minLabel="Laid-back"
+          maxLabel="Meticulous"
+          value={L.cleanliness ?? 3}
+          onChange={(v) => setLifestyle({ cleanliness: v })}
+        />
+
+        <CompactSliderRow
+          label="Bathroom upkeep"
+          minLabel="OK if clean weekly"
+          maxLabel="Spotless daily"
+          value={L.bathroomUpkeep ?? 3}
+          onChange={(v) => setLifestyle({ bathroomUpkeep: v })}
+        />
+
+        <CompactSliderRow
+          label="Kitchen cleanup"
+          minLabel="Tidy later"
+          maxLabel="Clean after cooking"
+          value={L.kitchenCleanup ?? 3}
+          onChange={(v) => setLifestyle({ kitchenCleanup: v })}
+        />
+
+        <CompactSliderRow
+          label="Dishes turnaround"
+          minLabel="Within 24–48h"
+          maxLabel="After each meal"
+          value={L.dishesTurnaround ?? 3}
+          onChange={(v) => setLifestyle({ dishesTurnaround: v })}
+        />
+
+        <CompactSliderRow
+          label="Trash & recycling cadence"
+          minLabel="When full"
+          maxLabel="Every 1–2 days"
+          value={L.trashCadence ?? 3}
+          onChange={(v) => setLifestyle({ trashCadence: v })}
+        />
+      </div>
+    </div>
+  );
+};
+
+
 
   const StepDietCooking = () => (
+  <div className="space-y-7">
+    {/* Diet */}
     <div>
-      <div className="mb-2 text-[13px] font-semibold">Diet</div>
+      <FieldHeading>Diet</FieldHeading>
       <div className="flex flex-wrap gap-2">
         {[
           { k: "veg", t: "Vegetarian" },
           { k: "vegan", t: "Vegan" },
           { k: "nonveg", t: "Non-veg" },
         ].map((o) => (
-          <Chip key={o.k} active={prefs.habits.diet === o.k} onClick={() => setHabits({ diet: o.k })}>
+          <Chip
+            key={o.k}
+            size="lg"
+            active={prefs.habits.diet === o.k}
+            onClick={() => setHabits({ diet: o.k })}
+          >
             {o.t}
           </Chip>
         ))}
       </div>
-
-      <Divider />
-      <div className="mb-2 text-[13px] font-semibold">Cooking frequency</div>
-      <div className="flex flex-wrap gap-2">
-        {["rare", "sometimes", "often"].map((k) => (
-          <Chip key={k} active={prefs.habits.cookingFreq === k} onClick={() => setHabits({ cookingFreq: k })}>
-            {k === "rare" ? "Cook rarely" : k === "often" ? "Cook often" : "Cook sometimes"}
-          </Chip>
-        ))}
-      </div>
     </div>
-  );
 
-  const StepHabits = () => (
+    <Divider />
+
+    {/* Cooking frequency – segmented look */}
     <div>
-      <div className="mb-2 text-[13px] font-semibold">Smoking</div>
+      <FieldHeading>Cooking frequency</FieldHeading>
       <div className="flex flex-wrap gap-2">
-        {["no", "outdoor_only", "yes"].map((k) => (
-          <Chip key={k} active={prefs.habits.smoking === k} onClick={() => setHabits({ smoking: k })}>
-            {k === "no" ? "No" : k === "yes" ? "Yes" : "Outdoor only"}
-          </Chip>
-        ))}
-      </div>
-
-      <Divider />
-      <div className="mb-2 text-[13px] font-semibold">Drinking</div>
-      <div className="flex flex-wrap gap-2">
-        {["no", "social", "frequent"].map((k) => (
-          <Chip key={k} active={prefs.habits.drinking === k} onClick={() => setHabits({ drinking: k })}>
-            {k.charAt(0).toUpperCase() + k.slice(1)}
-          </Chip>
-        ))}
-      </div>
-
-      <Divider />
-      <div className="mb-2 text-[13px] font-semibold">Parties</div>
-      <div className="flex flex-wrap gap-2">
-        {["no", "occasionally", "frequent"].map((k) => (
-          <Chip key={k} active={prefs.habits.partying === k} onClick={() => setHabits({ partying: k })}>
-            {k === "no" ? "No parties" : k === "occasionally" ? "Occasionally" : "Frequent"}
-          </Chip>
-        ))}
-      </div>
-    </div>
-  );
-
-  const StepPets = () => (
-    <div>
-      <div className="mb-2 text-[13px] font-semibold">Pets</div>
-      <div className="flex flex-wrap gap-2">
-        <Chip active={prefs.pets.hasPets} onClick={() => setPets({ hasPets: !prefs.pets.hasPets })}>
-          I have pets
-        </Chip>
-        <Chip active={prefs.pets.okWithPets} onClick={() => setPets({ okWithPets: !prefs.pets.okWithPets })}>
-          I’m okay with pets
-        </Chip>
-      </div>
-
-      <Divider />
-      <div className="mb-2 text-[13px] font-semibold">Allergies (type and Enter)</div>
-      <Input
-        placeholder="e.g., cats"
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && e.currentTarget.value.trim()) {
-            const v = e.currentTarget.value.trim();
-            setPets({ allergies: [...(prefs.pets.allergies || []), v] });
-            e.currentTarget.value = "";
-          }
-        }}
-      />
-      <div className="mt-2 flex flex-wrap gap-2">
-        {(prefs.pets.allergies || []).map((a) => (
-          <Chip key={a} active onClick={() => setPets({ allergies: (prefs.pets.allergies || []).filter((x) => x !== a) })}>
-            {a} ✕
-          </Chip>
-        ))}
-      </div>
-    </div>
-  );
-
-  const StepDealbreakers = () => {
-    const opts = [
-      ["no_smoking_indoors", "No smoking indoors"],
-      ["no_late_night_parties", "No late-night parties"],
-      ["no_pets", "No pets"],
-      ["quiet_after_22", "Quiet after 10PM"],
-      ["no_heavy_drinking", "No heavy drinking"],
-    ];
-    const limit = 3;
-    const onToggle = (k) => {
-      const cur = prefs.dealbreakers || [];
-      if (cur.includes(k)) savePrefs({ dealbreakers: cur.filter((x) => x !== k) });
-      else if (cur.length < limit) savePrefs({ dealbreakers: [...cur, k] });
-    };
-    return (
-      <div>
-        <div className="mb-2 text-[13px] font-semibold">Deal-breakers (pick up to 3)</div>
-        <div className="flex flex-wrap gap-2">
-          {opts.map(([k, t]) => (
+        {[
+          { k: "rare",       t: "Cook rarely",     I: Moon     },
+          { k: "sometimes",  t: "Cook sometimes",  I: Timer    },
+          { k: "often",      t: "Cook often",      I: Utensils },
+        ].map(({ k, t, I }) => {
+          const active = prefs.habits.cookingFreq === k;
+          return (
             <Chip
               key={k}
-              active={(prefs.dealbreakers || []).includes(k)}
-              onClick={() => onToggle(k)}
-              disabled={!((prefs.dealbreakers || []).includes(k)) && (prefs.dealbreakers || []).length >= limit}
+              size="lg"
+              active={active}
+              onClick={() => setHabits({ cookingFreq: k })}
             >
-              {t}
+              <I
+                className={`h-4 w-4 ${active ? "text-black/80" : "text-white/80"}`}
+                strokeWidth={1.8}
+              />
+              <span>{t}</span>
             </Chip>
-          ))}
-        </div>
-        <div className="mt-2 text-[12px] text-white/65">You chose {(prefs.dealbreakers || []).length} / {limit}</div>
+          );
+        })}
       </div>
-    );
+    </div>
+  </div>
+);
+
+
+  const StepHabits = () => (
+  <div className="grid grid-cols-1 xl:grid-cols-2 gap-15">
+    {/* Smoking */}
+    <div className="space-y-2">
+      <FieldHeading hint="No judgement — just setting expectations">Smoking</FieldHeading>
+      <div className="flex flex-wrap gap-2">
+        {[
+          { k: "no",           t: "No",            I: CigaretteOff },
+          { k: "outdoor_only", t: "Outdoor only",  I: Cigarette    },
+          { k: "yes",          t: "Yes",           I: Cigarette    },
+        ].map(({ k, t, I }) => {
+          const on = prefs.habits.smoking === k;
+          return (
+            <Chip key={k} active={on} onClick={() => setHabits({ smoking: k })}>
+              <I className={`${on ? "text-black/80" : "text-white/80"} h-4 w-4`} strokeWidth={1.8} />
+              <span>{t}</span>
+            </Chip>
+          );
+        })}
+      </div>
+      <p className="text-[12px] text-white/45">“Outdoor only” = balconies/porches, never indoors.</p>
+    </div>
+
+    {/* Drinking */}
+    <div className="space-y-2">
+      <FieldHeading>Drinking</FieldHeading>
+      <div className="flex flex-wrap gap-2">
+        {[
+          { k: "no",       t: "No",      I: Ban  },
+          { k: "social",   t: "Social",  I: Wine },
+          { k: "frequent", t: "Frequent",I: Wine },
+        ].map(({ k, t, I }) => {
+          const on = prefs.habits.drinking === k;
+          return (
+            <Chip key={k} active={on} onClick={() => setHabits({ drinking: k })}>
+              <I className={`${on ? "text-black/80" : "text-white/80"} h-4 w-4`} strokeWidth={1.8} />
+              <span>{t}</span>
+            </Chip>
+          );
+        })}
+      </div>
+    </div>
+
+    {/* Parties (full width) */}
+    <div className="space-y-2 xl:col-span-2">
+      <FieldHeading>Parties</FieldHeading>
+      <div className="flex flex-wrap gap-2">
+        {[
+          { k: "no",           t: "No parties",   I: Ban         },
+          { k: "occasionally", t: "Occasionally", I: PartyPopper },
+          { k: "frequent",     t: "Frequent",     I: PartyPopper },
+        ].map(({ k, t, I }) => {
+          const on = prefs.habits.partying === k;
+          return (
+            <Chip key={k} active={on} onClick={() => setHabits({ partying: k })}>
+              <I className={`${on ? "text-black/80" : "text-white/80"} h-4 w-4`} strokeWidth={1.8} />
+              <span>{t}</span>
+            </Chip>
+          );
+        })}
+      </div>
+    </div>
+  </div>
+);
+
+
+  const StepPets = () => {
+  const suggestions = ["cats", "dogs", "birds", "rabbits", "rodents", "reptiles", "fish"];
+
+  const addAllergy = (v) => {
+    const val = (v || "").trim();
+    if (!val) return;
+    const cur = prefs.pets.allergies || [];
+    if (!cur.includes(val)) setPets({ allergies: [...cur, val] });
   };
 
-  const StepFinish = () => (
-    <div>
-      <div className="flex items-center gap-3">
-        <div className="text-2xl">🎉</div>
-        <div>
-          <div className="text-lg font-semibold">Synapse is set!</div>
-          <div className="text-white/70 text-sm">Compatibility badges will appear on housing cards and owner approvals.</div>
+  const removeAllergy = (v) =>
+    setPets({ allergies: (prefs.pets.allergies || []).filter((x) => x !== v) });
+
+  return (
+    <div className="space-y-6 max-w-[760px]">
+      {/* Row: binary preferences */}
+      <div className="space-y-2">
+        <FieldHeading>Pets</FieldHeading>
+        <div className="flex flex-wrap gap-2">
+          <Chip
+            active={prefs.pets.hasPets}
+            onClick={() => setPets({ hasPets: !prefs.pets.hasPets })}
+          >
+            <PawPrint className={`${prefs.pets.hasPets ? "text-black/80" : "text-white/85"} h-4 w-4`} />
+            I have pets
+          </Chip>
+          <Chip
+            active={prefs.pets.okWithPets}
+            onClick={() => setPets({ okWithPets: !prefs.pets.okWithPets })}
+          >
+            {prefs.pets.okWithPets ? (
+              <Heart className="h-4 w-4 text-black/80" />
+            ) : (
+              <Heart className="h-4 w-4 text-white/85" />
+            )}
+            I’m okay with pets
+          </Chip>
+          {!prefs.pets.okWithPets && (
+            <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-white/60">
+              <Ban className="h-3.5 w-3.5" /> roommates’ pets not preferred
+            </span>
+          )}
         </div>
+        <p className="text-[11px] text-white/45">
+          This helps us match you with owners and roommates who align with your comfort.
+        </p>
       </div>
-      <Divider />
-      <div className="mb-2 text-[13px] font-semibold">Visibility</div>
-      <div className="flex flex-wrap gap-2">
-        <Chip
-          active={prefs.culture.visibility.showAvatarInPreviews}
-          onClick={() =>
-            setCulture({
-              visibility: {
-                ...prefs.culture.visibility,
-                showAvatarInPreviews: !prefs.culture.visibility.showAvatarInPreviews,
-              },
-            })
-          }
-        >
-          Show my name & avatar in previews
-        </Chip>
-        <Chip
-          active={prefs.culture.visibility.shareCultureInPreviews === "banded"}
-          onClick={() =>
-            setCulture({ visibility: { ...prefs.culture.visibility, shareCultureInPreviews: "banded" } })
-          }
-        >
-          Share only “compatibility badges”
-        </Chip>
+
+      {/* Row: allergies */}
+      <div className="space-y-2">
+        <FieldHeading>Allergies</FieldHeading>
+        <div className="relative w-full">
+          <Input
+            placeholder="Type an allergy and press Enter (e.g., cats)"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addAllergy(e.currentTarget.value);
+                e.currentTarget.value = "";
+              }
+            }}
+            aria-label="Add a pet allergy"
+          />
+        </div>
+
+        {/* Quick add suggestions */}
+        <div className="flex flex-wrap gap-2">
+          {suggestions.map((s) => (
+            <SuggestChip
+              key={s}
+              onClick={() => addAllergy(s)}
+              disabled={(prefs.pets.allergies || []).includes(s)}
+            >
+              {s}
+            </SuggestChip>
+          ))}
+        </div>
+
+        {/* Active allergy tokens */}
+        {(prefs.pets.allergies || []).length > 0 ? (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {(prefs.pets.allergies || []).map((a) => (
+              <AllergyTag key={a} label={a} onRemove={() => removeAllergy(a)} />
+            ))}
+          </div>
+        ) : (
+          <div className="text-[12px] text-white/45">No allergies added.</div>
+        )}
       </div>
     </div>
   );
+};
+
+
+  const StepDealbreakers = () => {
+  const opts = [
+    { k: "no_smoking_indoors",   t: "No smoking indoors",  Base: Cigarette,  banned: true  },
+    { k: "no_late_night_parties",t: "No late-night parties", Base: PartyPopper, banned: true },
+    { k: "no_pets",              t: "No pets",             Base: PawPrint,   banned: true  },
+    { k: "quiet_after_22",       t: "Quiet after 10PM",    Base: Moon,       banned: false },
+    { k: "no_heavy_drinking",    t: "No heavy drinking",   Base: Wine,       banned: true  },
+  ];
+
+  const limit = 3;
+  const selected = prefs.dealbreakers || [];
+  const count = selected.length;
+  const atLimit = count >= limit;
+
+  const onToggle = (k) => {
+    if (selected.includes(k)) {
+      savePrefs({ dealbreakers: selected.filter((x) => x !== k) });
+    } else if (!atLimit) {
+      savePrefs({ dealbreakers: [...selected, k] });
+    }
+  };
+
+  return (
+    <div className="space-y-4 max-w-[780px]">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="text-[16px] md:text-[18px] font-semibold">Deal-breakers</div>
+        <div className="flex items-center gap-2 text-[12px]">
+          <LimitMeter count={count} limit={limit} />
+          <span className={atLimit ? "text-rose-300" : "text-white/65"}>
+            You chose {count} / {limit}
+          </span>
+        </div>
+      </div>
+      <p className="text-[12px] text-white/55 -mt-2">Pick up to 3 non-negotiables.</p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {opts.map(({ k, t, Base, banned }) => {
+          const on = selected.includes(k);
+          const disabled = !on && atLimit;
+          return (
+            <Chip
+              key={k}
+              size="lg"
+              className="w-full min-h-[52px]"   // bigger target & full width
+              active={on}
+              disabled={disabled}
+              onClick={() => onToggle(k)}
+            >
+              <DBIcon Base={Base} banned={banned} size="lg" />
+              <span className="ml-1 leading-tight">{t}</span>
+            </Chip>
+          );
+        })}
+      </div>
+
+      {count > 0 && (
+        <div className="pt-1 text-[12px] text-white/60">
+          Selected:&nbsp;
+          {opts
+            .filter(o => selected.includes(o.k))
+            .map(o => o.t)
+            .join(" • ")}
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+  const StepFinish = () => {
+  const [boom, setBoom] = useState(false);
+
+  // Fire confetti when this step mounts
+  useEffect(() => {
+    setBoom(true);
+    const t = setTimeout(() => setBoom(false), 2000);
+    return () => clearTimeout(t);
+  }, []);
+
+  const Badge = ({ children }) => (
+    <span className="inline-flex items-center gap-1 rounded-full border border-white/12 bg-white/[0.06] px-2.5 py-1 text-[12px] text-white/80">
+      {children}
+    </span>
+  );
+
+  return (
+    <div className="relative">
+      {boom && <ConfettiBurst n={38} />}
+
+      {/* Success header */}
+      <div className="rounded-2xl ring-1 ring-white/10 p-4 sm:p-5 mb-4
+                      bg-gradient-to-r from-emerald-400/10 via-amber-400/10 to-fuchsia-400/10">
+        <div className="flex items-start gap-3">
+          <div className="shrink-0 grid h-10 w-10 place-items-center rounded-full bg-white text-black shadow-lg">
+            ✓
+          </div>
+          <div>
+            <div className="text-xl md:text-2xl font-bold">Synapse is set!</div>
+            <div className="text-white/75 text-sm md:text-[15px]">
+              Compatibility badges will appear on housing cards and owner approvals.
+            </div>
+          </div>
+        </div>
+
+        {/* A tiny preview of the kinds of badges users will see */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Badge><Sparkles className="h-4 w-4" /> Clean & tidy</Badge>
+          <Badge><Moon className="h-4 w-4" /> Quiet hours</Badge>
+          <Badge><Utensils className="h-4 w-4" /> Cooking rhythm</Badge>
+          <Badge><Route className="h-4 w-4" /> Commute</Badge>
+        </div>
+      </div>
+
+      <Divider />
+
+      {/* Visibility settings */}
+      <div className="space-y-2">
+        <div className="text-[15px] md:text-[16px] font-semibold">Visibility</div>
+
+        <div className="flex flex-wrap gap-2">
+          <Chip
+            active={prefs.culture.visibility.showAvatarInPreviews}
+            onClick={() =>
+              setCulture({
+                visibility: {
+                  ...prefs.culture.visibility,
+                  showAvatarInPreviews: !prefs.culture.visibility.showAvatarInPreviews,
+                },
+              })
+            }
+          >
+            Show my name & avatar in previews
+          </Chip>
+
+          <Chip
+            active={prefs.culture.visibility.shareCultureInPreviews === "banded"}
+            onClick={() =>
+              setCulture({
+                visibility: { ...prefs.culture.visibility, shareCultureInPreviews: "banded" },
+              })
+            }
+          >
+            Share only “compatibility badges”
+          </Chip>
+
+          <Chip
+            active={prefs.culture.visibility.shareCultureInPreviews === "details"}
+            onClick={() =>
+              setCulture({
+                visibility: { ...prefs.culture.visibility, shareCultureInPreviews: "details" },
+              })
+            }
+          >
+            Share brief details
+          </Chip>
+        </div>
+
+        <p className="text-[12px] text-white/55">
+          You’re in control. Change these anytime in Settings. We never share your contact info without consent.
+        </p>
+      </div>
+    </div>
+  );
+};
+
 
   const renderStep = () => {
     switch (step) {
