@@ -282,7 +282,7 @@ function Icon({ kind, className = "h-5 w-5" }) {
 
 const STEP_META = [
   { iconKey: "language",   pre: "Which", highlight: "language", post: "do you use most day-to-day?", sub: "Choose one. Add others if you’re comfortable." },
-  { iconKey: "home",       pre: "Where do you call", highlight: "home", post: "?", sub: "Pick your country, then state/region. City is optional." },
+  { iconKey: "home",       pre: "Where do you call", highlight: "home", post: "?", sub: "Pick your country, then state/region." },
   { iconKey: "moveBudget", pre: "When are you moving and what’s your", highlight: "monthly budget", post: "?", sub: "Used only to filter obvious mismatches." },
   { iconKey: "commute",    pre: "How far from campus is okay, and how will you", highlight: "commute", post: "?", sub: "Pick a distance and one or more modes." },
   { iconKey: "sleep",      pre: "What’s your", highlight: "sleep style", post: "and quiet hours?", sub: "We show compatibility bands, not exact times." },
@@ -299,13 +299,15 @@ const STEP_META = [
 /* through numbers; glow; desc)    */
 /* =============================== */
 function Stepper({ steps, current, onJump, meta = {} }) {
-  const DOT = 34;
-  const TRACK = 5;
-  const GAP = 12;
+  const DOT = 34;        // circle diameter
+  const TRACK = 5;       // connector width
+  const GAP = 12;        // space from dot to text column
+  const PAD = DOT + GAP; // left padding for text column
+  const SUB_PAD = 28;    // vertical space we reserve for the midline subtitle
 
   return (
     <Panel className="p-4 sm:p-5 h-full">
-      <div className="mb-3 text-[12px] font-semibold tracking-wide text-white/60">
+      <div className="mb-3 text-[12px] font-bold tracking-wide text-white/70">
         SETUP STEPS
       </div>
 
@@ -316,14 +318,20 @@ function Stepper({ steps, current, onJump, meta = {} }) {
         {steps.map((label, i) => {
           const isActive = i === current;
           const isDone = i < current;
+          const hasSub = !!meta?.[i]?.sub;
 
           return (
             <li
               key={label}
               className="relative min-h-[34px]"
-              style={{ ['--dot']: `${DOT}px`, ['--trk']: `${TRACK}px` }}
+              style={{
+                ['--dot']: `${DOT}px`,
+                ['--trk']: `${TRACK}px`,
+                // Reserve space only when the subtitle is shown and there *is* a next step.
+                paddingBottom: isActive && hasSub && i < steps.length - 1 ? SUB_PAD : 0,
+              }}
             >
-              {/* top connector (ends at circle edge) */}
+              {/* top connector */}
               {i > 0 && (
                 <span
                   aria-hidden
@@ -335,6 +343,7 @@ function Stepper({ steps, current, onJump, meta = {} }) {
                   style={{ top: 0, height: `calc(50% - ${DOT / 2}px)` }}
                 />
               )}
+
               {/* bottom connector */}
               {i < steps.length - 1 && (
                 <span
@@ -366,8 +375,8 @@ function Stepper({ steps, current, onJump, meta = {} }) {
                 {isDone ? '✓' : i + 1}
               </button>
 
-              {/* label + optional description */}
-              <div style={{ paddingLeft: DOT + GAP, minHeight: DOT }}>
+              {/* title */}
+              <div style={{ paddingLeft: PAD, minHeight: DOT }}>
                 <div
                   className={`flex items-center leading-none ${
                     isActive ? 'text-white' : 'text-white/85'
@@ -376,12 +385,28 @@ function Stepper({ steps, current, onJump, meta = {} }) {
                 >
                   <span className="text-[17px] md:text-[19px] font-semibold">{label}</span>
                 </div>
-                {isActive && meta?.[i]?.sub ? (
-                  <p className="mt-1 text-[12px] text-white/65 max-w-[270px]">
+              </div>
+
+              {/* subtitle */}
+              {isActive && hasSub ? (
+                i < steps.length - 1 ? (
+                  // Centered between this dot and the next; pointer-events none so it never steals clicks.
+                  <p
+                    className="absolute z-10 text-[12px] leading-snug text-white/65 max-w-[300px] pr-3 pointer-events-none"
+                    style={{
+                      left: PAD,
+                      top: `calc(25% + ${DOT / 2}px + 4px)`, // midline + tiny nudge
+                    }}
+                  >
                     {meta[i].sub}
                   </p>
-                ) : null}
-              </div>
+                ) : (
+                  // Last item: just place under the title.
+                  <p className="mt-1 text-[12px] text-white/65 max-w-[300px]" style={{ paddingLeft: PAD }}>
+                    {meta[i].sub}
+                  </p>
+                )
+              ) : null}
             </li>
           );
         })}
@@ -389,6 +414,8 @@ function Stepper({ steps, current, onJump, meta = {} }) {
     </Panel>
   );
 }
+
+
 
 /* =============================== */
 /* Centered, clamped question card */
@@ -554,87 +581,154 @@ const LANG_PRESETS = [
   { code: "bn", label: "Bengali" },
 ];
 
-  const StepLanguage = () => (
-  <div>
-    {/* Label + pill: slight gap and baseline align */}
-    <div className="mb-2 flex items-baseline gap-[10px]">
-      <span className="text-sm md:text-[15px] font-semibold text-white/90">Daily language</span>
-      <Pill className="translate-y-[1px]">Used for vibe only</Pill>
-    </div>
+  // STEP 1: Language
+const StepLanguage = () => {
+  // Keep a controlled input for "Other"
+  const [otherLang, setOtherLang] = useState(() => {
+    const pl = prefs.culture.primaryLanguage;
+    const isPreset = LANG_PRESETS.some((l) => l.code === pl);
+    return pl && !isPreset ? String(pl) : "";
+  });
 
-    {/* Chip grid + 'Other' share the same width so input doesn't span the card */}
-    <div className="max-w-[640px]">
-      <div className="flex flex-wrap gap-2">
-        {LANG_PRESETS.map((l) => (
+  // If primaryLanguage is loaded/changed to a custom value elsewhere, reflect it in the input.
+  useEffect(() => {
+    const pl = prefs.culture.primaryLanguage;
+    const isPreset = LANG_PRESETS.some((l) => l.code === pl);
+    if (pl && !isPreset) setOtherLang(String(pl));
+  }, [prefs.culture.primaryLanguage]);
+
+  const isPresetSelected = LANG_PRESETS.some(
+    (l) => l.code === prefs.culture.primaryLanguage
+  );
+  const isCustomSelected =
+    !!prefs.culture.primaryLanguage && !isPresetSelected;
+
+  const handlePresetClick = (code) => {
+    // toggle: clicking the same chip again unselects
+    const next =
+      prefs.culture.primaryLanguage === code ? "" : code;
+    // when picking a preset, clear the custom text to avoid confusion
+    if (next && next !== prefs.culture.primaryLanguage) setOtherLang("");
+    setCulture({ primaryLanguage: next });
+  };
+
+  const commitCustom = () => {
+    const v = (otherLang || "").trim();
+    if (!v) return;
+    setCulture({ primaryLanguage: v });
+    // keep the text so it doesn't look like it "vanished"
+    // (remove the next line if you prefer to clear after commit)
+    // setOtherLang(v);
+  };
+
+
+
+
+  return (
+    <div>
+      {/* Label + pill: slight gap and baseline align */}
+      <div className="mb-2 flex items-baseline gap-[10px]">
+        <span className="text-sm md:text-[15px] font-semibold text-white/90">
+          Daily language
+        </span>
+        <Pill className="translate-y-[1px]">Used for vibe only</Pill>
+      </div>
+
+      {/* Presets + custom share same width */}
+      <div className="max-w-[640px]">
+        <div className="flex flex-wrap gap-2">
+          {LANG_PRESETS.map((l) => {
+            const on = prefs.culture.primaryLanguage === l.code;
+            return (
+              <Chip key={l.code} active={on} onClick={() => handlePresetClick(l.code)}>
+                {l.label}
+              </Chip>
+            );
+          })}
+
+          {/* Show selected custom language as a chip so it’s visible & dismissible */}
+          {isCustomSelected && (
+            <Chip
+              active
+              onClick={() => {
+                setCulture({ primaryLanguage: "" });
+                // optional: keep whatever was typed, or clear it
+                // setOtherLang("");
+              }}
+            >
+              {String(prefs.culture.primaryLanguage)} ✕
+            </Chip>
+          )}
+        </div>
+
+        {/* "Other" controlled input; Enter commits selection without wiping text */}
+        <div className="mt-3">
+          <Input
+            className="w-full max-w-[520px] md:max-w-[560px]"
+            placeholder="Other (type and Enter)"
+            value={otherLang}
+            onChange={(e) => setOtherLang(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitCustom();
+              }
+            }}
+          />
+        </div>
+      </div>
+
+      <Divider />
+
+      <div className="mb-2 text-[13px] font-semibold">
+        Also comfortable with… (optional)
+      </div>
+      <div className="flex flex-wrap gap-2 max-w-[640px]">
+        {LANG_PRESETS.map((l) => {
+          const arr = prefs.culture.otherLanguages || [];
+          const on = arr.includes(l.code);
+          return (
+            <Chip
+              key={l.code}
+              active={on}
+              onClick={() =>
+                setCulture({
+                  otherLanguages: on
+                    ? arr.filter((x) => x !== l.code)
+                    : [...arr, l.code],
+                })
+              }
+            >
+              {l.label}
+            </Chip>
+          );
+        })}
+      </div>
+
+      <Divider />
+
+      <div className="mb-2 text-[13px] font-semibold">
+        Language comfort with roommates
+      </div>
+      <div className="flex flex-wrap gap-2 max-w-[640px]">
+        {[
+          { k: "same", t: "Prefer same language" },
+          { k: "either", t: "Either is fine" },
+          { k: "learn", t: "Happy to learn/teach" },
+        ].map((o) => (
           <Chip
-            key={l.code}
-            active={prefs.culture.primaryLanguage === l.code}
-            onClick={() => setCulture({ primaryLanguage: l.code })}
+            key={o.k}
+            active={prefs.culture.languageComfort === o.k}
+            onClick={() => setCulture({ languageComfort: o.k })}
           >
-            {l.label}
+            {o.t}
           </Chip>
         ))}
       </div>
-
-      {/* Compact 'Other' input aligned with chips */}
-      <div className="mt-3">
-        <Input
-          className="w-full max-w-[520px] md:max-w-[560px]"
-          placeholder="Other (type and Enter)"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && e.currentTarget.value.trim()) {
-              const code = e.currentTarget.value.trim().toLowerCase().slice(0, 12);
-              setCulture({ primaryLanguage: code });
-              e.currentTarget.value = "";
-            }
-          }}
-        />
-      </div>
     </div>
+  );
+};
 
-    <Divider />
-
-    <div className="mb-2 text-[13px] font-semibold">Also comfortable with… (optional)</div>
-    <div className="flex flex-wrap gap-2 max-w-[640px]">
-      {LANG_PRESETS.map((l) => {
-        const arr = prefs.culture.otherLanguages || [];
-        const on = arr.includes(l.code);
-        return (
-          <Chip
-            key={l.code}
-            active={on}
-            onClick={() =>
-              setCulture({
-                otherLanguages: on ? arr.filter((x) => x !== l.code) : [...arr, l.code],
-              })
-            }
-          >
-            {l.label}
-          </Chip>
-        );
-      })}
-    </div>
-
-    <Divider />
-
-    <div className="mb-2 text-[13px] font-semibold">Language comfort with roommates</div>
-    <div className="flex flex-wrap gap-2 max-w-[640px]">
-      {[
-        { k: "same", t: "Prefer same language" },
-        { k: "either", t: "Either is fine" },
-        { k: "learn", t: "Happy to learn/teach" },
-      ].map((o) => (
-        <Chip
-          key={o.k}
-          active={prefs.culture.languageComfort === o.k}
-          onClick={() => setCulture({ languageComfort: o.k })}
-        >
-          {o.t}
-        </Chip>
-      ))}
-    </div>
-  </div>
-);
 
 
   /* =============================== */
@@ -672,6 +766,15 @@ const LANG_PRESETS = [
       };
     }, [prefs.culture.home.country, prefs.culture.home.countryISO, countries]);
 
+    // ✅ Show label only (no flag here; the flag is rendered via `left`)
+    const fmt = (o) => (o?.label ?? "");
+
+    // ✅ Single flag on the left
+    const leftFlag = (o) =>
+      o ? <span className="text-lg leading-none">{o.flag || flagEmoji(o.iso2)}</span> : null;
+
+    // (We no longer need rightDial)
+
     const onCountry = async (opt) => {
       setCulture({ home: { country: opt.label, countryISO: opt.iso2, region: "", city: "" } });
       try { setStates(await loadStates(opt.label)); setCities([]); } catch { setStates([]); setCities([]); }
@@ -682,10 +785,6 @@ const LANG_PRESETS = [
     };
     const onCity = (opt) => setCulture({ home: { ...prefs.culture.home, city: opt.value } });
 
-    const fmt = (o) => (o ? `${o.flag || ""} ${o.label}` : "");
-    const leftFlag = (o) => (o ? <span className="text-lg">{o.flag || flagEmoji(o.iso2)}</span> : null);
-    const rightDial = (o) => (o?.dial ? `+${o.dial}` : "");
-
     return (
       <div className="grid gap-3 md:grid-cols-2">
         <SearchSelect
@@ -694,8 +793,8 @@ const LANG_PRESETS = [
           onChange={onCountry}
           options={countries}
           format={fmt}
-          left={leftFlag}
-          right={rightDial}
+          left={leftFlag}      // keep the single flag here
+          // right removed to drop phone codes
         />
         <SearchSelect
           label="State / Region"
@@ -714,6 +813,7 @@ const LANG_PRESETS = [
       </div>
     );
   };
+
 
   /* =============================== */
   /* Remaining steps (compact)       */
@@ -1006,6 +1106,40 @@ const LANG_PRESETS = [
     }
   };
 
+    // Add just above: const PANES_H = `calc(100vh - ${PANES_TOP + PANES_VPAD}px)`;
+    const blockMsg = useMemo(() => {
+      // Return a non-empty string to block the "Continue" button with this message.
+      switch (step) {
+        case 0: // Language & Comfort
+          return prefs?.culture?.primaryLanguage
+            ? ""
+            : "Select your daily language to continue.";
+        case 1: // Country & Region
+          return prefs?.culture?.home?.country && prefs?.culture?.home?.region
+            ? ""
+            : "Pick your country and state/region to continue.";
+        case 2: // Move-in & Budget
+          return prefs?.logistics?.moveInMonth && (prefs?.logistics?.budgetMax ?? null) !== null
+            ? ""
+            : "Add your move-in month and a max monthly budget to continue.";
+        case 3: // Distance & Commute
+          return (prefs?.logistics?.commuteMode || []).length > 0
+            ? ""
+            : "Choose at least one commute mode to continue.";
+        case 4: // Sleep & Quiet Hours
+          return prefs?.lifestyle?.sleepPattern
+            ? ""
+            : "Pick your sleep pattern to continue.";
+        case 6: // Diet & Cooking
+          return prefs?.habits?.diet
+            ? ""
+            : "Select your diet to continue.";
+        default:
+          return ""; // other steps are optional / have safe defaults
+      }
+    }, [step, prefs]);
+    const canContinue = !blockMsg;
+
   if (loading) {
     return (
       <div className="nr-dots-page min-h-screen text-white">
@@ -1096,13 +1230,23 @@ const LANG_PRESETS = [
                     </button>
                     {step < STEPS.length - 1 ? (
                       <button
-                        onClick={nextStep}
-                        className="inline-flex items-center gap-2 rounded-xl bg-white text-black px-4 py-2 text-sm font-semibold active:translate-y-[1px] transition"
+                        onClick={() => { if (canContinue) nextStep(); }}
+                        disabled={!canContinue}
+                        className={[
+                          "inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition",
+                          canContinue
+                            ? "bg-white text-black active:translate-y-[1px]"
+                            : "bg-white/10 text-white/50 cursor-not-allowed border border-white/15"
+                        ].join(" ")}
+                        aria-disabled={!canContinue}
                       >
                         Continue →
                       </button>
                     ) : (
-                      <a href="/properties" className="inline-flex items-center gap-2 rounded-xl bg-white text-black px-4 py-2 text-sm font-semibold">
+                      <a
+                        href="/properties"
+                        className="inline-flex items-center gap-2 rounded-xl bg-white text-black px-4 py-2 text-sm font-semibold"
+                      >
                         See matches →
                       </a>
                     )}
