@@ -701,13 +701,15 @@ const StepLanguage = () => {
   const handlePresetClick = (code) => {
     const next = prefs.culture.primaryLanguage === code ? "" : code;
     if (next && next !== prefs.culture.primaryLanguage) setOtherLang("");
-    setCulture({ primaryLanguage: next });
+    const cleanedOthers = (prefs.culture.otherLanguages || []).filter(x => x !== next);
+    setCulture({ primaryLanguage: next, otherLanguages: cleanedOthers });
   };
 
   const commitCustom = () => {
     const v = (otherLang || "").trim();
     if (!v) return;
-    setCulture({ primaryLanguage: v });
+    const cleanedOthers = (prefs.culture.otherLanguages || []).filter(x => x !== v);
+    setCulture({ primaryLanguage: v, otherLanguages: cleanedOthers });
   };
 
   const comfortOpts = [
@@ -783,13 +785,14 @@ const StepLanguage = () => {
                 <Chip
                   key={l.code}
                   active={on}
-                  onClick={() =>
+                  onClick={() =>{
+                    if (l.code === prefs.culture.primaryLanguage) return;
                     setCulture({
                       otherLanguages: on
                         ? arr.filter((x) => x !== l.code)
                         : [...arr, l.code],
                     })
-                  }
+                  }}
                 >
                   {l.label}
                 </Chip>

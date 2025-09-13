@@ -58,7 +58,7 @@ export default function Footer() {
               </span>
             </div>
             <p className="mt-3 max-w-sm text-white/70">
-              Housing, essentials, and community — curated for your university.
+              Housing, essentials, and community — curated for yourself.
             </p>
           </div>
 

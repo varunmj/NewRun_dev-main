@@ -1670,6 +1670,70 @@ app.get('/threads/:id', authenticateToken, async (req, res) => {
 });
 
 
+// Synapse Preference : 
+
+// --- Synapse (roommate) preferences ---
+// GET: fetch current user's preferences
+app.get("/synapse/preferences", authenticateToken, async (req, res) => {
+  try {
+    const userId = getAuthUserId(req);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const user = await User.findById(userId, { synapse: 1 }).lean();
+    return res.json({ preferences: user?.synapse || {} });
+  } catch (err) {
+    console.error("GET /synapse/preferences error:", err);
+    return res.status(500).json({ message: "Failed to load preferences" });
+  }
+});
+
+// POST: upsert (replace) current user's preferences
+app.post("/synapse/preferences", authenticateToken, async (req, res) => {
+  try {
+    const userId = getAuthUserId(req);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const incoming = req.body || {};
+
+    // Only allow the expected top-level keys
+    const allowed = ["culture", "logistics", "lifestyle", "habits", "pets", "dealbreakers"];
+    const clean = {};
+    for (const k of allowed) if (k in incoming) clean[k] = incoming[k];
+
+    // --- normalize: drop primary from otherLanguages + dedupe ---
+    const norm = (() => {
+      const out = { ...clean };
+      const c = { ...(out.culture || {}) };
+
+      const primary =
+        typeof c.primaryLanguage === "string" ? c.primaryLanguage.trim() : "";
+
+      let others = Array.isArray(c.otherLanguages) ? c.otherLanguages : [];
+      // keep strings only, trim empties, remove primary, and dedupe
+      others = [...new Set(
+        others
+          .filter(x => typeof x === "string")
+          .map(x => x.trim())
+          .filter(x => x && x !== primary)
+      )];
+
+      out.culture = { ...c, otherLanguages: others };
+      return out;
+    })();
+
+    const updated = await User.findByIdAndUpdate(
+      userId,
+      { $set: { synapse: norm } },
+      { new: true, projection: { synapse: 1 } }
+    ).lean();
+
+    return res.json({ ok: true, preferences: updated?.synapse || {} });
+  } catch (err) {
+    console.error("POST /synapse/preferences error:", err);
+    return res.status(500).json({ message: "Failed to save preferences" });
+  }
+});
+
 
   server.listen(8000, () => {
     console.log('Server is running on port 8000');
