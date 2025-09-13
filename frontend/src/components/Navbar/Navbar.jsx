@@ -338,7 +338,7 @@ export default function Navbar() {
 
   const productItems = [
     { title: "Housing", desc: "Verified listings near campus.", to: "/all-properties", icon: MdHomeWork },
-    { title: "Roommate matcher", desc: "2-minute quiz for a great fit.", to: "/roommate", icon: MdPeople },
+    { title: "Roommate matcher", desc: "2-minute quiz for a great fit.", to: "/Synapse", icon: MdPeople },
     { title: "Essentials pack", desc: "Day-1 kit: buy or rent.", to: "/marketplace", icon: MdShoppingBag },
     { title: "Arrival checklist", desc: "7-day plan + airport transit.", to: "/chatbot", icon: MdChecklistRtl },
     { title: "Community", desc: "Clubs, events, and groups.", to: "/community", icon: MdDiversity3 },

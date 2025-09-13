@@ -71,7 +71,7 @@ export default function Footer() {
               <li><Link to="/marketplace" className="hover:text-white">Marketplace</Link></li>
               <li><Link to="/properties" className="hover:text-white">Housing</Link></li>
               <li><Link to="/messaging" className="hover:text-white">Messaging</Link></li>
-              <li><Link to="/roommate" className="hover:text-white">Roommate Match</Link></li>
+              <li><Link to="/Synapse" className="hover:text-white">Roommate Match</Link></li>
             </ul>
           </div>
 

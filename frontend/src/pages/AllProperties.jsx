@@ -81,14 +81,14 @@ const AllProperties = () => {
       <main className="flex-1">
         <div className="mx-auto max-w-7xl px-4 pt-8 pb-28">{/* pb-28 keeps cards away from footer */}
           {/* Roommate Finder CTA */}
-          <div className="flex justify-center">
+          {/* <div className="flex justify-center">
             <button
               onClick={() => navigate('/roommate')}
               className="rounded-xl bg-[#2f64ff] px-4 py-2 text-sm font-medium text-white hover:bg-[#2958e3] transition"
             >
               Roommate Finder
             </button>
-          </div>
+          </div> */}
 
           {allProperties.length > 0 ? (
             <section className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">

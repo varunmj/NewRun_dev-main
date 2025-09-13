@@ -25,6 +25,7 @@ import Roommate from './pages/Roommate';
 import Waitlist from "./pages/Waitlist";
 import OnboardingFlow from "./onboarding/OnboardingFlow";
 import ContactRequestsPage from "./pages/ContactRequests";
+import RoommateMatches from "./pages/RoommateMatches";
 // guards
 import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
 
@@ -121,7 +122,7 @@ const App = () => {
             }
           />
           <Route
-            path="/roommate"
+            path="/Synapse"
             element={
               <ProtectedRoute>
                 <Roommate />
@@ -146,7 +147,10 @@ const App = () => {
 
             {/* Keep any catch-all LAST */}
             <Route path="*" element={<Navigate to="/" replace />} />
+
+            <Route path="/Synapsematches" element={<RoommateMatches />} />
           </Routes>
+          
         
       </Router>
     </HeroUIProvider>
