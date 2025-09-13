@@ -1742,58 +1742,62 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
   //   scope: "school" | "country" | "any"   (optional narrowing)
   //   minScore: 0..100 (optional)
   // Notes: keep it simple now; we can iterate on weights later.
+  // --- Synapse (roommate) matches ---
   app.get("/synapse/matches", authenticateToken, async (req, res) => {
     try {
       const userId = getAuthUserId(req);
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
+      // Load the authed user with just what we need
       const me = await User.findById(userId, {
-        synapse: 1, firstName: 1, lastName: 1, avatar: 1, university: 1,
+        firstName: 1, lastName: 1, avatar: 1,
+        university: 1,
+        synapse: 1,
       }).lean();
 
-      const s = me?.synapse || {};
-      const culture = s.culture || {};
+      const s         = me?.synapse || {};
+      const culture   = s.culture   || {};
       const logistics = s.logistics || {};
       const lifestyle = s.lifestyle || {};
-      const habits = s.habits || {};
-      const pets = s.pets || {};
+      const habits    = s.habits    || {};
+      const pets      = s.pets      || {};
 
-      const page  = Math.max(0, parseInt(req.query.page ?? "0", 10));
-      const limit = Math.min(50, Math.max(1, parseInt(req.query.limit ?? "24", 10)));
+      const mePrimary = (culture.primaryLanguage || "").trim();
+      const meOthers  = Array.isArray(culture.otherLanguages) ? culture.otherLanguages : [];
+      const meComfort = culture.languageComfort || "either";
+
+      const meHomeCountry = (culture.home?.country || "").trim();
+      const meHomeRegion  = (culture.home?.region  || "").trim();
+      const meHomeCity    = (culture.home?.city    || "").trim();
+
+      const meCommute     = Array.isArray(logistics.commuteMode) ? logistics.commuteMode : [];
+      const meCleanliness = Number.isFinite(lifestyle.cleanliness) ? lifestyle.cleanliness : null;
+
+      // Pagination & filters
+      const page     = Math.max(0, parseInt(req.query.page ?? "0", 10));
+      const limit    = Math.min(50, Math.max(1, parseInt(req.query.limit ?? "24", 10)));
       const minScore = Math.max(0, Math.min(100, parseInt(req.query.minScore ?? "0", 10)));
-      const scope = (req.query.scope || "").toLowerCase(); // "school" | "country" | "any"
+      const scope    = String(req.query.scope || "school").toLowerCase(); // default to same school
 
-      // ---- Pre-filter candidates (cheap matches)
-      const match = {
-        _id: { $ne: me._id },
-        "synapse": { $exists: true },
-      };
+      // Pre-filter candidates. DO NOT require synapse; allow partial profiles.
+      const match = { _id: { $ne: me._id } };
 
-      // Optional scoping to reduce the pool
       if (scope === "school" && me.university) {
-        match.university = me.university;
-      } else if (scope === "country" && culture?.home?.country) {
-        match["synapse.culture.home.country"] = culture.home.country;
+        match.university = me.university;               // <-- top-level university
+      } else if (scope === "country" && meHomeCountry) {
+        match["synapse.culture.home.country"] = meHomeCountry;
       }
+      // else "any": no extra narrowing
 
-      // If user prefers "same language", hard-filter to candidates who can speak it
-      if (culture?.languageComfort === "same" && culture?.primaryLanguage) {
-        match.$or = [
-          { "synapse.culture.primaryLanguage": culture.primaryLanguage },
-          { "synapse.culture.otherLanguages": culture.primaryLanguage },
-        ];
-      }
-
-      // Build scoring weights
+      // Scoring weights (simple, tweak anytime)
       const W = {
         langPrimarySame: 25,
-        langCrossOK:     15, // my primary ∈ their others  OR their primary ∈ my others
-        comfortBonus:    10, // "either"/"learn" gives a small OK even if not aligned
+        langCrossOK:     15,
+        comfortBonus:    10,
         country:         10,
         region:          8,
         city:            6,
         commuteMode:     6,
-        distanceBand:    6,
         sleep:           6,
         cleanlinessNear: 8,
         dietSame:        4,
@@ -1803,93 +1807,69 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
         petsCompat:      7,
       };
 
-      // Helper expressions (all server-side, no JS on DB)
-      const mePrimary  = culture?.primaryLanguage || null;
-      const meOthers   = culture?.otherLanguages || [];
-      const meCountry  = culture?.home?.country || null;
-      const meRegion   = culture?.home?.region  || null;
-      const meCity     = culture?.home?.city    || null;
+      // Build the score parts dynamically so we only add checks that have a "me" side
+      const scoreParts = [
+        // Language
+        { $cond: [{ $eq: ["$synapse.culture.primaryLanguage", mePrimary] }, W.langPrimarySame, 0] },
+        { $cond: [
+          { $in: [ mePrimary, { $ifNull: ["$synapse.culture.otherLanguages", []] } ] },
+          W.langCrossOK, 0
+        ]},
+        { $cond: [
+          { $in: [ "$synapse.culture.primaryLanguage", meOthers ] },
+          W.langCrossOK, 0
+        ]},
+        // If my comfort isn't "same", small base
+        ...(meComfort !== "same" ? [ { $literal: W.comfortBonus } ] : []),
+
+        // Commute overlap
+        { $cond: [
+          { $gt: [ { $size: { $setIntersection: [ { $ifNull: ["$synapse.logistics.commuteMode", []] }, meCommute ] } }, 0 ] },
+          W.commuteMode, 0
+        ]},
+
+        // Sleep & cleanliness
+        { $cond: [ { $eq: ["$synapse.lifestyle.sleepPattern", lifestyle.sleepPattern || ""] }, W.sleep, 0 ] },
+        ...(meCleanliness !== null ? [{
+          $cond: [
+            { $and: [
+              { $ne: [ { $ifNull: ["$synapse.lifestyle.cleanliness", null] }, null ] },
+              { $lte: [ { $abs: { $subtract: [ { $ifNull: ["$synapse.lifestyle.cleanliness", 0] }, meCleanliness ] } }, 1 ] }
+            ]},
+            W.cleanlinessNear, 0
+          ]
+        }] : []),
+
+        // Habits
+        { $cond: [ { $eq: ["$synapse.habits.diet",      habits.diet      || "" ] }, W.dietSame,     0 ] },
+        { $cond: [ { $eq: ["$synapse.habits.smoking",   habits.smoking   || "" ] }, W.smokingSame,  0 ] },
+        { $cond: [ { $eq: ["$synapse.habits.drinking",  habits.drinking  || "" ] }, W.drinkingSame, 0 ] },
+        { $cond: [ { $eq: ["$synapse.habits.partying",  habits.partying  || "" ] }, W.partiesSame,  0 ] },
+
+        // Pets compatibility (very light check)
+        { $cond: [
+          { $eq: [ { $ifNull: ["$synapse.pets.okWithPets", true] }, (pets.okWithPets ?? true) ] },
+          W.petsCompat, 0
+        ] },
+      ];
+
+      if (meHomeCountry) scoreParts.push({
+        $cond: [ { $eq: ["$synapse.culture.home.country", meHomeCountry] }, W.country, 0 ]
+      });
+      if (meHomeRegion) scoreParts.push({
+        $cond: [ { $eq: ["$synapse.culture.home.region",  meHomeRegion ] }, W.region,  0 ]
+      });
+      if (meHomeCity) scoreParts.push({
+        $cond: [ { $eq: ["$synapse.culture.home.city",    meHomeCity   ] }, W.city,    0 ]
+      });
 
       const pipeline = [
         { $match: match },
-
-        // compute a numeric "score" by summing conditional weights
-        {
-          $addFields: {
-            score: {
-              $add: [
-                // Language
-                { $cond: [
-                  { $eq: ["$synapse.culture.primaryLanguage", mePrimary] },
-                  W.langPrimarySame, 0
-                ]},
-                { $cond: [
-                  { $in: [ "$synapse.culture.primaryLanguage", meOthers ] },
-                  W.langCrossOK, 0
-                ]},
-                { $cond: [
-                  { $and: [
-                    { $ne: [mePrimary, null] },
-                    { $in: [ mePrimary, "$synapse.culture.otherLanguages" ] }
-                  ]},
-                  W.langCrossOK, 0
-                ]},
-                // If *my* comfort isn't "same", give a small base for language tolerance
-                { $cond: [ { $in: [ culture?.languageComfort || "either", ["either","learn"] ] }, W.comfortBonus, 0 ]},
-
-                // Home proximity
-                { $cond: [ { $and: [ { $ne: [meCountry, null] }, { $eq: ["$synapse.culture.home.country", meCountry] } ] }, W.country, 0 ]},
-                { $cond: [ { $and: [ { $ne: [meRegion, null] },  { $eq: ["$synapse.culture.home.region",  meRegion]  } ] }, W.region,  0 ]},
-                { $cond: [ { $and: [ { $ne: [meCity, null] },    { $eq: ["$synapse.culture.home.city",    meCity]    } ] }, W.city,    0 ]},
-
-                // Commute (any overlap)
-                { $cond: [
-                  { $gt: [ { $size: { $setIntersection: ["$synapse.logistics.commuteMode", logistics?.commuteMode || []] } }, 0 ] },
-                  W.commuteMode, 0
-                ]},
-
-                // Distance band (simple bucket match)
-                { $cond: [
-                  { $eq: ["$synapse.logistics.maxDistanceMiles", logistics?.maxDistanceMiles || null] },
-                  W.distanceBand, 0
-                ]},
-
-                // Lifestyle closeness
-                { $cond: [ { $eq: ["$synapse.lifestyle.sleepPattern", lifestyle?.sleepPattern || ""] }, W.sleep, 0 ]},
-                // cleanliness within ±1
-                { $cond: [
-                  { $lte: [ { $abs: { $subtract: ["$synapse.lifestyle.cleanliness", lifestyle?.cleanliness ?? 3] } }, 1 ] },
-                  W.cleanlinessNear, 0
-                ]},
-
-                // Habits
-                { $cond: [ { $eq: ["$synapse.habits.diet", habits?.diet || ""] }, W.dietSame, 0 ]},
-                { $cond: [ { $eq: ["$synapse.habits.smoking", habits?.smoking || ""] }, W.smokingSame, 0 ]},
-                { $cond: [ { $eq: ["$synapse.habits.drinking", habits?.drinking || ""] }, W.drinkingSame, 0 ]},
-                { $cond: [ { $eq: ["$synapse.habits.partying", habits?.partying || ""] }, W.partiesSame, 0 ]},
-
-                // Pets compatibility
-                { $cond: [
-                  // ok if both allow pets OR both not okay OR neither has allergies conflict
-                  {
-                    $or: [
-                      { $and: ["$synapse.pets.okWithPets", pets?.okWithPets ?? true] },
-                      { $eq: ["$synapse.pets.okWithPets", pets?.okWithPets ?? true] }
-                    ]
-                  }, W.petsCompat, 0
-                ]},
-              ]
-            }
-          }
-        },
-
-        // (Optional) filter by minimum score
+        { $addFields: { score: { $add: scoreParts } } },
         ...(minScore > 0 ? [{ $match: { score: { $gte: minScore } } }] : []),
-
         { $sort: { score: -1, createdOn: -1 } },
         { $skip: page * limit },
         { $limit: limit },
-
         { $project: {
             _id: 1,
             firstName: 1,
@@ -1897,41 +1877,98 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
             avatar: 1,
             university: 1,
             score: 1,
-            synapse: {
-              culture: {
-                primaryLanguage: 1,
-                otherLanguages: 1,
-                languageComfort: 1,
-                home: { country: 1, region: 1, city: 1 },
-              },
-              logistics: { commuteMode: 1, maxDistanceMiles: 1 },
-              lifestyle: { sleepPattern: 1, cleanliness: 1 },
-              habits: { diet: 1, smoking: 1, drinking: 1, partying: 1 },
-              pets: { hasPets: 1, okWithPets: 1 },
-            }
+            synapse: 1,
           }
         }
       ];
 
       const rows = await User.aggregate(pipeline);
-      res.json({
+
+      // Post-process for UI niceties (overlap, reasons, flags)
+      const toSet = (a) => Array.from(new Set((Array.isArray(a) ? a : []).filter(Boolean)));
+      const intersect = (a, b) => {
+        const sb = new Set(b || []);
+        return toSet(a).filter(x => sb.has(x));
+      };
+
+      const matches = rows.map(r => {
+        const their = r.synapse || {};
+        const tCult = their.culture   || {};
+        const tLog  = their.logistics || {};
+        const tLife = their.lifestyle || {};
+        const tHab  = their.habits    || {};
+        const tPets = their.pets      || {};
+
+        const primaryLangSame = tCult.primaryLanguage && mePrimary && tCult.primaryLanguage === mePrimary;
+
+        const theirLangsAll = toSet([ tCult.primaryLanguage, ...(tCult.otherLanguages || []) ]);
+        const myLangsAll    = toSet([ mePrimary,            ...meOthers ]);
+        const bothLangs     = intersect(theirLangsAll, myLangsAll);
+
+        const commuteOverlap = intersect(tLog.commuteMode || [], meCommute || []);
+
+        const sleepMatch = (tLife.sleepPattern && lifestyle.sleepPattern)
+          ? (tLife.sleepPattern === lifestyle.sleepPattern ? "good" : "different")
+          : null;
+
+        const cleanMatch = (Number.isFinite(tLife.cleanliness) && meCleanliness !== null)
+          ? (Math.abs(Number(tLife.cleanliness) - meCleanliness) <= 1)
+          : false;
+
+        const reasons = [];
+        if (primaryLangSame) reasons.push("Same daily language");
+        if (bothLangs.length) reasons.push(`Both speak ${bothLangs.join(", ")}`);
+        if (commuteOverlap.length) reasons.push(`Overlap: ${commuteOverlap.join(" / ")}`);
+        if (sleepMatch === "good") reasons.push("Similar sleep hours");
+        if (cleanMatch) reasons.push("Clean & tidy");
+        if (tPets.okWithPets && (pets.okWithPets ?? true)) reasons.push("Pets are okay");
+        if (tHab.diet && habits.diet && tHab.diet === habits.diet) reasons.push(`Both ${tHab.diet}`);
+
+        const flags = {
+          // Basic conflict flag: if both have dealbreakers arrays, mark when they intersect
+          hasDealbreakerConflict: (
+            (their.dealbreakers || []).length &&
+            (s.dealbreakers || []).length &&
+            intersect(their.dealbreakers, s.dealbreakers).length > 0
+          )
+        };
+
+        return {
+          id: String(r._id),
+          name: `${r.firstName || ""} ${r.lastName || ""}`.trim(),
+          avatar: r.avatar || "",
+          university: r.university || "",              // top-level field
+          score: Math.max(0, Math.min(100, Math.round(r.score || 0))),
+          homeCity: tCult?.home?.city || "",
+          distanceMiles: null,                         // (optional) add real distance later
+          overlap: {
+            primaryLanguage: primaryLangSame,
+            otherLanguages: bothLangs,
+            commute: commuteOverlap,
+            sleep: sleepMatch,
+            clean: cleanMatch,
+            petsOk: Boolean(tPets.okWithPets),
+            diet: tHab.diet || null,
+          },
+          reasons,
+          flags,
+          synapse: their, // keep raw slice if you need more details in the drawer
+        };
+      });
+
+      return res.json({
         ok: true,
         page,
         limit,
-        results: rows.map(r => ({
-          id: r._id,
-          name: `${r.firstName || ""} ${r.lastName || ""}`.trim(),
-          avatar: r.avatar || "",
-          university: r.university || "",
-          score: Math.min(100, r.score), // keep it 0..100-ish
-          synapse: r.synapse,
-        }))
+        matches,          // <- what the FE expects
+        results: matches, // <- alias for safety with older FE
       });
     } catch (err) {
       console.error("GET /synapse/matches error:", err);
-      res.status(500).json({ message: "Failed to load matches" });
+      return res.status(500).json({ message: "Failed to load matches" });
     }
   });
+
 
 
 
