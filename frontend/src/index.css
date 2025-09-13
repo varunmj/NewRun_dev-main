@@ -261,3 +261,6 @@ input[type="date"].nr-month::-webkit-inner-spin-button {
     10%  { opacity: 1; }
     100% { transform: translate3d(var(--tx), 110vh, 0) rotate(calc(var(--r) + 540deg)); opacity: .9; }
   }
+
+  /* don't clip chip glows inside the answers pane */
+  .nr-panel { overflow: visible; }

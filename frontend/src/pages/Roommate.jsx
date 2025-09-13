@@ -4,26 +4,17 @@ import axiosInstance from "../utils/axiosInstance";
 import Navbar from "../components/Navbar/Navbar";
 import "../styles/newrun-hero.css";
 import {
-  Languages,
-  MapPin,
-  CalendarClock,
-  Route,
-  Moon,
-  Sparkles,
-  Utensils,
-  PartyPopper,
-  PawPrint,
-  OctagonX,
-  CheckCircle2,
-  Timer, Cigarette, CigaretteOff, Wine, Heart, Ban, Plus,
+  Languages, MapPin, CalendarClock, Route, Moon, Sparkles, Utensils, PartyPopper, PawPrint,
+  OctagonX, CheckCircle2, Timer, Cigarette, CigaretteOff, Wine, Heart, Ban, Plus, Users, BookOpen, Search 
 } from "lucide-react";
 
 /* =============================== */
 /* Laptop-first layout constants   */
 /* =============================== */
 const PANES_TOP = 220;            // where the 3-pane overlay starts (from viewport top)
+const PANES_TOP_WIDE   = 220;  // NEW: tighter top for wide steps
 const PANES_VPAD = 16;            // breathing room at the bottom
-const GRID_GAP = "1.5rem";        // horizontal gap between columns
+const GRID_GAP = "1.25rem";        // horizontal gap between columns
 
 // Collapsing hero: expanded vs. collapsed heights
 const HERO_EXPANDED = 240;        // px  (welcome size)
@@ -122,13 +113,25 @@ function ConfettiBurst({ n = 36, duration = 1800 }) {
 }
 
 
-function Chip({ active, children, onClick, disabled, size = "md", className = "" }) {
+function Chip({
+  active,
+  children,
+  onClick,
+  disabled,
+  size = "md",
+  block = false,
+  className = "",
+}) {
   const sizeCls =
     size === "lg"
       ? "px-4 py-2 text-[15px] rounded-2xl"
       : size === "sm"
       ? "px-2.5 py-1 text-[12px] rounded-full"
-      : "px-3.5 py-1.5 text-[13px] rounded-full"; // md (default)
+      : "px-3.5 py-1.5 text-[13px] rounded-full";
+
+  const blockCls = block
+    ? "w-full justify-center text-center whitespace-normal leading-tight min-h-[52px] md:min-h-[56px]"
+    : "";
 
   return (
     <button
@@ -140,6 +143,7 @@ function Chip({ active, children, onClick, disabled, size = "md", className = ""
         "inline-flex items-center gap-2 border font-semibold transition duration-150",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 active:translate-y-[1px]",
         sizeCls,
+        blockCls,
         active
           ? "border-transparent bg-gradient-to-r from-amber-400 to-orange-500 text-black shadow-[0_8px_18px_rgba(255,153,0,.25)] hover:brightness-110"
           : "border-white/12 bg-white/[0.06] text-white/75 hover:bg-white/[0.12] hover:border-white/90",
@@ -148,7 +152,7 @@ function Chip({ active, children, onClick, disabled, size = "md", className = ""
       ].join(" ")}
     >
       {active && <span className="text-black/80">✓</span>}
-      {children}
+      <span className="[text-wrap:balance]">{children}</span>
     </button>
   );
 }
@@ -672,7 +676,7 @@ const LANG_PRESETS = [
   { code: "bn", label: "Bengali" },
 ];
 
-  // STEP 1: Language
+// STEP 1: Language (compact, 2-column, no ISO badges)
 const StepLanguage = () => {
   // Keep a controlled input for "Other"
   const [otherLang, setOtherLang] = useState(() => {
@@ -681,7 +685,7 @@ const StepLanguage = () => {
     return pl && !isPreset ? String(pl) : "";
   });
 
-  // If primaryLanguage is loaded/changed to a custom value elsewhere, reflect it in the input.
+  // If primaryLanguage becomes a custom value elsewhere, reflect it here
   useEffect(() => {
     const pl = prefs.culture.primaryLanguage;
     const isPreset = LANG_PRESETS.some((l) => l.code === pl);
@@ -695,10 +699,7 @@ const StepLanguage = () => {
     !!prefs.culture.primaryLanguage && !isPresetSelected;
 
   const handlePresetClick = (code) => {
-    // toggle: clicking the same chip again unselects
-    const next =
-      prefs.culture.primaryLanguage === code ? "" : code;
-    // when picking a preset, clear the custom text to avoid confusion
+    const next = prefs.culture.primaryLanguage === code ? "" : code;
     if (next && next !== prefs.culture.primaryLanguage) setOtherLang("");
     setCulture({ primaryLanguage: next });
   };
@@ -707,26 +708,27 @@ const StepLanguage = () => {
     const v = (otherLang || "").trim();
     if (!v) return;
     setCulture({ primaryLanguage: v });
-    // keep the text so it doesn't look like it "vanished"
-    // (remove the next line if you prefer to clear after commit)
-    // setOtherLang(v);
   };
 
-
-
+  const comfortOpts = [
+    { k: "same", t: "Prefer same language" },
+    { k: "either", t: "Either is fine" },
+    { k: "learn", t: "Happy to learn/teach" },
+  ];
 
   return (
-    <div>
-      {/* Label + pill: slight gap and baseline align */}
-      <div className="mb-2 flex items-baseline gap-[10px]">
-        <span className="text-sm md:text-[15px] font-semibold text-white/90">
-          Daily language
-        </span>
-        <Pill className="translate-y-[1px]">Used for vibe only</Pill>
-      </div>
+    <div className="grid gap-6 md:grid-cols-[minmax(0,1.2fr)_minmax(0,.8fr)] items-start max-w-[920px]">
+      {/* LEFT: Primary language + Other + Also comfortable */}
+      <div>
+        {/* Heading */}
+        <div className="mb-2 flex items-baseline gap-2">
+          <span className="text-[16px] md:text-[18px] font-semibold text-white/95">
+            Daily language
+          </span>
+          <Pill>Used for vibe only</Pill>
+        </div>
 
-      {/* Presets + custom share same width */}
-      <div className="max-w-[640px]">
+        {/* Preset chips (text only; no ISO badges) */}
         <div className="flex flex-wrap gap-2">
           {LANG_PRESETS.map((l) => {
             const on = prefs.culture.primaryLanguage === l.code;
@@ -743,8 +745,6 @@ const StepLanguage = () => {
               active
               onClick={() => {
                 setCulture({ primaryLanguage: "" });
-                // optional: keep whatever was typed, or clear it
-                // setOtherLang("");
               }}
             >
               {String(prefs.culture.primaryLanguage)} ✕
@@ -752,11 +752,11 @@ const StepLanguage = () => {
           )}
         </div>
 
-        {/* "Other" controlled input; Enter commits selection without wiping text */}
-        <div className="mt-3">
+        {/* "Other" compact input */}
+        <div className="mt-3 max-w-[560px]">
           <Input
-            className="w-full max-w-[520px] md:max-w-[560px]"
-            placeholder="Other (type and Enter)"
+            className="w-full"
+            placeholder="Search or type another language… (press Enter)"
             value={otherLang}
             onChange={(e) => setOtherLang(e.target.value)}
             onKeyDown={(e) => {
@@ -767,55 +767,73 @@ const StepLanguage = () => {
             }}
           />
         </div>
+
+        {/* Also comfortable with… — horizontal chip rail to avoid vertical scroll */}
+        <div className="mt-6">
+          <div className="mb-2 text-[13px] font-semibold">
+            Also comfortable with… (optional)
+          </div>
+
+          {/* Same compact style as Daily language */}
+          <div className="flex flex-wrap gap-2">
+            {LANG_PRESETS.map((l) => {
+              const arr = prefs.culture.otherLanguages || [];
+              const on = arr.includes(l.code);
+              return (
+                <Chip
+                  key={l.code}
+                  active={on}
+                  onClick={() =>
+                    setCulture({
+                      otherLanguages: on
+                        ? arr.filter((x) => x !== l.code)
+                        : [...arr, l.code],
+                    })
+                  }
+                >
+                  {l.label}
+                </Chip>
+              );
+            })}
+          </div>
+        </div>
+
       </div>
 
-      <Divider />
+      {/* Right side: Language comfort with roommates */}
+      <aside className="rounded-3xl border border-white/12 bg-white/[0.03] p-4 sm:p-5 w-full max-w-[320px]">
+        <h3 className="text-white text-[20px] sm:text-[22px] font-bold leading-tight mb-3">
+          Language
+          <br /> comfort with
+          <br /> roommates
+        </h3>
 
-      <div className="mb-2 text-[13px] font-semibold">
-        Also comfortable with… (optional)
-      </div>
-      <div className="flex flex-wrap gap-2 max-w-[640px]">
-        {LANG_PRESETS.map((l) => {
-          const arr = prefs.culture.otherLanguages || [];
-          const on = arr.includes(l.code);
-          return (
-            <Chip
-              key={l.code}
-              active={on}
-              onClick={() =>
-                setCulture({
-                  otherLanguages: on
-                    ? arr.filter((x) => x !== l.code)
-                    : [...arr, l.code],
-                })
-              }
-            >
-              {l.label}
-            </Chip>
-          );
-        })}
-      </div>
+        <div className="grid gap-3">
+          {[
+            { k: "same",   t: "Prefer same language" },
+            { k: "either", t: "Either is fine" },
+            { k: "learn",  t: "Happy to learn/teach" },
+          ].map(({ k, t }) => {
+            const on = prefs.culture.languageComfort === k;
+            return (
+              <Chip
+                key={k}
+                size="lg"
+                className="w-full h-[48px] justify-center"
+                active={on}
+                onClick={() => setCulture({ languageComfort: k })}
+              >
+                {t}
+              </Chip>
+            );
+          })}
+        </div>
 
-      <Divider />
+        <p className="mt-3 text-[12px] text-white/55">
+          Used only to improve matching. You can change this anytime.
+        </p>
+      </aside>
 
-      <div className="mb-2 text-[13px] font-semibold">
-        Language comfort with roommates
-      </div>
-      <div className="flex flex-wrap gap-2 max-w-[640px]">
-        {[
-          { k: "same", t: "Prefer same language" },
-          { k: "either", t: "Either is fine" },
-          { k: "learn", t: "Happy to learn/teach" },
-        ].map((o) => (
-          <Chip
-            key={o.k}
-            active={prefs.culture.languageComfort === o.k}
-            onClick={() => setCulture({ languageComfort: o.k })}
-          >
-            {o.t}
-          </Chip>
-        ))}
-      </div>
     </div>
   );
 };
@@ -1128,7 +1146,19 @@ function DBIcon({ Base, banned, size = "md" }) {
   );
 }
 
-
+// Evenly-spaced chip grid that wraps across rows
+function ChipCloud({ children, min = 140, className = "" }) {
+  return (
+    <div
+      className={`grid gap-2 sm:gap-2 ${className}`}
+      style={{ gridTemplateColumns: `repeat(auto-fit, minmax(${min}px, 1fr))` }}
+    >
+      {React.Children.map(children, (child) => (
+        <div className="min-w-0">{child}</div>
+      ))}
+    </div>
+  );
+}
 
 
   // helper (place above StepCleanliness or near other small atoms)
@@ -1722,6 +1752,9 @@ const StepCleanliness = () => {
 
   const PANES_H = `calc(100vh - ${PANES_TOP + PANES_VPAD}px)`;
 
+  const isWideStep = step === 0; // Language screen gets more space
+  const TOP = isWideStep ? PANES_TOP_WIDE : PANES_TOP;
+
   return (
     <div className="nr-dots-page text-white" style={{ height: "100vh", overflow: "hidden", position: "relative" }}>
       <Navbar />
@@ -1741,22 +1774,30 @@ const StepCleanliness = () => {
 
       {/* Three-pane overlay */}
       <section
-        className="mx-auto pl-4 pr-2 xl:pr-4 max-w-[88rem] 2xl:max-w-[96rem]"
+        className={`mx-auto ${isWideStep ? "max-w-[106rem] 2xl:max-w-[116rem]" : "max-w-[88rem] 2xl:max-w-[96rem]"} px-3 sm:px-4`}
         style={{
           position: "absolute",
-          top: PANES_TOP,
+          top: TOP,          // was PANES_TOP
           left: 0,
           right: 0,
-          height: PANES_H,
+          height: PANES_H,   // uses TOP above
         }}
       >
-        <div
+         <div
           id="roommateGrid"
           className="grid h-full items-start"
-          style={{ gridTemplateColumns: "1fr 1.35fr 1.75fr", gap: GRID_GAP }}
+          style={{
+            // widen the answers column on Language step
+            gridTemplateColumns: isWideStep ? "0.7fr 0.75fr 1.3fr" : "1fr 1.35fr 1.75fr",
+            gap: GRID_GAP,
+          }}
         >
           {/* Left: Stepper */}
-          <aside className="hidden lg:block h-full min-h-0 -ml-8 xl:-ml-12 2xl:-ml-16">
+          <aside
+            className={`hidden lg:block h-full min-h-0 ${
+              isWideStep ? "ml-0" : "-ml-8 xl:-ml-12 2xl:-ml-16"
+            }`}
+          >
             <Stepper steps={STEPS} current={step} onJump={goToStep} meta={STEP_META} />
           </aside>
 
