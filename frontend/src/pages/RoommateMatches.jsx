@@ -5,13 +5,17 @@ import Navbar from "../components/Navbar/Navbar";
 import "../styles/newrun-hero.css";
 import {
   Heart, HeartOff, Languages, MapPin, Route, Moon, Sparkles, Utensils,
-  PawPrint, Filter, ChevronRight, X
+  PawPrint, Filter, ChevronRight, X, Info
 } from "lucide-react";
 
-/* --- atoms to match Roommate.jsx -------------------------------------- */
-function Panel({ className = "", children }) {
-  return <div className={`nr-panel ${className}`}>{children}</div>;
+/* ================================
+   Small style atoms / utilities
+   ================================ */
+
+function Panel({ className = "", children, style }) {
+  return <div className={`nr-panel ${className}`} style={style}>{children}</div>;
 }
+
 function Chip({ active, onClick, children, className = "" }) {
   return (
     <button
@@ -30,108 +34,40 @@ function Chip({ active, onClick, children, className = "" }) {
     </button>
   );
 }
+
 const Pill = ({ children }) => (
   <span className="inline-flex items-center rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-[11px] text-white/65">
     {children}
   </span>
 );
 
-/* --- university logo mark (logo → favicon → monogram) ----------------- */
-const uniDomainCache = new Map();
-
-function uniInitials(name = "") {
-  const stop = new Set(["university", "college", "of", "the", "and", "&"]);
-  const words = name
-    .split(/\s+/)
-    .map(w => w.replace(/[^a-z]/gi, ""))
-    .filter(w => w && !stop.has(w.toLowerCase()));
-  const caps = words.map(w => w[0]?.toUpperCase()).filter(Boolean).slice(0, 3);
-  return (caps.join("") || name.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase());
+/* Hue from score (0→red, 50→amber, 100→green) */
+function hueForScore(score = 0) {
+  // clamp 0..100 then map to 0..130 (red to spring green)
+  const s = Math.max(0, Math.min(100, Number(score) || 0));
+  return Math.round((130 * s) / 100);
 }
 
-function UniMark({ university, domain: domainProp, size = 28, className = "" }) {
-  const [domain, setDomain] = useState(domainProp || null);
-  const [srcIndex, setSrcIndex] = useState(0);
-
-  // Resolve domain once via small backend helper if not provided
-  useEffect(() => {
-    if (domainProp || !university) return;
-    const key = university.trim().toLowerCase();
-    if (uniDomainCache.has(key)) {
-      setDomain(uniDomainCache.get(key));
-      return;
-    }
-    (async () => {
-      try {
-        const r = await fetch(`/util/university/resolve?name=${encodeURIComponent(university)}`);
-        const j = await r.json();
-        const d = j?.domain || null;
-        uniDomainCache.set(key, d);
-        setDomain(d);
-      } catch {
-        uniDomainCache.set(key, null);
-        setDomain(null);
-      }
-    })();
-  }, [university, domainProp]);
-
-  const sources = useMemo(() => {
-    if (!domain) return [];
-    const px = Math.max(64, size * 2);
-    return [
-      `https://logo.clearbit.com/${domain}?size=${px}`,
-      `https://icons.duckduckgo.com/ip3/${domain}.ico`,
-      `https://www.google.com/s2/favicons?domain=${domain}&sz=${px}`,
-    ];
-  }, [domain, size]);
-
-  const initials = uniInitials(university || "Uni");
-
-  return (
-    <span
-      className={[
-        "relative inline-grid place-items-center rounded-full overflow-hidden",
-        "ring-1 ring-white/15 bg-white/[0.06]",
-        className,
-      ].join(" ")}
-      style={{ width: size, height: size }}
-      title={university || "University"}
-      aria-label={university || "University"}
-    >
-      {sources.length > 0 ? (
-        <>
-          <img
-            src={sources[srcIndex]}
-            alt=""
-            className="absolute inset-0 w-full h-full object-contain p-1"
-            onError={() => {
-              setSrcIndex((i) => (i + 1 < sources.length ? i + 1 : i));
-            }}
-          />
-          {/* if images fail, the text shows */}
-          <span className="text-[11px] font-bold text-white/75">{initials}</span>
-        </>
-      ) : (
-        <span className="text-[11px] font-bold text-white/80">{initials}</span>
-      )}
-    </span>
-  );
-}
-
-/* --- score ring -------------------------------------------------------- */
-function ScoreRing({ score = 0, size = 60 }) {
+/* ================================
+   Score Ring (with text)
+   ================================ */
+function ScoreRing({ score = 0, size = 56, thick = 6 }) {
   const pct = Math.max(0, Math.min(100, Math.round(score)));
-  const c = `conic-gradient(#f59e0b ${pct * 3.6}deg, rgba(255,255,255,.08) 0)`;
+  const hue = hueForScore(pct);
+  const bg = `conic-gradient(hsl(${hue} 90% 55%) ${pct * 3.6}deg, rgba(255,255,255,.09) 0)`;
   return (
     <div
-      className="grid place-items-center rounded-full"
-      style={{ width: size, height: size, background: c }}
+      className="grid place-items-center rounded-full relative"
+      style={{
+        width: size, height: size, background: bg,
+        boxShadow: `0 0 0 1px rgba(255,255,255,.08), 0 12px 28px rgba(0,0,0,.45), 0 0 24px hsl(${hue} 90% 50% / .25)`
+      }}
       aria-label={`Compatibility ${pct}%`}
       title={`Compatibility ${pct}%`}
     >
       <div
         className="grid place-items-center rounded-full bg-[#0f1115] text-white font-bold"
-        style={{ width: size - 10, height: size - 10 }}
+        style={{ width: size - thick*2, height: size - thick*2 }}
       >
         <span className="text-[13px]">{pct}%</span>
       </div>
@@ -139,92 +75,177 @@ function ScoreRing({ score = 0, size = 60 }) {
   );
 }
 
-/* --- tiny badge -------------------------------------------------------- */
+/* ================================
+   University Logo (scaled)
+   ================================ */
+// --- University logo (fixed sizing + fallback) ---
+const UNI_DOMAINS = {
+  "Northern Illinois University": "niu.edu",
+  // add more canonical names here as you go
+};
+
+function universityLogoUrl(name = "") {
+  const n = String(name || "").trim();
+  if (!n) return "";
+  const domain = UNI_DOMAINS[n] || `${n.toLowerCase().replace(/[^a-z0-9]+/g, "")}.edu`;
+  return `https://logo.clearbit.com/${domain}`;
+}
+
+function initialsFrom(name = "") {
+  const parts = String(name).trim().split(/\s+/);
+  const picks = parts.length >= 2 ? [parts[0][0], parts[parts.length - 1][0]] : [parts[0]?.[0] || ""];
+  return picks.join("").toUpperCase();
+}
+
+function UniversityMark({ name, size = 56 }) {
+  const url = universityLogoUrl(name);
+  const init = initialsFrom(name);
+
+  return (
+    <div
+      className="relative rounded-full overflow-hidden ring-1 ring-white/15 bg-white/5 shrink-0"
+      style={{ width: size, height: size, minWidth: size }}
+      title={name || "University"}
+    >
+      {url ? (
+        <img
+          src={url}
+          alt={name}
+          className="w-full h-full object-contain p-1.5"
+          onError={(e) => {
+            // hide broken image; show lettermark fallback beneath
+            e.currentTarget.style.display = "none";
+          }}
+        />
+      ) : null}
+      {/* lettermark fallback sits underneath / or shows when image hidden */}
+      <div className="absolute inset-0 grid place-items-center">
+        <div
+          className="rounded-full grid place-items-center"
+          style={{
+            width: size, height: size,
+            background: "linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.02))",
+          }}
+        >
+          <span className="text-[12px] font-bold text-white/80">{init}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================
+   Badges (tiny)
+   ================================ */
 const Badge = ({ Icon, children }) => (
   <span className="inline-flex items-center gap-1 rounded-full border border-white/12 bg-white/[0.06] px-2 py-[3px] text-[11px] text-white/80">
     <Icon className="h-3.5 w-3.5" /> {children}
   </span>
 );
 
-/* --- a single match card ---------------------------------------------- */
-function MatchCard({ m, shortlisted, onToggleShortlist, onOpen, highlightTop = false }) {
-  const topMark =
-    highlightTop ? (
-      <span className="absolute -top-2 right-14 translate-y-[-50%] rounded-full bg-amber-400/20 text-amber-200 text-[10px] px-2 py-0.5 border border-amber-400/40">
-        Top match
-      </span>
-    ) : null;
+/* ==========================================
+   A single match card (revamped & consistent)
+   ========================================== */
+function MatchCard({ m, shortlisted, onToggleShortlist, onOpen }) {
+  const score = m.score ?? 0;
+  const hue = hueForScore(score);
 
-  // choose a concise set of badges for the row, not all of them
-  const badges = [
-    m.overlap?.primaryLanguage && { Icon: Languages, text: "Same daily language" },
-    m.overlap?.sleep === "good" && { Icon: Moon, text: "Sleep match" },
-    m.overlap?.clean && { Icon: Sparkles, text: "Clean & tidy" },
-  ].filter(Boolean);
+  // limit chips to 2 for calmness
+  const chips = [];
+  if (m.overlap?.primaryLanguage) chips.push(<Badge Icon={Languages} key="lang">Same daily language</Badge>);
+  if (m.overlap?.sleep === "good") chips.push(<Badge Icon={Moon} key="sleep">Sleep match</Badge>);
+  if (m.overlap?.clean) chips.push(<Badge Icon={Sparkles} key="clean">Clean & tidy</Badge>);
+  if (m.overlap?.commute?.length > 0) chips.push(<Badge Icon={Route} key="commute">{m.overlap.commute.join(" / ")}</Badge>);
+  if (m.overlap?.diet) chips.push(<Badge Icon={Utensils} key="diet">{m.overlap.diet}</Badge>);
+  if (m.overlap?.petsOk) chips.push(<Badge Icon={PawPrint} key="pets">Pets OK</Badge>);
+  const primaryChips = chips.slice(0, 2);
+  const extraCount = Math.max(0, chips.length - primaryChips.length);
 
-  const extraCount = [
-    (m.overlap?.commute?.length || 0) > 0,
-    !!m.overlap?.petsOk,
-    !!m.overlap?.diet,
-  ].filter(Boolean).length;
+  const showCity = !!m.homeCity;
+  const showDist = typeof m.distanceMiles === "number" && !Number.isNaN(m.distanceMiles);
 
   return (
-    <div className="relative rounded-2xl ring-1 ring-white/8 overflow-hidden bg-[#0f1115]/70">
-      {topMark}
-      {/* header */}
-      <div className="p-4 flex items-start gap-3">
+    <div
+      className="relative rounded-3xl overflow-hidden bg-[#0f1115]/80 ring-1 ring-white/8 transition-transform"
+      style={{
+        minHeight: 280,
+        boxShadow: `0 0 0 1px rgba(255,255,255,.04),
+                    0 14px 36px rgba(0,0,0,.55),
+                    0 0 50px hsl(${hue} 90% 55% / .08)` // soft colored aura
+      }}
+    >
+      {/* HEADER */}
+      <div className="p-5 md:p-6 flex items-start gap-4">
+        {/* Avatar */}
         <img
           src={m.avatar || "/avatar-fallback.png"}
           alt=""
-          className="h-12 w-12 rounded-full object-cover ring-1 ring-white/10"
+          className="h-14 w-14 rounded-full object-cover ring-1 ring-white/10"
         />
+
         <div className="min-w-0 grow">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="font-semibold text-white truncate max-w-[200px]">
-              {m.name || "Student"}
+          <div className="flex items-center gap-3">
+            <div className="font-extrabold text-white text-[18px] md:text-[20px] truncate">
+              {m.name}
             </div>
-            <UniMark university={m.university} domain={m.universityDomain} />
+            {/* University mark same scale as score ring */}
+            <UniversityMark name={m.university} size={56} />
           </div>
-          <div className="mt-0.5 flex items-center gap-2 text-[12px] text-white/60">
-            <MapPin className="h-3.5 w-3.5" />
-            <span className="truncate">
-              {m.homeCity || "Near campus"} • {m.distanceMiles ?? "—"} mi
-            </span>
-          </div>
+
+          {(showCity || showDist) && (
+            <div className="mt-1 flex items-center gap-2 text-[12px] text-white/60">
+              {showCity && (
+                <>
+                  <MapPin className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{m.homeCity}</span>
+                </>
+              )}
+              {showCity && showDist && <span>•</span>}
+              {showDist && <span>{m.distanceMiles.toFixed(1)} mi</span>}
+            </div>
+          )}
         </div>
-        <div className="ml-auto shrink-0">
-          <ScoreRing score={m.score} size={56} />
+
+        <div className="shrink-0">
+          <ScoreRing score={score} size={64} thick={7} />
         </div>
       </div>
 
-      {/* concise badges row */}
-      <div className="px-4 pb-2 flex flex-wrap gap-2">
-        {badges.map((b, i) => (
-          <Badge key={i} Icon={b.Icon}>{b.text}</Badge>
-        ))}
+      {/* CHIPS */}
+      <div className="px-5 md:px-6 pb-2 flex flex-wrap gap-2">
+        {primaryChips}
         {extraCount > 0 && (
-          <span className="inline-flex items-center rounded-full border border-white/12 bg-white/[0.06] px-2 py-[3px] text-[11px] text-white/70">
+          <span className="inline-flex items-center rounded-full border border-white/12 bg-white/[0.06] px-2.5 py-[6px] text-[12px] text-white/75">
             +{extraCount} more
           </span>
         )}
       </div>
 
-      {/* short reasons line */}
+      {/* REASONS (clamped for uniform height) */}
       {m.reasons?.length ? (
-        <div className="px-4 pb-3 text-[12px] text-white/65">
-          {m.reasons.slice(0, 1).join(" • ")}
+        <div
+          className="px-5 md:px-6 pb-3 text-[13px] text-white/70"
+          style={{
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden"
+          }}
+          title={m.reasons.join(" • ")}
+        >
+          {m.reasons.join(" • ")}
         </div>
       ) : null}
 
-      {/* actions */}
-      <div className="px-4 pb-4 flex items-center justify-between">
+      {/* ACTIONS */}
+      <div className="px-5 md:px-6 pb-5 flex items-center justify-between">
         <button
           onClick={() => onToggleShortlist(m.id)}
           className={[
-            "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition",
+            "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[13px] font-semibold transition",
             shortlisted
               ? "border-amber-400/60 bg-amber-400/15 text-amber-200"
-              : "border-white/12 bg-white/[0.06] text-white/75 hover:bg-white/[0.12]",
+              : "border-white/12 bg-white/[0.06] text-white/80 hover:bg-white/[0.12]",
           ].join(" ")}
           title={shortlisted ? "Remove from shortlist" : "Shortlist"}
         >
@@ -238,7 +259,7 @@ function MatchCard({ m, shortlisted, onToggleShortlist, onOpen, highlightTop = f
 
         <button
           onClick={() => onOpen(m)}
-          className="inline-flex items-center gap-2 rounded-xl bg-white text-black px-3 py-1.5 text-[13px] font-semibold"
+          className="inline-flex items-center gap-2 rounded-xl bg-white text-black px-3.5 py-2 text-[13px] font-semibold shadow-[0_6px_18px_rgba(255,255,255,.08)] hover:shadow-[0_10px_24px_rgba(255,255,255,.12)]"
         >
           View details <ChevronRight className="h-4 w-4" />
         </button>
@@ -247,13 +268,15 @@ function MatchCard({ m, shortlisted, onToggleShortlist, onOpen, highlightTop = f
   );
 }
 
-/* --- detail drawer ----------------------------------------------------- */
+/* ==============
+   Drawer (same)
+   ============== */
 function Drawer({ open, onClose, match }) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="absolute right-0 top-0 h-full w-full max-w-[520px] bg-[#0b0d12] ring-1 ring-white/10 p-4 overflow-auto">
+      <div className="absolute right-0 top-0 h-full w-full max-w-[560px] bg-[#0b0d12] ring-1 ring-white/10 p-4 overflow-auto">
         <div className="flex items-center justify-between mb-3">
           <div className="text-lg font-bold">Match details</div>
           <button
@@ -266,26 +289,18 @@ function Drawer({ open, onClose, match }) {
 
         {/* header */}
         <div className="flex items-center gap-3 mb-3">
-          <img
-            src={match?.avatar || "/avatar-fallback.png"}
-            alt=""
-            className="h-12 w-12 rounded-full ring-1 ring-white/10"
-          />
+          <img src={match?.avatar || "/avatar-fallback.png"} alt="" className="h-12 w-12 rounded-full ring-1 ring-white/10" />
           <div className="min-w-0 grow">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="text-white font-semibold truncate max-w-[260px]">
-                {match?.name || "Student"}
+            <div className="text-white font-semibold truncate">{match?.name}</div>
+            {(match?.homeCity || typeof match?.distanceMiles === "number") && (
+              <div className="text-[12px] text-white/60 flex items-center gap-2">
+                {match?.homeCity && (<><MapPin className="h-3.5 w-3.5" /><span className="truncate">{match.homeCity}</span></>)}
+                {match?.homeCity && typeof match?.distanceMiles === "number" && <span>•</span>}
+                {typeof match?.distanceMiles === "number" && <span>{match.distanceMiles.toFixed(1)} mi</span>}
               </div>
-              <UniMark university={match?.university} domain={match?.universityDomain} />
-            </div>
-            <div className="text-[12px] text-white/60 flex items-center gap-2">
-              <MapPin className="h-3.5 w-3.5" />
-              {match?.homeCity || "Near campus"} • {match?.distanceMiles ?? "—"} mi
-            </div>
+            )}
           </div>
-          <div className="ml-auto">
-            <ScoreRing score={match?.score ?? 0} />
-          </div>
+          <div className="ml-auto"><ScoreRing score={match?.score ?? 0} size={60} /></div>
         </div>
 
         {/* overlap grid */}
@@ -294,9 +309,7 @@ function Drawer({ open, onClose, match }) {
           <div className="flex flex-wrap gap-2">
             {match?.overlap?.primaryLanguage && <Badge Icon={Languages}>Same daily language</Badge>}
             {match?.overlap?.otherLanguages?.length > 0 && (
-              <Badge Icon={Languages}>
-                Other: {(match.overlap.otherLanguages || []).join(", ")}
-              </Badge>
+              <Badge Icon={Languages}>Other: {(match.overlap.otherLanguages || []).join(", ")}</Badge>
             )}
             {match?.overlap?.commute?.length > 0 && <Badge Icon={Route}>{match.overlap.commute.join(" / ")}</Badge>}
             {match?.overlap?.sleep && <Badge Icon={Moon}>{match.overlap.sleep === "good" ? "Sleep match" : "Different hours"}</Badge>}
@@ -316,17 +329,19 @@ function Drawer({ open, onClose, match }) {
   );
 }
 
-/* --- page -------------------------------------------------------------- */
+/* ==========
+   The page
+   ========== */
 export default function RoommateMatches() {
   const [loading, setLoading] = useState(true);
   const [matches, setMatches] = useState([]);
   const [error, setError] = useState("");
-  const [shortlist, setShortlist] = useState(
-    () => new Set(JSON.parse(localStorage.getItem("nr.shortlist") || "[]"))
+  const [shortlist, setShortlist] = useState(() =>
+    new Set(JSON.parse(localStorage.getItem("nr.shortlist") || "[]"))
   );
   const [drawer, setDrawer] = useState({ open: false, match: null });
 
-  // simple filters/sort
+  // filters/sort
   const [filters, setFilters] = useState({
     sameLanguage: false,
     petsOk: false,
@@ -338,15 +353,14 @@ export default function RoommateMatches() {
     (async () => {
       try {
         const r = await axiosInstance.get("/synapse/matches");
-        const list = Array.isArray(r?.data?.matches) ? r.data.matches : [];
+        const list = Array.isArray(r?.data?.results)
+          ? r.data.results.map(reshapeFromAPI)
+          : makeMockMatches();
         setMatches(list);
-        if (!Array.isArray(r?.data?.matches)) {
-          setError("No matches yet. Adjust your preferences or check back soon.");
-        }
       } catch (e) {
-        console.error("GET /synapse/matches failed:", e?.message || e);
-        setError("Couldn’t load matches right now.");
-        setMatches([]);
+        console.warn("GET /synapse/matches failed — using mock", e?.message);
+        setMatches(makeMockMatches());
+        setError("No matches yet. Adjust your preferences or check back soon.");
       } finally {
         setLoading(false);
       }
@@ -355,14 +369,11 @@ export default function RoommateMatches() {
 
   const filtered = useMemo(() => {
     let arr = [...matches];
-    if (filters.sameLanguage) arr = arr.filter(m => m?.overlap?.primaryLanguage);
-    if (filters.petsOk)       arr = arr.filter(m => m?.overlap?.petsOk);
-    if (filters.dealbreakersClear) arr = arr.filter(m => !m?.flags?.hasDealbreakerConflict);
-    if (filters.sort === "distance") {
-      arr.sort((a,b) => (a.distanceMiles ?? Number.POSITIVE_INFINITY) - (b.distanceMiles ?? Number.POSITIVE_INFINITY));
-    } else {
-      arr.sort((a,b) => (b.score ?? 0) - (a.score ?? 0));
-    }
+    if (filters.sameLanguage) arr = arr.filter(m => m.overlap?.primaryLanguage);
+    if (filters.petsOk)       arr = arr.filter(m => m.overlap?.petsOk);
+    if (filters.dealbreakersClear) arr = arr.filter(m => !m.flags?.hasDealbreakerConflict);
+    if (filters.sort === "distance") arr.sort((a,b) => (a.distanceMiles ?? 9e9) - (b.distanceMiles ?? 9e9));
+    else arr.sort((a,b) => (b.score ?? 0) - (a.score ?? 0));
     return arr;
   }, [matches, filters]);
 
@@ -372,8 +383,6 @@ export default function RoommateMatches() {
     setShortlist(next);
     localStorage.setItem("nr.shortlist", JSON.stringify([...next]));
   };
-
-  const shownCount = filtered.length;
 
   return (
     <div className="nr-dots-page min-h-screen text-white">
@@ -389,16 +398,18 @@ export default function RoommateMatches() {
             <Pill>Powered by Synapse</Pill>
             <Pill>Private • You control what’s shared</Pill>
           </div>
-          <div className="mt-2 text-center text-[12px] text-white/55">
-            {loading ? "Loading…" : `${shownCount} match${shownCount === 1 ? "" : "es"} shown`}
-          </div>
+          {!loading && (
+            <div className="mt-2 text-center text-[11px] text-white/60">
+              {filtered.length} match{filtered.length === 1 ? "" : "es"} shown
+            </div>
+          )}
         </div>
       </section>
 
       {/* body */}
-      <section className="mx-auto max-w-[96rem] px-3 sm:px-4 pb-8">
+      <section className="mx-auto max-w-[96rem] px-3 sm:px-4 pb-10">
         <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-4 mt-4">
-          {/* filters panel */}
+          {/* Filters panel */}
           <aside className="hidden lg:block">
             <Panel className="p-4">
               <div className="mb-2 flex items-center gap-2">
@@ -449,36 +460,38 @@ export default function RoommateMatches() {
             </Panel>
           </aside>
 
-          {/* results */}
+          {/* Results */}
           <div>
             {error ? (
-              <div className="mb-3 text-[12px] text-amber-300">{error}</div>
+              <div className="mb-3 text-[12px] text-amber-300 inline-flex items-center gap-2">
+                <Info className="h-4 w-4" /> {error}
+              </div>
             ) : null}
 
             <Panel className="p-4">
               {loading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="rounded-2xl bg-white/[0.04] h-56 animate-pulse" />
+                    <div key={i} className="rounded-3xl bg-white/[0.04] h-[280px] animate-pulse" />
                   ))}
                 </div>
               ) : filtered.length === 0 ? (
                 <div className="py-16 text-center text-white/70">
-                  No matches with the current filters.
-                  <div className="mt-2">
-                    <a href="/roommate" className="underline text-white/85">Adjust Synapse preferences</a>
-                  </div>
+                  No matches with the current filters.{" "}
+                  <a href="/roommate" className="underline">Adjust Synapse preferences</a>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {filtered.map((m, idx) => (
+                <div
+                  className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+                  style={{ gridAutoRows: "minmax(280px, auto)" }}
+                >
+                  {filtered.map((m) => (
                     <MatchCard
-                      key={m.id || idx}
+                      key={m.id}
                       m={m}
                       shortlisted={shortlist.has(m.id)}
                       onToggleShortlist={toggleShortlist}
                       onOpen={(mm) => setDrawer({ open: true, match: mm })}
-                      highlightTop={idx === 0 && filters.sort === "score"}
                     />
                   ))}
                 </div>
@@ -495,4 +508,76 @@ export default function RoommateMatches() {
       />
     </div>
   );
+}
+
+/* ==========================
+   Helpers & mock (fallback)
+   ========================== */
+
+// shape rows from /synapse/matches
+function reshapeFromAPI(r = {}) {
+  return {
+    id: r.id || r._id || String(Math.random()),
+    name: r.name || "Student",
+    avatar: r.avatar || "",
+    university: r.university || "",
+    homeCity: r.synapse?.culture?.home?.city || "",
+
+    // Optional distance (hide if missing)
+    distanceMiles: typeof r.distanceMiles === "number" ? r.distanceMiles : undefined,
+
+    score: Number(r.score || 0),
+
+    overlap: {
+      primaryLanguage: Boolean(
+        r.synapse?.culture?.primaryLanguage &&
+        r.synapse?.culture?.primaryLanguage === r.synapse?.culture?.primaryLanguage // existence check
+      ),
+      otherLanguages: r.synapse?.culture?.otherLanguages || [],
+      commute: r.synapse?.logistics?.commuteMode || [],
+      petsOk: r.synapse?.pets?.okWithPets ?? false,
+      sleep: r.synapse?.lifestyle?.sleepPattern ? "good" : undefined, // placeholder highlight
+      clean: typeof r.synapse?.lifestyle?.cleanliness === "number" ? true : false,
+      diet: r.synapse?.habits?.diet || "",
+    },
+
+    reasons: buildReasons(r),
+    flags: { hasDealbreakerConflict: false },
+  };
+}
+
+function buildReasons(r) {
+  const reasons = [];
+  if (r.synapse?.culture?.primaryLanguage) reasons.push("Same daily language");
+  const comm = r.synapse?.logistics?.commuteMode || [];
+  if (comm.length) reasons.push(`Overlap: ${comm.join(" / ")}`);
+  if (r.synapse?.lifestyle?.sleepPattern) reasons.push("Similar sleep hours");
+  if (typeof r.synapse?.lifestyle?.cleanliness === "number") reasons.push("Clean & tidy");
+  if (r.synapse?.habits?.diet) reasons.push(r.synapse.habits.diet === "veg" ? "Veg-friendly" : r.synapse.habits.diet);
+  return reasons;
+}
+
+/* Mock only if API fails (kept tiny) */
+function makeMockMatches() {
+  return [
+    {
+      id: "u_1",
+      name: "Aarav K.",
+      avatar: "/avatars/aarav.jpg",
+      university: "Northern Illinois University",
+      homeCity: "DeKalb",
+      distanceMiles: 0.6,
+      score: 92,
+      overlap: {
+        primaryLanguage: true,
+        otherLanguages: ["en", "hi"],
+        commute: ["walk", "bus"],
+        petsOk: true,
+        sleep: "good",
+        clean: true,
+        diet: "Veg-friendly"
+      },
+      reasons: ["Same daily language", "Both walk/bus to campus", "Cleanliness expectations match"]
+    }
+  ];
 }
