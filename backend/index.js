@@ -1878,6 +1878,7 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
             university: 1,
             score: 1,
             synapse: 1,
+            budgetMax: "$synapse.logistics.budgetMax",
           }
         }
       ];
@@ -1941,6 +1942,7 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
           score: Math.max(0, Math.min(100, Math.round(r.score || 0))),
           homeCity: tCult?.home?.city || "",
           distanceMiles: null,                         // (optional) add real distance later
+          budget: Number.isFinite(tLog.budgetMax) ? tLog.budgetMax : undefined,
           overlap: {
             primaryLanguage: primaryLangSame,
             otherLanguages: bothLangs,
