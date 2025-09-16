@@ -601,83 +601,140 @@ function MatchGrid({ items, saved, onSaveToggle, onHide, onOpen }) {
 }
 
 function MatchCard({ item, saved, onSaveToggle, onHide, onOpen }) {
-  const nameShort = displayName({ full: item.name, firstName: item.firstName, lastName: item.lastName });
+  const nameShort = displayName({
+    full: item.name,
+    firstName: item.firstName,
+    lastName: item.lastName,
+  });
+
+  const cover =
+    item.avatarUrl ||
+    // minimal gradient fallback when no image
+    "data:image/svg+xml;charset=UTF-8," +
+      encodeURIComponent(
+        `<svg xmlns='http://www.w3.org/2000/svg' width='800' height='480'><defs><linearGradient id='g' x1='0' x2='0' y1='0' y2='1'><stop stop-color='#1b2230'/><stop offset='1' stop-color='#0b0f16'/></linearGradient></defs><rect fill='url(#g)' width='800' height='480'/></svg>`
+      );
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.02)_inset] transition-transform hover:translate-y-[-2px] hover:bg-white/[0.06]">
-      {/* Top row */}
-      <div className="flex items-start justify-between">
-        {/* Left: avatar + name */}
-        <div className="flex items-center gap-3">
-          <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-white/10">
-            {item.avatarUrl ? (
-              <img src={item.avatarUrl} alt={nameShort || item.name} className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-sm text-white/70">
-                {(nameShort || item.name || "?").slice(0,1)}
-              </div>
-            )}
-            {item.verified?.edu && (
-              <div className="absolute -right-1 -top-1 rounded-full border border-white/10 bg-emerald-500/90 p-0.5">
-                <ShieldCheck size={12} />
-              </div>
-            )}
-          </div>
-          <div>
-            <p className="text-[15px] font-semibold leading-tight" title={item.name}>
+    <div
+      role="button"
+      onClick={onOpen}
+      className="
+        group relative overflow-hidden rounded-3xl
+        border border-white/10
+        bg-white/[0.035]
+        shadow-[0_10px_30px_rgba(0,0,0,0.25)]
+        transition-all hover:-translate-y-0.5 hover:bg-white/[0.045]
+      "
+    >
+      {/* Cover */}
+      <div
+        className="relative h-56 w-full overflow-hidden"
+        style={{
+          backgroundImage: `url(${cover})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      >
+        {/* Top badges: uni + ring */}
+        <div className="absolute right-3 top-3 flex items-center gap-2">
+          <UniversityLogoCircle university={item.university} size={56} />
+          <ScoreRing value={item.matchScore} size={56} />
+        </div>
+
+        {/* Subtle top sheen */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-14 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),transparent)]" />
+
+        {/* Bottom gradient so text stays readable */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-[linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,0.55))]" />
+      </div>
+
+      {/* Glass panel (bottom) */}
+      <div
+        className="
+          mx-4 -mt-8 mb-4 rounded-3xl
+          border border-white/10 bg-white/[0.06] backdrop-blur-md
+          shadow-[0_8px_24px_rgba(0,0,0,0.25)]
+        "
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-4 pb-4 pt-3">
+          {/* Name row */}
+          <div className="flex items-center gap-2">
+            <p
+              className="truncate text-[17px] font-semibold leading-5 tracking-tight"
+              title={item.name}
+            >
               {nameShort}
             </p>
-            <div className="mt-1 flex items-center gap-2 text-xs text-white/60">
-              {item.graduation ? (<><GraduationCap size={14} /> {item.graduation}<span className="mx-1">•</span></>) : null}
-              {item.lastActive ? (<><Clock size={14} /> {formatLastActive(item.lastActive)}</>) : null}
-            </div>
+            {item.verified?.edu && (
+              <span
+                className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/90"
+                title=".edu verified"
+                aria-label="Verified .edu"
+              >
+                <ShieldCheck size={12} className="text-white" />
+              </span>
+            )}
+          </div>
+
+          {/* One slim metadata line */}
+          <div className="mt-1 flex items-center gap-2 text-[13px] text-white/65">
+            {typeof item.budget === "number" ? (
+              <span>
+                <span className="text-white/75">Budget:</span> ${item.budget}/mo
+              </span>
+            ) : (
+              <span>
+                <span className="text-white/75">Budget:</span> —
+              </span>
+            )}
+            {item.lastActive && (
+              <>
+                <span className="text-white/25">•</span>
+                <span className="inline-flex items-center gap-1">
+                  <Clock size={16} />
+                  {formatLastActive(item.lastActive)}
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* CTA row */}
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              className="
+                inline-flex flex-1 items-center justify-center gap-2
+                rounded-full border border-white/12 bg-white/[0.05]
+                px-4 py-2 text-[13px] font-medium
+                transition hover:bg-white/[0.09]
+              "
+              onClick={onOpen}
+            >
+              <Info size={16} /> View details
+            </button>
+
+            <button
+              className="
+                inline-flex flex-1 items-center justify-center gap-2
+                rounded-full border border-emerald-500/30
+                bg-emerald-500/15 px-4 py-2
+                text-[13px] font-semibold text-emerald-300
+                transition hover:bg-emerald-500/20
+              "
+              onClick={() =>
+                window.location.assign(`/messages?to=${item.userId}&ctx=roommate`)
+              }
+            >
+              <MessageCircle size={16} /> Message
+            </button>
           </div>
         </div>
-
-        {/* Right: University logo + Score ring (larger) */}
-        <div className="flex items-center gap-2">
-          <UniversityLogoCircle university={item.university} size={CARD_UNI_SIZE} />
-          <ScoreRing value={item.matchScore} size={CARD_RING_SIZE} />
-        </div>
-      </div>
-
-      {/* Middle: budget + distance */}
-      <div className="mt-4 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-white/80">
-          {typeof item.distanceMi === "number" ? (
-            <>
-              <div className="flex items-center gap-1">
-                <MapPin size={14}/> {item.distanceMi.toFixed(1)} mi
-              </div>
-              <span className="text-white/30">•</span>
-            </>
-          ) : null}
-          {typeof item.budget === "number" ? (
-            <div>Budget: ${item.budget}/mo</div>
-          ) : (
-            <div className="text-white/50">Budget: —</div>
-          )}
-        </div>
-      </div>
-
-      {/* Bottom: CTAs */}
-      <div className="mt-4 flex items-center justify-between">
-        <button
-          onClick={onOpen}
-          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium transition hover:bg-white/10"
-        >
-          <Info size={16}/> View details
-        </button>
-        <button
-          onClick={()=>window.location.assign(`/messages?to=${item.userId}&ctx=roommate`)}
-          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium transition hover:bg-white/10"
-        >
-          <MessageCircle size={16}/> Message
-        </button>
       </div>
     </div>
   );
 }
+
 
 function GridSkeleton() {
   return (
