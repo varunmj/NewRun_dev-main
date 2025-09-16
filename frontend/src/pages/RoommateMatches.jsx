@@ -1,13 +1,11 @@
 // src/pages/RoommateMatches.jsx
-// Synapse — NewRun's Roommate Matching UI
-// (V2.4 — right drawer, HSL ring, Clearbit logo-only, friendly language names)
+// Synapse — NewRun's Roommate Matching UI (V2.3 — score breakdown w/ backend weights + HSL ring + Clearbit logo)
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axiosInstance from "../utils/axiosInstance";
 import Navbar from "../components/Navbar/Navbar";
 import "../styles/newrun-hero.css";
-import { expandLanguageCodes, expandLangsInText } from "../utils/languageNames";
 import {
   Heart, HeartOff, MessageCircle, Info, X, MapPin, GraduationCap,
   ShieldCheck, Clock, Filter, Check, AlertTriangle, Languages, PawPrint, Moon
@@ -53,13 +51,10 @@ const UNI_DOMAINS = { "Northern Illinois University": "niu.edu" };
 const universityLogoUrl = (name = "") => {
   const n = String(name || "").trim();
   if (!n) return "";
-  const domain = UNI_DOMAINS[n] || `${n.toLowerCase().replace(/[^a-z0-9]+/g, "")}.edu`; // fixed stray space bug
+  const domain = UNI_DOMAINS[n] || `${n.toLowerCase().replace(/[^a-z0-9]+/g, "")} .edu`;
   return `https://logo.clearbit.com/${domain}`;
 };
 
-/* =====================================================================
-   Small UI helpers
-   ===================================================================== */
 function Collapsible({ title, defaultOpen=false, children }) {
   const [open, setOpen] = React.useState(defaultOpen);
   return (
@@ -84,17 +79,14 @@ function ScoreRow({ part }) {
         <span className="font-medium">{part.label}</span>
         <span className={part.got > 0 ? "text-emerald-300" : "text-white/60"}>+{part.got} / {part.max}</span>
       </div>
-      {part.note && (
-        <div className="mt-0.5 text-xs text-white/60">
-          {expandLangsInText(part.note)}
-        </div>
-      )}
+      {part.note && <div className="mt-0.5 text-xs text-white/60">{part.note}</div>}
       <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
         <div className="h-full rounded-full" style={{ width: `${pct}%`, background: hsl(scoreToHsl(pct)) }} />
       </div>
     </div>
   );
 }
+
 
 /* =====================================================================
    Friendly-overlap helpers (for reasons fallback)
@@ -132,11 +124,11 @@ function computeOverlap(candidate, mine) {
 const toReasonObj = (r) => (typeof r === "string" ? { type: "positive", text: r } : r);
 
 /* =====================================================================
-   Backend weights (mirror of API)
+   THE weights (mirror of backend W)
    ===================================================================== */
 const WEIGHTS = {
   langPrimarySame: 25,
-  langCrossOK:     15,
+  langCrossOK:     15,   // applied twice (both directions) when applicable
   comfortBonus:    10,
   country:         10,
   region:          8,
@@ -255,7 +247,7 @@ function computeScoreBreakdown(candidateSynapse = {}, me = {}) {
       label: "Cleanliness within ±1",
       got: ok ? WEIGHTS.cleanlinessNear : 0,
       max: WEIGHTS.cleanlinessNear,
-      note: `You ${meClean} • Them ${cLife.cleanliness}`,
+      note: ok ? `You ${meClean} • Them ${cLife.cleanliness}` : `You ${meClean} • Them ${cLife.cleanliness}`,
     });
   }
 
@@ -362,7 +354,7 @@ export default function RoommateMatches() {
           const id = r.id || r._id || r.userId || String(Math.random());
           const name = r.name || [r.firstName, r.lastName].filter(Boolean).join(" ") || "Roommate";
           const syn = r.synapse || {};
-          const { reasons: fallbackReasons } = computeOverlap(r, prefs);
+          const { overlap, reasons: fallbackReasons } = computeOverlap(r, prefs);
           const matchScore = typeof r.score === "number" ? r.score : (r.matchScore ?? 0);
           const rawReasons = (Array.isArray(r.reasons) && r.reasons.length ? r.reasons : fallbackReasons);
           return {
@@ -571,13 +563,9 @@ function MatchCard({ item, saved, onSaveToggle, onHide, onOpen }) {
             <div className="flex items-center gap-2">
               <p className="text-[15px] font-semibold leading-tight">{item.name}</p>
               {item.university ? (
-                <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5">
-                  <img
-                    src={universityLogoUrl(item.university)}
-                    alt={item.university}
-                    className="h-3 w-auto"
-                    onError={(e)=>e.currentTarget.style.display="none"}
-                  />
+                <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-white/70">
+                  <img src={universityLogoUrl(item.university)} alt={item.university} className="h-3" onError={(e)=>e.currentTarget.style.display="none"} />
+                  {item.university}
                 </span>
               ) : null}
             </div>
@@ -642,7 +630,7 @@ function GridSkeleton() {
 }
 
 /* =====================================================================
-   Drawer (RIGHT) — score breakdown + friendly reasons
+   Drawer (Left) — now with score breakdown
    ===================================================================== */
 function MatchDrawer({ match, prefs, onClose, onStartChat, onSaveToggle, isSaved }) {
   const panelRef = useRef(null);
@@ -662,13 +650,13 @@ function MatchDrawer({ match, prefs, onClose, onStartChat, onSaveToggle, isSaved
       <aside
         ref={panelRef}
         className={cn(
-          "absolute right-0 top-0 h-full w-full max-w-[700px] overflow-y-auto border-l border-white/10 bg-[#0d1017] shadow-2xl transition-transform will-change-transform",
-          open ? "translate-x-0" : "translate-x-full"
+            "absolute right-0 top-0 h-full w-full max-w-[700px] overflow-y-auto border-l border-white/10 bg-[#0d1017] shadow-2xl transition-transform will-change-transform",
+            open ? "translate-x-0" : "translate-x-full"
         )}
         role="dialog"
         aria-modal="true"
         aria-label="Match details"
-      >
+        >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#0d1017]/95 px-5 py-4 backdrop-blur">
           <div className="flex items-center gap-3">
             <span className="text-sm font-semibold">Match details</span>
@@ -717,10 +705,11 @@ function DrawerBody({ profile, prefs, onStartChat, onSaveToggle, isSaved }) {
   // Display score = backend percent if provided, else computed total (clamped)
   const displayScore = clamp01(profile.matchScore ?? total);
 
-  // Friendly reasons (merged)
+  // Friendly reasons (merge “top reasons” & “why this fit”)
   const reasons = (profile.reasons || []).map(toReasonObj);
   const top3 = reasons.filter(r => r.type !== "negative").slice(0, 3);
 
+  // Derive chips
   const langs = profile.languages || [];
   const traits = (profile.keyTraits || []).slice(0, 6);
 
@@ -748,11 +737,11 @@ function DrawerBody({ profile, prefs, onStartChat, onSaveToggle, isSaved }) {
             <div className="flex items-center gap-2">
               <h3 className="text-lg font-semibold leading-tight">{profile.name}</h3>
               {profile.university && (
-                <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5">
+                <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-white/70">
                   <img
                     src={universityLogoUrl(profile.university)}
                     alt={profile.university}
-                    className="h-3 w-auto"
+                    className="h-3"
                     onError={(e)=>e.currentTarget.style.display="none"}
                   />
                 </span>
@@ -771,24 +760,20 @@ function DrawerBody({ profile, prefs, onStartChat, onSaveToggle, isSaved }) {
         </div>
       </div>
 
-      {/* Quick reasons (compact, human) */}
-      {top3.length > 0 && (
-        <section className="mt-5">
-          <h4 className="mb-1.5 text-sm font-semibold text-white/80">
-            Why this is a strong match
-          </h4>
-          <ul className="space-y-1.5 text-[15px] leading-6">
-            {top3.map((r, i) => (
-              <li key={i} className="flex gap-2">
-                <Check size={16} className="mt-0.5 text-emerald-400" />
-                <span>{expandLangsInText(r.text)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {/* Quick reasons (merged) */}
+      <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+        <p className="text-sm text-white/70">Why this is a strong match</p>
+        <ul className="mt-2 grid grid-cols-1 gap-1 text-sm">
+          {top3.map((r, i) => (
+            <li key={i} className="inline-flex items-start gap-2">
+              <Check size={16} className="text-emerald-400" />
+              <span>{r.text}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
 
-      {/* About + languages/traits */}
+      {/* About + languages/traits moved up (human-first) */}
       <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-semibold tracking-wide text-white/80">About {profile.name.split(" ")[0]}</h4>
@@ -800,8 +785,7 @@ function DrawerBody({ profile, prefs, onStartChat, onSaveToggle, isSaved }) {
         <div className="mt-3 flex flex-wrap gap-1.5">
           {langs.length > 0 && (
             <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-white/70">
-              <Languages size={12} />
-              {expandLanguageCodes(langs).join(", ")}
+              <Languages size={12}/> {langs.join(", ")}
             </span>
           )}
           {traits.map(t => (
@@ -814,6 +798,7 @@ function DrawerBody({ profile, prefs, onStartChat, onSaveToggle, isSaved }) {
       <div className="mt-6">
         <Collapsible title="Detailed score breakdown" defaultOpen={false}>
           <div className="space-y-2">
+            {/* Top 4 first, then a “Show all factors” chunk */}
             {topParts.map(p => <ScoreRow key={p.key} part={p} />)}
             <details className="mt-2">
               <summary className="cursor-pointer text-sm text-white/70">Show all factors</summary>
@@ -843,3 +828,4 @@ function DrawerBody({ profile, prefs, onStartChat, onSaveToggle, isSaved }) {
     </div>
   );
 }
+
