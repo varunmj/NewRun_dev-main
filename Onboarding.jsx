@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { saveProgress, clearProgress } from "../utils/onboardingProgress";
+import { saveProgress, clearProgress } from "./frontend/src/utils/onboardingProgress";
 
 // ✅ Added a Housing card that links to /all-properties
 const cards = [

@@ -1,15 +1,19 @@
 // src/pages/RoommateMatches.jsx
 // Synapse — NewRun's Roommate Matching UI
-// (V2.5 — bigger ring + uni logo, no fav/unfav on cards, 3-col grid, Clearbit fix)
+// (V2.6 — NewRun hero + auto-scroll intro, dotted grid page bg, on-brand cards)
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axiosInstance from "../utils/axiosInstance";
 import Navbar from "../components/Navbar/Navbar";
+import MatchCard from "../components/ProfileCard/MatchCard";
 import "../styles/newrun-hero.css";
+import "../styles/neumorphic-button.css";
+import VerifiedIcon from "../assets/icons/icons8-verified-48.png";
+import { expandLanguageCodes, expandLangsInText } from "../utils/languageNames";
+
 import {
-  MessageCircle, Info, X, MapPin, GraduationCap,
-  ShieldCheck, Clock, Filter, Check, AlertTriangle, Languages, PawPrint, Moon
+  Info, X, MapPin, Clock, Filter, Check, Languages, PawPrint, Moon, ChevronLeft, ChevronRight
 } from "lucide-react";
 
 /* =====================================================================
@@ -18,7 +22,7 @@ import {
 const CARD_RING_SIZE = 56;   // px — match score ring on cards
 const CARD_UNI_SIZE  = 56;   // px — university logo circle on cards
 const DRAWER_RING    = 56;   // px — ring in drawer header
-const DRAWER_UNI     = 48;   // px — uni logo in drawer header
+const DRAWER_UNI     = 56;   // px — uni logo in drawer header
 
 /* =====================================================================
    Utilities
@@ -52,20 +56,42 @@ function scoreRingStyle(score = 0) {
     backgroundImage: `conic-gradient(${hsl(col)} ${clamp01(score) * 3.6}deg, rgba(255,255,255,0.08) 0deg)`
   };
 }
-function ScoreRing({ value = 0, size = 56 }) {
-  const inset = Math.max(4, Math.round(size * 0.07)); // proportional inner circle
+function ScoreRing({ value = 0, size = 64, animated = true }) {
+  const [displayValue, setDisplayValue] = useState(0);
+  
+  useEffect(() => {
+    if (animated) {
+      const timer = setTimeout(() => setDisplayValue(value), 100);
+      return () => clearTimeout(timer);
+    } else {
+      setDisplayValue(value);
+    }
+  }, [value, animated]);
+
+  const hue = Math.round(Math.max(0, Math.min(100, displayValue)) * 1.2); // 0->120
+  const ringColor = `hsl(${hue}, 85%, 55%)`;
+  const isHighScore = displayValue >= 80;
+  const isMediumScore = displayValue >= 60;
+
   return (
     <div
-      aria-label={`Match score ${value}%`}
-      className="relative shrink-0 rounded-full"
-      style={{ width: size, height: size, ...scoreRingStyle(value) }}
-      title={`Match: ${value}%`}
+      aria-label={`Match score ${Math.round(displayValue)}%`}
+      className="relative shrink-0 rounded-full transition-all duration-500 ease-out"
+      style={{ 
+        width: size, 
+        height: size, 
+        backgroundImage: `conic-gradient(${ringColor} ${Math.max(0, Math.min(100, displayValue)) * 3.6}deg, rgba(255,255,255,0.08) 0deg)`,
+        filter: isHighScore ? 'drop-shadow(0 0 8px rgba(34, 197, 94, 0.3))' : 
+                isMediumScore ? 'drop-shadow(0 0 6px rgba(251, 191, 36, 0.2))' : 'none'
+      }}
     >
-      <div className="absolute rounded-full" style={{ inset, background: "#10131a" }}/>
-      <div className="absolute inset-0 flex items-center justify-center font-semibold text-white/90"
-           style={{ fontSize: Math.max(11, Math.round(size * 0.22)) }}>
-        {value}%
+      <div className="absolute" style={{ inset: 4, borderRadius: "9999px", background: "#10131a" }} />
+      <div className="absolute inset-0 flex items-center justify-center text-[12px] font-semibold text-white/90">
+        {Math.round(displayValue)}%
       </div>
+      {isHighScore && (
+        <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-emerald-400 animate-pulse" />
+      )}
     </div>
   );
 }
@@ -77,7 +103,7 @@ const UNI_DOMAINS = { "Northern Illinois University": "niu.edu" };
 const universityLogoUrl = (name = "") => {
   const n = String(name || "").trim();
   if (!n) return "";
-  const domain = UNI_DOMAINS[n] || `${n.toLowerCase().replace(/[^a-z0-9]+/g, "")}.edu`; // fixed stray space
+  const domain = UNI_DOMAINS[n] || `${n.toLowerCase().replace(/[^a-z0-9]+/g, "")}.edu`;
   return `https://logo.clearbit.com/${domain}`;
 };
 
@@ -89,7 +115,7 @@ function UniversityLogoCircle({ university, size = 56 }) {
 
   return (
     <div
-      className="shrink-0 overflow-hidden rounded-full border border-white/10 bg-white/[0.06] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]"
+      className="shrink-0 overflow-hidden rounded-full border border-white/10 bg-transparent"
       style={{ width: size, height: size }}
       title={university}
       aria-label={`University: ${university}`}
@@ -97,8 +123,8 @@ function UniversityLogoCircle({ university, size = 56 }) {
       <img
         src={url}
         alt=""
-        className="h-full w-full object-contain"
-        style={{ padding: Math.round(size * 0.12) }} /* lighter padding so logo appears larger */
+        className="h-full w-full rounded-full object-contain"
+        style={{ padding: Math.round(size * 0.06) }}
         onError={(e)=>{ e.currentTarget.style.display="none"; }}
       />
     </div>
@@ -116,7 +142,7 @@ function Collapsible({ title, defaultOpen=false, children }) {
         onClick={()=>setOpen(o=>!o)}
         className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium"
       >
-        <span>{title}</span>
+        <span className="bg-gradient-to-r from-emerald-300 to-cyan-300 bg-clip-text text-transparent">{title}</span>
         <span className="text-white/60">{open ? "Hide" : "Show"}</span>
       </button>
       {open && <div className="border-t border-white/10 px-4 py-3">{children}</div>}
@@ -125,15 +151,20 @@ function Collapsible({ title, defaultOpen=false, children }) {
 }
 function ScoreRow({ part }) {
   const pct = part.max ? Math.max(0, Math.min(100, (part.got / part.max) * 100)) : 0;
+  const hue = Math.round(pct * 1.2);
+  const barColor = `hsl(${hue},85%,55%)`;
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+    <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-white/0 px-3 py-2">
       <div className="flex items-center justify-between text-sm">
-        <span className="font-medium">{part.label}</span>
-        <span className={part.got > 0 ? "text-emerald-300" : "text-white/60"}>+{part.got} / {part.max}</span>
+        <span className="font-medium flex items-center gap-2">
+          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: barColor }} />
+          {part.label}
+        </span>
+        <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-white/70">{part.got} / {part.max}</span>
       </div>
       {part.note && <div className="mt-0.5 text-xs text-white/60">{part.note}</div>}
-      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: hsl(scoreToHsl(pct)) }} />
+      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: barColor }} />
       </div>
     </div>
   );
@@ -146,7 +177,7 @@ const displayName = ({ full = "", firstName = "", lastName = "" } = {}) => {
   const lParts = split(lastName);
 
   if (fParts.length || lParts.length) {
-    if (fParts.length >= 2) return `${fParts[0]} ${fParts[1]}`.trim(); // keep two-word first names
+    if (fParts.length >= 2) return `${fParts[0]} ${fParts[1]}`.trim();
     if (fParts.length === 1 && lParts.length >= 2) return `${fParts[0]} ${lParts[lParts.length - 1]}`.trim();
     const f = fParts[0] || "";
     const l = lParts[lParts.length - 1] || "";
@@ -156,6 +187,28 @@ const displayName = ({ full = "", firstName = "", lastName = "" } = {}) => {
   if (tokens.length <= 2) return tokens.join(" ").trim();
   return `${tokens[0]} ${tokens[1]}`.trim();
 };
+
+function UniLogoCircle({ university, size = 56 }) {
+  if (!university) return null;
+  const badge = { width: size, height: size, borderRadius: size / 2 };
+  const imgSize = Math.round(size * 0.58);
+  return (
+    <div
+      className="flex items-center justify-center border border-white/12 bg-white/[0.08] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]"
+      style={badge}
+      aria-label="University"
+      title={university}
+    >
+      <img
+        src={universityLogoUrl(university)}
+        alt=""
+        className="pointer-events-none"
+        style={{ width: imgSize, height: imgSize, objectFit: "contain" }}
+        onError={(e)=>{ e.currentTarget.style.display="none"; }}
+      />
+    </div>
+  );
+}
 
 /* =====================================================================
    Overlap helpers + weights + scoring (unchanged)
@@ -357,10 +410,11 @@ async function fetchSynapseData(scope, signal) {
     axiosInstance.get("/synapse/preferences", { signal }),
     axiosInstance.get("/synapse/matches", { params: { scope }, signal }),
   ]);
-  const prefs = pResp?.data?.preferences || {};
+  const pData = pResp?.data || {};
+  const prefs = pData?.preferences || {};
   const raw = mResp?.data?.results || mResp?.data?.matches || [];
-  return { prefs, raw };
-}
+  return { prefs, raw, pData };   // ⬅️ include full payload
+ }
 
 async function postSave(userId) {
   try {
@@ -377,6 +431,119 @@ async function postHide(userId, reason) {
 }
 
 /* =====================================================================
+   Small hero with dotted grid + 4-dot progress
+   ===================================================================== */
+function HeroIntro({ firstName = "", onSkip }) {
+  const [step, setStep] = React.useState(0);
+
+  React.useEffect(() => {
+    const id = setInterval(() => setStep((s) => Math.min(s + 1, 4)), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  React.useEffect(() => {
+    const cancel = () => onSkip?.("user");
+    window.addEventListener("wheel", cancel, { passive: true });
+    window.addEventListener("touchstart", cancel, { passive: true });
+    window.addEventListener("keydown", cancel);
+    return () => {
+      window.removeEventListener("wheel", cancel);
+      window.removeEventListener("touchstart", cancel);
+      window.removeEventListener("keydown", cancel);
+    };
+  }, [onSkip]);
+
+  const name = String(firstName || "").trim();
+  const line1 = name ? `${name}, we’ve crunched your preferences.` : `We’ve crunched your preferences.`;
+  const line2 = `Here are the roommates who match your lifestyle best.`;
+
+  return (
+    <section className="nr-hero-bg nr-hero-starry relative flex min-h-[52vh] items-center">
+      <div className="mx-auto w-full max-w-[110rem] px-4 py-14">
+        {/* Smaller, responsive, centered */}
+        <h1 className="text-center font-extrabold leading-[1.1] tracking-tight">
+          <span className="block text-[clamp(22px,3.6vw,42px)]">
+            {line1}
+          </span>
+          <span className="block text-[clamp(20px,3.2vw,38px)] mt-1">
+            <span className="bg-gradient-to-r from-[#ffb84d] to-[#ff8a00] bg-clip-text text-transparent">
+              {line2}
+            </span>
+          </span>
+        </h1>
+
+        <span className="mt-3 text-center text-[13px] text-white/70 rounded-full border border-white/50 bg-white/5 px-2 py-1 ">
+          Transparent reasons • Quick actions • Safer connections
+        </span>
+
+        <div className="mt-6 flex items-center justify-center gap-3">
+          <button onClick={() => onSkip?.("cta")} className="inline-flex items-center gap-2 rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_24px_rgba(255,153,0,.25)] hover:bg-orange-400" type="button">
+            See your matches
+          </button>
+          <span className="text-white/80 text-xs">Auto scrolling…</span>
+        </div>
+
+        <div className="mt-5 flex justify-center gap-2">
+          {[0, 1, 2, 3,].map((i) => (
+            <span
+              key={i}
+              className={`h-1.5 w-1.5 rounded-full transition ${step > i ? "bg-white/90" : "bg-white/25"}`}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
+
+// Try hard to find user's first name from prefs or caches
+function pickFirstName(anyObj) {
+  const grab = (o, path) => {
+    try {
+      return path.split(".").reduce((x, k) => (x && x[k] != null ? x[k] : undefined), o);
+    } catch { return undefined; }
+  };
+
+  // 1) Direct fields we might get with prefs/me
+  const candidates = [
+    grab(anyObj, "user.firstName"),
+    grab(anyObj, "profile.firstName"),
+    grab(anyObj, "preferences.profile.firstName"),
+    grab(anyObj, "preferences.user.firstName"),
+    grab(anyObj, "preferences.firstName"),
+    grab(anyObj, "firstName"),
+    // If we only have a full name, take the first token
+    (grab(anyObj, "profile.name") || grab(anyObj, "preferences.profile.name") || grab(anyObj, "name"))?.split?.(/\s+/)?.[0],
+  ].filter(Boolean);
+
+  let fromLocal = "";
+  try {
+    const keys = ["firstName", "userFirstName", "nr:firstName", "nr_user", "user", "me", "authUser"];
+    for (const k of keys) {
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      if (k === "firstName" || k === "userFirstName" || k === "nr:firstName") {
+        fromLocal = raw;
+        break;
+      }
+      // keys that may store JSON user blobs
+      try {
+        const parsed = JSON.parse(raw);
+        const fn = parsed?.firstName || parsed?.profile?.firstName || parsed?.user?.firstName || parsed?.name?.split?.(" ")?.[0];
+        if (fn) { fromLocal = fn; break; }
+      } catch { /* ignore */ }
+    }
+  } catch { /* SSR or blocked storage */ }
+
+  const val = (candidates.find(Boolean) || fromLocal || "").toString().trim();
+  // Normalize casing (Varun, not VARUN / varun)
+  return val ? (val[0].toUpperCase() + val.slice(1)) : "";
+}
+
+
+/* =====================================================================
    Page Component
    ===================================================================== */
 export default function RoommateMatches() {
@@ -391,8 +558,14 @@ export default function RoommateMatches() {
   const [sort, setSort] = useState("match"); // match | distance | activity
   const [filters, setFilters] = useState({ pets: "any", sleep: "any", scope: "school" });
   const [drawerMatch, setDrawerMatch] = useState(null);
+  const [drawerIndex, setDrawerIndex] = useState(-1); // index within visibleMatches
   const [saved, setSaved] = useState(() => new Set());
   const [hidden, setHidden] = useState(() => new Set());
+
+  // Hero → Matches anchor for smooth auto-scroll
+  const matchesRef = useRef(null);
+  const autoScrollDoneRef = useRef(false);
+  const [firstName, setFirstName] = useState("");
 
   // Load Synapse prefs + matches
   useEffect(() => {
@@ -400,8 +573,9 @@ export default function RoommateMatches() {
     (async () => {
       setLoading(true); setError("");
       try {
-        const { prefs, raw } = await fetchSynapseData(filters.scope, c.signal);
+        const { prefs, raw, pData } = await fetchSynapseData(filters.scope, c.signal);
         setPrefs(prefs);
+        setFirstName((prev) => prev || pickFirstName(pData)); // keep any previously found value
         const normalized = raw.map((r) => {
           const id = r.id || r._id || r.userId || String(Math.random());
           const firstName = r.firstName || "";
@@ -444,6 +618,29 @@ export default function RoommateMatches() {
     return () => c.abort();
   }, [filters.scope]);
 
+  const smoothScrollToMatches = React.useCallback(() => {
+    if (!matchesRef.current) return;
+    const prefersReduced =
+      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    matchesRef.current.scrollIntoView({
+      behavior: prefersReduced ? "auto" : "smooth",
+      block: "start",
+    });
+    autoScrollDoneRef.current = true;
+  }, []);
+
+  const handleHeroSkip = React.useCallback(() => {
+    smoothScrollToMatches();
+  }, [smoothScrollToMatches]);
+
+  // Auto-scroll ~4s after load (unless user interacts)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (!autoScrollDoneRef.current) smoothScrollToMatches();
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [smoothScrollToMatches]);
+
   // Derived list (query + sort)
   const visibleMatches = useMemo(() => {
     let list = matches.filter(m => !hidden.has(m.userId));
@@ -463,10 +660,38 @@ export default function RoommateMatches() {
     return list;
   }, [matches, hidden, query, sort]);
 
+  // Keep drawerMatch in sync with index and visibleMatches
+  useEffect(() => {
+    if (drawerIndex >= 0 && drawerIndex < visibleMatches.length) {
+      setDrawerMatch(visibleMatches[drawerIndex]);
+    }
+  }, [drawerIndex, visibleMatches]);
+
+  // Prefetch neighbor avatars for smoother nav
+  useEffect(() => {
+    if (drawerIndex < 0) return;
+    const prefetch = (idx) => {
+      const m = visibleMatches[idx];
+      if (m?.avatarUrl) {
+        const img = new Image();
+        img.src = m.avatarUrl;
+      }
+    };
+    prefetch(drawerIndex - 1);
+    prefetch(drawerIndex + 1);
+  }, [drawerIndex, visibleMatches]);
+
   return (
-    <div className="min-h-screen bg-[#0b0d12] text-white">
+    <div className="nr-dots-page min-h-screen text-white">
       <Navbar />
-      <main className="mx-auto w-full max-w-[110rem] px-4 pb-24 pt-10">
+
+      {/* Hero with dotted grid + progress; user or CTA will trigger scroll */}
+      <HeroIntro firstName={firstName} onSkip={handleHeroSkip} />
+
+      {/* Anchor for smooth scrolling target */}
+      <div ref={matchesRef} />
+
+      <main className="mx-auto w-full max-w-[110rem] px-4 pb-24 pt-6">
         <HeaderBar
           count={visibleMatches.length}
           query={query}
@@ -478,7 +703,9 @@ export default function RoommateMatches() {
         />
 
         {error ? (
-          <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">{error}</div>
+          <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">
+            {error}
+          </div>
         ) : null}
 
         {loading ? (
@@ -495,7 +722,8 @@ export default function RoommateMatches() {
               setHidden(prev => new Set(prev).add(id));
               const res = await postHide(id, "not a fit"); if (!res.ok) console.warn("Hide failed:", res.error);
             }}
-            onOpen={(m) => setDrawerMatch(m)}
+            onOpen={(m) => setDrawerIndex(visibleMatches.findIndex(v => v.userId === m.userId))}
+            drawerOpen={!!drawerMatch}
           />
         )}
       </main>
@@ -503,13 +731,17 @@ export default function RoommateMatches() {
       <MatchDrawer
         match={drawerMatch}
         prefs={prefs}
-        onClose={() => setDrawerMatch(null)}
+        onClose={() => { setDrawerMatch(null); setDrawerIndex(-1); }}
         onStartChat={(id) => navigate(`/messages?to=${id}&ctx=roommate`)}
         onSaveToggle={async (id) => {
           const next = new Set(saved); if (next.has(id)) next.delete(id); else next.add(id); setSaved(next);
           const res = await postSave(id); if (!res.ok) console.warn("Save failed:", res.error);
         }}
         isSaved={(id) => saved.has(id)}
+        onPrev={() => setDrawerIndex(i => Math.max(0, i - 1))}
+        onNext={() => setDrawerIndex(i => Math.min(visibleMatches.length - 1, i + 1))}
+        hasPrev={drawerIndex > 0}
+        hasNext={drawerIndex >= 0 && drawerIndex < visibleMatches.length - 1}
       />
     </div>
   );
@@ -519,10 +751,23 @@ export default function RoommateMatches() {
    Header Bar
    ===================================================================== */
 function HeaderBar({ count, query, setQuery, sort, setSort, filters, setFilters }) {
+  const clearAll = () => {
+    setSort('match');
+    setFilters({ pets:'any', sleep:'any', scope:'school' });
+  };
+
+  const activeChips = [];
+  if (sort !== 'match') activeChips.push({ key:'sort', label:`Sort: ${sort}`, onClear:()=>setSort('match') });
+  if (filters.pets !== 'any') activeChips.push({ key:'pets', label:`Pets: ${filters.pets.toUpperCase()}`, onClear:()=>setFilters(f=>({...f,pets:'any'})) });
+  if (filters.sleep !== 'any') activeChips.push({ key:'sleep', label:`Sleep: ${filters.sleep}`, onClear:()=>setFilters(f=>({...f,sleep:'any'})) });
+  if (filters.scope !== 'school') activeChips.push({ key:'scope', label:`Scope: ${filters.scope}`, onClear:()=>setFilters(f=>({...f,scope:'school'})) });
+
   return (
     <section className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Top Matches <span className="text-white/60">({count})</span></h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Top Matches <span className="text-white/60">({count})</span>
+        </h1>
         <p className="mt-1 text-sm text-white/60">Transparent reasons • Quick actions • Safer connections</p>
       </div>
 
@@ -535,26 +780,50 @@ function HeaderBar({ count, query, setQuery, sort, setSort, filters, setFilters 
               placeholder="Search by name, trait, university..."
               className="w-72 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm outline-none placeholder-white/40 focus:bg-white/7"
             />
-            <div className="pointer-events-none absolute right-3 top-2.5 text-white/40"><Filter size={16} /></div>
+            <div className="pointer-events-none absolute right-3 top-2.5 text-white/40">
+              <Filter size={16} />
+            </div>
           </div>
           <div className="inline-flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-2 py-2">
             <button onClick={() => setSort("match")} className={cn("rounded-lg px-2 py-1 text-xs", sort==="match" ? "bg-white/10" : "text-white/70")}>Best Match</button>
             <button onClick={() => setSort("distance")} className={cn("rounded-lg px-2 py-1 text-xs", sort==="distance" ? "bg-white/10" : "text-white/70")}>Distance</button>
             <button onClick={() => setSort("activity")} className={cn("rounded-lg px-2 py-1 text-xs", sort==="activity" ? "bg-white/10" : "text-white/70")}>Active</button>
           </div>
+          <FilterChip
+            icon={<PawPrint size={14} />}
+            label="Pets"
+            value={filters.pets}
+            options={[{k:"any", n:"Any"},{k:"ok", n:"OK"},{k:"no", n:"No"}]}
+            onChange={(v)=>setFilters(f=>({...f, pets:v}))}
+          />
+          <FilterChip
+            icon={<Moon size={14} />}
+            label="Sleep"
+            value={filters.sleep}
+            options={[{k:"any", n:"Any"},{k:"early", n:"Early"},{k:"mid", n:"Mid"},{k:"late", n:"Late"}]}
+            onChange={(v)=>setFilters(f=>({...f, sleep:v}))}
+          />
+          <FilterChip
+            icon={<Info size={14} />}
+            label="Scope"
+            value={filters.scope}
+            options={[{k:"school", n:"School"},{k:"country", n:"Country"},{k:"any", n:"Any"}]}
+            onChange={(v)=>setFilters(f=>({...f, scope:v}))}
+          />
         </div>
+      </div>
 
-        <div className="flex items-center gap-2">
-          <FilterChip icon={<PawPrint size={14} />} label="Pets" value={filters.pets}
-                      options={[{k:"any", n:"Any"},{k:"ok", n:"OK"},{k:"no", n:"No"}]}
-                      onChange={(v)=>setFilters(f=>({...f, pets:v}))} />
-          <FilterChip icon={<Moon size={14} />} label="Sleep" value={filters.sleep}
-                      options={[{k:"any", n:"Any"},{k:"early", n:"Early"},{k:"mid", n:"Mid"},{k:"late", n:"Late"}]}
-                      onChange={(v)=>setFilters(f=>({...f, sleep:v}))} />
-          <FilterChip icon={<Info size={14} />} label="Scope" value={filters.scope}
-                      options={[{k:"school", n:"School"},{k:"country", n:"Country"},{k:"any", n:"Any"}]}
-                      onChange={(v)=>setFilters(f=>({...f, scope:v}))} />
-        </div>
+      {/* Active filter chips */}
+      <div className="flex flex-wrap items-center gap-2">
+        {activeChips.map(c => (
+          <span key={c.key} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
+            {c.label}
+            <button onClick={c.onClear} className="rounded bg-white/10 px-1 text-white/70 hover:bg-white/20">×</button>
+          </span>
+        ))}
+        {activeChips.length > 0 && (
+          <button onClick={clearAll} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70 hover:bg-white/10">Clear all</button>
+        )}
       </div>
     </section>
   );
@@ -566,7 +835,9 @@ function FilterChip({ icon, label, value, options, onChange }) {
       <span className="flex items-center gap-1 text-white/70">{icon}{label}:</span>
       <div className="flex items-center gap-1">
         {options.map(o => (
-          <button key={o.k} onClick={()=>onChange(o.k)} className={cn("rounded-md px-2 py-1", value===o.k ? "bg-white/10" : "text-white/70")}>{o.n}</button>
+          <button key={o.k} onClick={()=>onChange(o.k)} className={cn("rounded-md px-2 py-1", value===o.k ? "bg-white/10" : "text-white/70")}>
+            {o.n}
+          </button>
         ))}
       </div>
     </div>
@@ -576,7 +847,7 @@ function FilterChip({ icon, label, value, options, onChange }) {
 /* =====================================================================
    Grid + Cards
    ===================================================================== */
-function MatchGrid({ items, saved, onSaveToggle, onHide, onOpen }) {
+function MatchGrid({ items, saved, onSaveToggle, onHide, onOpen, drawerOpen }) {
   if (!items.length) {
     return (
       <div className="mt-12 flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] p-12 text-center">
@@ -586,152 +857,26 @@ function MatchGrid({ items, saved, onSaveToggle, onHide, onOpen }) {
     );
   }
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {items.map(item => (
-        <MatchCard key={item.userId}
+        <MatchCard
+          key={item.userId}
           item={item}
-          saved={saved.has(item.userId)}
-          onSaveToggle={()=>onSaveToggle(item.userId)}
-          onHide={()=>onHide(item.userId)}
           onOpen={()=>onOpen(item)}
+          onMessage={(userId) => window.location.assign(`/messages?to=${userId}&ctx=roommate`)}
+          hideOverlays={drawerOpen}
         />
       ))}
     </div>
   );
 }
 
-function MatchCard({ item, saved, onSaveToggle, onHide, onOpen }) {
-  const nameShort = displayName({
-    full: item.name,
-    firstName: item.firstName,
-    lastName: item.lastName,
-  });
-
-  const cover =
-    item.avatarUrl ||
-    // minimal gradient fallback when no image
-    "data:image/svg+xml;charset=UTF-8," +
-      encodeURIComponent(
-        `<svg xmlns='http://www.w3.org/2000/svg' width='800' height='480'><defs><linearGradient id='g' x1='0' x2='0' y1='0' y2='1'><stop stop-color='#1b2230'/><stop offset='1' stop-color='#0b0f16'/></linearGradient></defs><rect fill='url(#g)' width='800' height='480'/></svg>`
-      );
-
+function NeoButton({ children, size = "sm", className = "", ...props }) {
+  const sizeClass = size === "sm" ? "styled-button--sm" : "styled-button";
   return (
-    <div
-      role="button"
-      onClick={onOpen}
-      className="
-        group relative overflow-hidden rounded-3xl
-        border border-white/10
-        bg-white/[0.035]
-        shadow-[0_10px_30px_rgba(0,0,0,0.25)]
-        transition-all hover:-translate-y-0.5 hover:bg-white/[0.045]
-      "
-    >
-      {/* Cover */}
-      <div
-        className="relative h-56 w-full overflow-hidden"
-        style={{
-          backgroundImage: `url(${cover})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
-      >
-        {/* Top badges: uni + ring */}
-        <div className="absolute right-3 top-3 flex items-center gap-2">
-          <UniversityLogoCircle university={item.university} size={56} />
-          <ScoreRing value={item.matchScore} size={56} />
-        </div>
-
-        {/* Subtle top sheen */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-14 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),transparent)]" />
-
-        {/* Bottom gradient so text stays readable */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-[linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,0.55))]" />
-      </div>
-
-      {/* Glass panel (bottom) */}
-      <div
-        className="
-          mx-4 -mt-8 mb-4 rounded-3xl
-          border border-white/10 bg-white/[0.06] backdrop-blur-md
-          shadow-[0_8px_24px_rgba(0,0,0,0.25)]
-        "
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-4 pb-4 pt-3">
-          {/* Name row */}
-          <div className="flex items-center gap-2">
-            <p
-              className="truncate text-[17px] font-semibold leading-5 tracking-tight"
-              title={item.name}
-            >
-              {nameShort}
-            </p>
-            {item.verified?.edu && (
-              <span
-                className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/90"
-                title=".edu verified"
-                aria-label="Verified .edu"
-              >
-                <ShieldCheck size={12} className="text-white" />
-              </span>
-            )}
-          </div>
-
-          {/* One slim metadata line */}
-          <div className="mt-1 flex items-center gap-2 text-[13px] text-white/65">
-            {typeof item.budget === "number" ? (
-              <span>
-                <span className="text-white/75">Budget:</span> ${item.budget}/mo
-              </span>
-            ) : (
-              <span>
-                <span className="text-white/75">Budget:</span> —
-              </span>
-            )}
-            {item.lastActive && (
-              <>
-                <span className="text-white/25">•</span>
-                <span className="inline-flex items-center gap-1">
-                  <Clock size={16} />
-                  {formatLastActive(item.lastActive)}
-                </span>
-              </>
-            )}
-          </div>
-
-          {/* CTA row */}
-          <div className="mt-3 flex items-center gap-2">
-            <button
-              className="
-                inline-flex flex-1 items-center justify-center gap-2
-                rounded-full border border-white/12 bg-white/[0.05]
-                px-4 py-2 text-[13px] font-medium
-                transition hover:bg-white/[0.09]
-              "
-              onClick={onOpen}
-            >
-              <Info size={16} /> View details
-            </button>
-
-            <button
-              className="
-                inline-flex flex-1 items-center justify-center gap-2
-                rounded-full border border-emerald-500/30
-                bg-emerald-500/15 px-4 py-2
-                text-[13px] font-semibold text-emerald-300
-                transition hover:bg-emerald-500/20
-              "
-              onClick={() =>
-                window.location.assign(`/messages?to=${item.userId}&ctx=roommate`)
-              }
-            >
-              <MessageCircle size={16} /> Message
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <button type="button" {...props} className={cn(sizeClass, className)}>
+      {children}
+    </button>
   );
 }
 
@@ -764,7 +909,7 @@ function GridSkeleton() {
 /* =====================================================================
    Drawer (RIGHT) — score breakdown + friendly reasons
    ===================================================================== */
-function MatchDrawer({ match, prefs, onClose, onStartChat, onSaveToggle, isSaved }) {
+function MatchDrawer({ match, prefs, onClose, onStartChat, onSaveToggle, isSaved, onPrev, onNext, hasPrev, hasNext }) {
   const panelRef = useRef(null);
   const open = !!match;
 
@@ -793,7 +938,7 @@ function MatchDrawer({ match, prefs, onClose, onStartChat, onSaveToggle, isSaved
         </div>
 
         {!match ? <DrawerSkeleton /> :
-          <DrawerBody profile={match} prefs={prefs} onStartChat={onStartChat} onSaveToggle={onSaveToggle} isSaved={isSaved} />
+          <DrawerBody profile={match} prefs={prefs} onStartChat={onStartChat} onSaveToggle={onSaveToggle} isSaved={isSaved} hasPrev={hasPrev} hasNext={hasNext} onPrev={onPrev} onNext={onNext} />
         }
       </aside>
     </div>
@@ -818,7 +963,7 @@ function DrawerSkeleton(){
   );
 }
 
-function DrawerBody({ profile, prefs, onStartChat, onSaveToggle, isSaved }) {
+function DrawerBody({ profile, prefs, onStartChat, onSaveToggle, isSaved, hasPrev, hasNext, onPrev, onNext }) {
   const saved = isSaved(profile.userId);
   const { parts, total } = React.useMemo(
     () => computeScoreBreakdown(profile.synapse, prefs || {}),
@@ -830,10 +975,12 @@ function DrawerBody({ profile, prefs, onStartChat, onSaveToggle, isSaved }) {
   const langs = profile.languages || [];
   const traits = (profile.keyTraits || []).slice(0, 6);
   const topParts = [...parts].sort((a,b) => (b.got - a.got) || (b.max - a.max)).slice(0, 4);
+  const langsHuman = expandLanguageCodes(langs);
 
   return (
     <div className="px-5 pb-10 pt-4">
       {/* Header row: avatar + name + uni + ring */}
+      <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 via-white/2 to-white/0 p-4">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-4">
           <div className="relative h-14 w-14 overflow-hidden rounded-full bg-white/10">
@@ -841,9 +988,7 @@ function DrawerBody({ profile, prefs, onStartChat, onSaveToggle, isSaved }) {
               ? <img src={profile.avatarUrl} alt={profile.name} className="h-full w-full object-cover" />
               : <div className="flex h-full w-full items-center justify-center text-sm text-white/70">{profile.name.slice(0,1)}</div>}
             {profile.verified?.edu && (
-              <div className="absolute -right-1 -top-1 rounded-full border border-white/10 bg-emerald-500/90 p-0.5">
-                <ShieldCheck size={12} />
-              </div>
+              <img src={VerifiedIcon} alt="Verified" className="h-7 w-7 -mt-[1px] select-none" />
             )}
           </div>
           <div>
@@ -858,18 +1003,21 @@ function DrawerBody({ profile, prefs, onStartChat, onSaveToggle, isSaved }) {
           </div>
         </div>
 
-        <ScoreRing value={displayScore} size={DRAWER_RING} />
+        <div className="rounded-2xl bg-black/40 p-2 border border-white/10 shadow-[0_0_30px_rgba(56,189,248,0.15)]">
+          <ScoreRing value={displayScore} size={DRAWER_RING} />
+        </div>
+      </div>
       </div>
 
       {/* Quick reasons */}
       {top3.length > 0 && (
-        <section className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+        <section className="mt-6 rounded-2xl border border-white/10 bg-gradient-to-br from-emerald-500/5 to-cyan-500/5 p-4">
           <p className="text-sm text-white/70">Why this is a strong match</p>
           <ul className="mt-2 grid grid-cols-1 gap-1 text-sm">
             {top3.map((r, i) => (
               <li key={i} className="inline-flex items-start gap-2">
-                <Check size={16} className="text-emerald-400" />
-                <span>{r.text}</span>
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300"><Check size={14}/></span>
+                <span>{expandLangsInText(r.text)}</span>
               </li>
             ))}
           </ul>
@@ -877,7 +1025,7 @@ function DrawerBody({ profile, prefs, onStartChat, onSaveToggle, isSaved }) {
       )}
 
       {/* About + languages/traits */}
-      <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="mt-6 rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/0 p-4">
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-semibold tracking-wide text-white/80">About {profile.name.split(" ")[0]}</h4>
           {typeof profile.budget === "number" && <span className="text-xs text-white/60">${profile.budget}/mo</span>}
@@ -887,12 +1035,12 @@ function DrawerBody({ profile, prefs, onStartChat, onSaveToggle, isSaved }) {
         </p>
         <div className="mt-3 flex flex-wrap gap-1.5">
           {langs.length > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-white/70">
-              <Languages size={12}/> {langs.join(", ")}
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-200">
+              <Languages size={12}/> {langsHuman.join(", ")}
             </span>
           )}
           {traits.map(t => (
-            <span key={t} className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-white/70">{t}</span>
+            <span key={t} className="inline-flex items-center rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[11px] text-cyan-200">{t}</span>
           ))}
         </div>
       </div>
@@ -912,10 +1060,37 @@ function DrawerBody({ profile, prefs, onStartChat, onSaveToggle, isSaved }) {
         </Collapsible>
       </div>
 
-      {/* CTAs */}
-      <div className="mt-8 flex gap-3">
-        <button onClick={()=>onStartChat(profile.userId)} className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium hover:bg-white/10">Start chat</button>
-        <button onClick={()=>onSaveToggle(profile.userId)} className={cn("rounded-xl border border-white/10 px-4 py-3 text-sm font-medium", saved?"bg-pink-500/10 text-pink-300":"bg-white/5 hover:bg-white/10")}>{saved?"Saved":"Save match"}</button>
+      {/* CTAs (sticky on mobile) */}
+      <div className="mt-8" />
+      <div className="sticky bottom-0 left-0 right-0 z-10 border-t border-white/10 bg-[#0d1017]/90 backdrop-blur supports-[backdrop-filter]:bg-[#0d1017]/60">
+        <div className="px-5 pt-3 pb-2 flex items-center justify-between">
+          <button
+            disabled={!hasPrev}
+            onClick={onPrev}
+            className={cn(
+              "group inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm border border-white/10",
+              hasPrev ? "bg-white/5 hover:bg-white/10" : "opacity-40 cursor-default"
+            )}
+          >
+            <ChevronLeft size={16} className="transition-transform group-hover:-translate-x-0.5" />
+            <span>Prev</span>
+          </button>
+          <button
+            disabled={!hasNext}
+            onClick={onNext}
+            className={cn(
+              "group inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm border border-white/10",
+              hasNext ? "bg-white/5 hover:bg-white/10" : "opacity-40 cursor-default"
+            )}
+          >
+            <span>Next</span>
+            <ChevronRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+          </button>
+        </div>
+        <div className="px-5 pb-3 flex gap-3">
+          <button onClick={()=>onStartChat(profile.userId)} className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium hover:bg-white/10">Start chat</button>
+          <button onClick={()=>onSaveToggle(profile.userId)} className={cn("rounded-xl border border-white/10 px-4 py-3 text-sm font-medium", saved?"bg-pink-500/10 text-pink-300":"bg-white/5 hover:bg-white/10")}>{saved?"Saved":"Save match"}</button>
+        </div>
       </div>
     </div>
   );

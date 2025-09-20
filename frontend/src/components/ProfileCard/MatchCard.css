@@ -1,0 +1,232 @@
+/* MatchCard specific styles */
+.match-card-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  aspect-ratio: 5/7; /* slightly smaller footprint */
+}
+
+/* Tighter typography for card usage so headers don't force extra height */
+/* Use default ProfileCard heading sizes for strong visual hierarchy */
+
+/* Overlays container */
+.match-overlays {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 4; /* above shine(3) similar to glare(4); ensure visible */
+  --uni-badge-size: 48px;
+}
+
+.university-watermark {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(55%, 260px);
+  height: min(55%, 260px);
+  opacity: 0.08;
+  filter: saturate(0.8) blur(0.2px);
+  transform: translateY(6%);
+}
+
+/* Ensure the ProfileCard doesn't clip our overlays */
+.match-card-wrapper .pc-card-wrapper {
+  overflow: visible;
+  position: relative;
+}
+
+.match-card-wrapper .pc-card {
+  overflow: visible;
+  position: relative;
+}
+
+.match-card-wrapper .pc-inside {
+  overflow: visible;
+  position: relative;
+}
+
+/* Match score overlay */
+.match-score-overlay {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 10;
+  pointer-events: none;
+  transform: translateZ(0);
+}
+
+.match-score-ring {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  /* Single clean ring: progress + track in one background, no extra borders */
+  background:
+    conic-gradient(var(--ring-color, #22ff99) calc(var(--score, 0) * 3.6deg), rgba(255,255,255,0.08) 0deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.match-score-ring::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: rgba(8, 12, 18, 0.92);
+}
+
+.match-score-text {
+  position: relative;
+  z-index: 1;
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+}
+
+/* Top match badge */
+.top-match-badge {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 255, 136, 0.15);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  border-radius: 20px;
+  padding: 6px 12px;
+  backdrop-filter: blur(20px);
+  pointer-events: none;
+  transform: translateZ(0);
+}
+
+.badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00ff88;
+  animation: pulse 2s infinite;
+}
+
+.top-match-badge span {
+  color: #00ff88;
+  font-size: 11px;
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+}
+
+/* University badge */
+.university-badge {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  pointer-events: none;
+  transform: translateZ(0);
+}
+
+.university-logo-img {
+  width: var(--uni-badge-size);
+  height: var(--uni-badge-size);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 5px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+}
+
+/* Offset Top Match capsule so it never overlaps the university badge */
+.top-match-badge {
+  left: calc(16px + var(--uni-badge-size) + 10px);
+}
+
+/* Verification badge */
+.verification-badge {
+  position: absolute;
+  bottom: 80px;
+  right: 20px;
+  z-index: 10;
+  pointer-events: none;
+  transform: translateZ(0);
+}
+
+.verified-icon {
+  width: 24px;
+  height: 24px;
+  filter: drop-shadow(0 0 8px rgba(0, 255, 136, 0.5));
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .match-score-ring {
+    width: 50px;
+    height: 50px;
+  }
+  
+  .match-score-text {
+    font-size: 10px;
+  }
+  
+  .top-match-badge {
+    padding: 4px 8px;
+  }
+  
+  .top-match-badge span {
+    font-size: 10px;
+  }
+  
+  .university-logo {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .university-logo span {
+    font-size: 12px;
+  }
+  
+  .verified-icon {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .match-score-overlay {
+    top: 15px;
+    right: 15px;
+  }
+  
+  .top-match-badge {
+    top: 15px;
+    left: 15px;
+    padding: 3px 6px;
+  }
+  
+  .university-badge {
+    top: 15px;
+  }
+  
+  .verification-badge {
+    bottom: 70px;
+    right: 15px;
+  }
+}

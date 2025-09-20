@@ -71,7 +71,7 @@
   opacity:.6;
 }
 /* keep all children above the page dots */
-.nr-dots-page > *{ position:relative;}
+.nr-dots-page > :not(.fixed){ position: relative; }
 
 /* =============== LOCAL DOTS FADE (for a section like FeatureSplit) =============== */
 .nr-dots-fade{
@@ -319,3 +319,54 @@
 }
 
 
+/* NewRun shared surfaces for dark UI */
+.newrun-bg {                /* page backdrop: dotted grid + vignette */
+  background:
+    radial-gradient(ellipse at 50% -20%, rgba(255,255,255,0.06), rgba(0,0,0,0) 55%),
+    radial-gradient(1000px 1000px at 120% 0%, rgba(255,255,255,0.06), rgba(0,0,0,0) 60%),
+    repeating-radial-gradient(circle at 0 0, rgba(255,255,255,0.03) 0 1px, transparent 1px 12px),
+    #0b0d12;
+  background-blend-mode: screen, screen, normal, normal;
+}
+
+.newrun-surface {           /* card base: subtle, neutral, matches site */
+  background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.00) 40%),
+              radial-gradient(120% 120% at 0% 0%, #161b22 0%, #0d1117 60%);
+}
+
+/* NewRun generic card surface used on Matches */
+.nr-card{
+  /* base: same palette as other pages */
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.00) 40%),
+    radial-gradient(120% 120% at 0% 0%, #161b22 0%, #0d1117 60%);
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow:
+    0 8px 30px rgba(0,0,0,.35),
+    inset 0 0 0 1px rgba(255,255,255,.02);
+  position: relative;
+}
+
+.nr-card::before{
+  /* faint diagonal banding like other sections */
+  content:"";
+  position:absolute; inset:-18%;
+  background: repeating-linear-gradient(115deg, rgba(255,255,255,.045) 0 12px, transparent 12px 36px);
+  mix-blend-mode: overlay;
+  opacity:.55;
+  transform: translateZ(0);
+  pointer-events:none;
+}
+
+.nr-card::after{
+  /* subtle hover gleam */
+  content:"";
+  position:absolute; inset:-60% -40%;
+  background: conic-gradient(from 210deg at 50% 50%, rgba(255,255,255,.14), transparent 30% 100%);
+  transform: rotate(6deg);
+  opacity:0; filter: blur(12px);
+  transition: opacity .6s ease, filter .6s ease;
+  pointer-events:none;
+}
+
+.nr-card:hover::after{ opacity:.7; }
