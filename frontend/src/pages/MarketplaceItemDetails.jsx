@@ -182,47 +182,50 @@ export default function MarketplaceItemDetails() {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      {/* Background with NewRun hero styling */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-        <div className="absolute inset-0 bg-[url('/src/assets/Graphics/noise-8bit.png')] opacity-20 mix-blend-overlay"></div>
-        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 via-transparent to-blue-500/10"></div>
-        <div className="absolute inset-0 bg-[url('/src/assets/Graphics/mesh-hero.png')] opacity-30 mix-blend-overlay"></div>
-      </div>
-      
-      <Navbar />
-      
-      {/* Back Button */}
-      <div className="relative z-10 container mx-auto px-4 py-6">
-        <button
-          onClick={() => navigate('/marketplace')}
-          className="group inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm text-white/85 hover:bg-white/10 hover:border-white/30 transition-all duration-200 backdrop-blur-sm"
-        >
-          <MdArrowBack className="text-lg group-hover:-translate-x-1 transition-transform" />
-          <span>Back to Marketplace</span>
-        </button>
-      </div>
+      {/* NewRun hero background - exact same as RoommateMatches */}
+      <section className="nr-hero-bg nr-hero-starry relative flex min-h-screen items-center overflow-hidden">
+        {/* Animated background elements */}
+        <div className="absolute inset-0">
+          <div className="hero-orb absolute top-1/4 left-1/4 w-32 h-32 bg-gradient-to-r from-orange-500/10 to-cyan-500/10 rounded-full blur-3xl" />
+          <div className="hero-orb absolute bottom-1/4 right-1/4 w-48 h-48 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-full blur-3xl" />
+          <div className="hero-orb absolute top-1/2 right-1/3 w-24 h-24 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 rounded-full blur-2xl" />
+        </div>
 
-      <div className="relative z-10 container mx-auto px-4 pb-12">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+        <div className="mx-auto w-full max-w-[110rem] px-4 py-14 relative z-10">
+          <Navbar />
           
-          {/* Image Gallery */}
-          <div className="space-y-6">
-            {/* Main Image */}
-            <div 
-              className="relative aspect-[4/3] rounded-3xl overflow-hidden bg-gradient-to-br from-white/5 to-white/10 border border-white/20 cursor-pointer group shadow-2xl backdrop-blur-sm"
-              onClick={() => setShowImageModal(true)}
+          {/* Back Button */}
+          <div className="relative z-10 container mx-auto px-4 py-6">
+            <button
+              onClick={() => navigate('/marketplace')}
+              className="group inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm text-white/85 hover:bg-white/10 hover:border-white/30 transition-all duration-200 backdrop-blur-sm"
             >
+              <MdArrowBack className="text-lg group-hover:-translate-x-1 transition-transform" />
+              <span>Back to Marketplace</span>
+            </button>
+          </div>
+
+          <div className="relative z-10 container mx-auto px-4 pb-12">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              
+              {/* Image Gallery */}
+              <div className="space-y-4">
+                {/* Main Image */}
+                <div 
+                  className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-gradient-to-br from-white/5 to-white/10 border border-white/20 cursor-pointer group shadow-xl backdrop-blur-sm"
+                  onClick={() => setShowImageModal(true)}
+                >
               {currentImage ? (
                 <img
                   src={currentImage}
                   alt={item.title}
                   className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                />
-              ) : (
+            />
+          ) : (
                 <div className="flex items-center justify-center h-full text-white/40">
                   <div className="text-center">
-                    <div className="w-20 h-20 bg-gradient-to-br from-orange-500/20 to-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-3 backdrop-blur-sm border border-white/20">
-                      <MdPerson className="text-3xl text-white/60" />
+                    <div className="w-16 h-16 bg-gradient-to-br from-orange-500/20 to-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-2 backdrop-blur-sm border border-white/20">
+                      <MdPerson className="text-2xl text-white/60" />
                     </div>
                     <p className="text-white/60">No image available</p>
                   </div>
@@ -237,31 +240,31 @@ export default function MarketplaceItemDetails() {
                       e.stopPropagation();
                       setCurrentImageIndex(prev => prev > 0 ? prev - 1 : images.length - 1);
                     }}
-                    className="w-12 h-12 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/80 transition-all duration-200 border border-white/20"
+                    className="w-10 h-10 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/80 transition-all duration-200 border border-white/20"
                   >
-                    <MdArrowBack className="text-xl" />
+                    <MdArrowBack className="text-lg" />
                   </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setCurrentImageIndex(prev => prev < images.length - 1 ? prev + 1 : 0);
                     }}
-                    className="w-12 h-12 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/80 transition-all duration-200 border border-white/20"
+                    className="w-10 h-10 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/80 transition-all duration-200 border border-white/20"
                   >
-                    <MdArrowForwardIos className="text-xl" />
+                    <MdArrowForwardIos className="text-lg" />
                   </button>
-                </div>
-              )}
             </div>
+          )}
+        </div>
 
             {/* Thumbnail Gallery */}
             {images.length > 1 && (
-              <div className="flex gap-3 overflow-x-auto pb-2">
+              <div className="flex gap-2 overflow-x-auto pb-2">
                 {images.map((image, index) => (
                   <button
                     key={index}
                     onClick={() => setCurrentImageIndex(index)}
-                    className={`flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden border-2 transition-all duration-200 backdrop-blur-sm ${
+                    className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all duration-200 backdrop-blur-sm ${
                       index === currentImageIndex 
                         ? 'border-orange-500 shadow-lg shadow-orange-500/25' 
                         : 'border-white/20 hover:border-white/40 hover:shadow-lg'
@@ -279,47 +282,47 @@ export default function MarketplaceItemDetails() {
           </div>
 
           {/* Item Information */}
-          <div className="space-y-8">
+          <div className="space-y-6">
             
             {/* Header */}
-            <div className="space-y-8">
+            <div className="space-y-6">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <h1 className="text-5xl lg:text-6xl font-bold text-white mb-6 bg-gradient-to-r from-white via-orange-100 to-white bg-clip-text text-transparent">
+                  <h1 className="text-3xl lg:text-4xl font-bold text-white mb-4 bg-gradient-to-r from-white via-orange-100 to-white bg-clip-text text-transparent">
                     {item.title}
                   </h1>
-                  <div className="flex items-center gap-4 mb-8">
-                    <span className={`px-6 py-3 rounded-full text-sm font-bold border backdrop-blur-sm ${getConditionColor(item.condition)}`}>
+                  <div className="flex items-center gap-3 mb-6">
+                    <span className={`px-4 py-2 rounded-full text-sm font-semibold border backdrop-blur-sm ${getConditionColor(item.condition)}`}>
                       {item.condition?.charAt(0).toUpperCase() + item.condition?.slice(1)}
                     </span>
-                    <span className="px-6 py-3 rounded-full text-sm font-bold bg-gradient-to-r from-purple-500/20 to-blue-500/20 text-purple-300 border border-purple-500/30 backdrop-blur-sm">
+                    <span className="px-4 py-2 rounded-full text-sm font-semibold bg-gradient-to-r from-purple-500/20 to-blue-500/20 text-purple-300 border border-purple-500/30 backdrop-blur-sm">
                       {item.category}
                     </span>
                   </div>
-                </div>
-                
-                <div className="flex items-center gap-4">
+        </div>
+
+                <div className="flex items-center gap-3">
                   <button
                     onClick={handleFavorite}
-                    className="group w-16 h-16 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 backdrop-blur-sm border border-white/20 hover:border-white/40"
+                    className="group w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 backdrop-blur-sm border border-white/20 hover:border-white/40"
                   >
                     {favorited ? (
-                      <MdFavorite className="text-red-400 text-3xl group-hover:scale-110 transition-transform" />
+                      <MdFavorite className="text-red-400 text-xl group-hover:scale-110 transition-transform" />
                     ) : (
-                      <MdFavoriteBorder className="text-white/70 text-3xl group-hover:scale-110 transition-transform" />
+                      <MdFavoriteBorder className="text-white/70 text-xl group-hover:scale-110 transition-transform" />
                     )}
                   </button>
-                  <button
+          <button
                     onClick={handleShare}
-                    className="group w-16 h-16 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 backdrop-blur-sm border border-white/20 hover:border-white/40"
+                    className="group w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 backdrop-blur-sm border border-white/20 hover:border-white/40"
                   >
-                    <MdShare className="text-white/70 text-3xl group-hover:scale-110 transition-transform" />
-                  </button>
-                </div>
-              </div>
+                    <MdShare className="text-white/70 text-xl group-hover:scale-110 transition-transform" />
+          </button>
+        </div>
+      </div>
 
               {/* Price */}
-              <div className="text-6xl lg:text-7xl font-bold text-white mb-4">
+              <div className="text-4xl lg:text-5xl font-bold text-white mb-4">
                 <span className="bg-gradient-to-r from-orange-400 via-orange-300 to-yellow-400 bg-clip-text text-transparent">
                   {formatPrice(item.price)}
                 </span>
@@ -327,25 +330,25 @@ export default function MarketplaceItemDetails() {
             </div>
 
             {/* Description */}
-            <div className="space-y-6">
-              <h3 className="text-3xl font-bold text-white bg-gradient-to-r from-white to-orange-100 bg-clip-text text-transparent">Description</h3>
-              <div className="p-8 bg-gradient-to-br from-white/5 to-white/10 rounded-3xl border border-white/20 backdrop-blur-sm shadow-2xl">
-                <p className="text-white/90 leading-relaxed text-xl">
-                  {item.description}
-                </p>
+            <div className="space-y-4">
+              <h3 className="text-xl font-semibold text-white">Description</h3>
+              <div className="p-6 bg-gradient-to-br from-white/5 to-white/10 rounded-2xl border border-white/20 backdrop-blur-sm">
+                <p className="text-white/90 leading-relaxed">
+              {item.description}
+            </p>
               </div>
             </div>
 
             {/* Exchange Method */}
-            <div className="space-y-6">
-              <h3 className="text-3xl font-bold text-white bg-gradient-to-r from-white to-orange-100 bg-clip-text text-transparent">Exchange Method</h3>
-              <div className="flex items-center gap-6 p-8 bg-gradient-to-br from-orange-500/10 to-purple-500/10 rounded-3xl border border-orange-500/20 backdrop-blur-sm shadow-2xl">
-                <div className="w-20 h-20 bg-gradient-to-br from-orange-500/20 to-purple-500/20 rounded-full flex items-center justify-center text-4xl backdrop-blur-sm border border-white/20">
+            <div className="space-y-4">
+              <h3 className="text-xl font-semibold text-white">Exchange Method</h3>
+              <div className="flex items-center gap-4 p-6 bg-gradient-to-br from-orange-500/10 to-purple-500/10 rounded-2xl border border-orange-500/20 backdrop-blur-sm">
+                <div className="w-12 h-12 bg-gradient-to-br from-orange-500/20 to-purple-500/20 rounded-full flex items-center justify-center text-2xl backdrop-blur-sm border border-white/20">
                   {getExchangeMethodIcon(item.contactInfo?.exchangeMethod)}
                 </div>
                 <div>
-                  <p className="text-white font-bold text-2xl">{getExchangeMethodText(item.contactInfo?.exchangeMethod)}</p>
-                  <p className="text-white/70 text-lg">
+                  <p className="text-white font-semibold text-lg">{getExchangeMethodText(item.contactInfo?.exchangeMethod)}</p>
+                  <p className="text-white/70 text-sm">
                     {item.contactInfo?.exchangeMethod === 'public' && 'Meet in a public place for safety'}
                     {item.contactInfo?.exchangeMethod === 'campus' && 'Pickup available on campus'}
                     {item.contactInfo?.exchangeMethod === 'shipping' && 'Item can be shipped to you'}
@@ -354,105 +357,124 @@ export default function MarketplaceItemDetails() {
               </div>
             </div>
 
-            {/* Location */}
+            {/* Location - Privacy Focused */}
             {item.contactInfo?.generalLocation && (
-              <div className="space-y-6">
-                <h3 className="text-3xl font-bold text-white bg-gradient-to-r from-white to-orange-100 bg-clip-text text-transparent">Location</h3>
-                <div className="flex items-center gap-6 p-8 bg-gradient-to-br from-white/5 to-white/10 rounded-3xl border border-white/20 backdrop-blur-sm shadow-2xl">
-                  <div className="w-16 h-16 bg-gradient-to-br from-orange-500/20 to-orange-600/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-orange-500/30">
-                    <MdLocationOn className="text-orange-400 text-2xl" />
+              <div className="space-y-4">
+                <h3 className="text-xl font-semibold text-white">General Location</h3>
+                <div className="flex items-center gap-4 p-6 bg-gradient-to-br from-white/5 to-white/10 rounded-2xl border border-white/20 backdrop-blur-sm">
+                  <div className="w-10 h-10 bg-gradient-to-br from-orange-500/20 to-orange-600/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-orange-500/30">
+                    <MdLocationOn className="text-orange-400 text-lg" />
                   </div>
-                  <span className="text-white/90 text-2xl font-bold">{item.contactInfo.generalLocation}</span>
+                  <div>
+                    <span className="text-white/90 text-lg font-medium">{item.contactInfo.generalLocation}</span>
+                    <p className="text-white/60 text-sm mt-1">General area only - no specific address shared</p>
+                  </div>
                 </div>
               </div>
             )}
 
+            {/* Safety Notice */}
+            <div className="p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-xl border border-blue-500/20 backdrop-blur-sm">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-blue-400 text-lg">🛡️</span>
+                </div>
+                <div>
+                  <h4 className="text-blue-300 font-semibold text-sm mb-1">Safety First</h4>
+                  <p className="text-white/70 text-sm">
+                    Always meet in public places during daylight hours. Never share your home address. 
+                    Trust your instincts and report any suspicious behavior.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Contact Section */}
-            <div className="space-y-8">
-              <h3 className="text-3xl font-bold text-white bg-gradient-to-r from-white to-orange-100 bg-clip-text text-transparent">Contact Seller</h3>
+            <div className="space-y-6">
+              <h3 className="text-xl font-semibold text-white">Contact Seller</h3>
               
               {!contactRevealed ? (
-                <div className="p-10 bg-gradient-to-br from-orange-500/10 via-purple-500/10 to-blue-500/10 rounded-3xl border border-orange-500/20 backdrop-blur-sm shadow-2xl">
+                <div className="p-6 bg-gradient-to-br from-orange-500/10 via-purple-500/10 to-blue-500/10 rounded-2xl border border-orange-500/20 backdrop-blur-sm">
                   <div className="text-center">
-                    <div className="w-24 h-24 bg-gradient-to-br from-orange-500/20 to-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-8 backdrop-blur-sm border border-white/20">
-                      <MdPerson className="text-orange-400 text-4xl" />
+                    <div className="w-16 h-16 bg-gradient-to-br from-orange-500/20 to-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm border border-white/20">
+                      <MdPerson className="text-orange-400 text-2xl" />
                     </div>
-                    <h4 className="text-3xl font-bold text-white mb-4">Contact Information</h4>
-                    <p className="text-white/80 mb-8 text-xl">
+                    <h4 className="text-lg font-semibold text-white mb-2">Contact Information</h4>
+                    <p className="text-white/80 mb-4 text-sm">
                       Click below to reveal seller contact information
                     </p>
                     <button
                       onClick={() => setContactRevealed(true)}
-                      className="group px-12 py-6 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-3xl font-bold text-xl transition-all duration-200 shadow-2xl shadow-orange-500/25 hover:shadow-orange-500/40 hover:scale-105"
+                      className="group px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 hover:scale-105"
                     >
-                      <span className="flex items-center gap-3">
+                      <span className="flex items-center gap-2">
                         Reveal Contact Info
-                        <MdArrowForwardIos className="text-2xl group-hover:translate-x-1 transition-transform" />
+                        <MdArrowForwardIos className="text-lg group-hover:translate-x-1 transition-transform" />
                       </span>
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-8">
-                  <div className="p-8 bg-gradient-to-br from-white/5 to-white/10 rounded-3xl border border-white/20 backdrop-blur-sm shadow-2xl">
-                    <div className="flex items-center gap-6 mb-8">
-                      <div className="w-20 h-20 bg-gradient-to-br from-orange-500/20 to-purple-500/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/20">
-                        <MdPerson className="text-orange-400 text-3xl" />
+                <div className="space-y-4">
+                  <div className="p-6 bg-gradient-to-br from-white/5 to-white/10 rounded-2xl border border-white/20 backdrop-blur-sm">
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="w-12 h-12 bg-gradient-to-br from-orange-500/20 to-purple-500/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/20">
+                        <MdPerson className="text-orange-400 text-xl" />
                       </div>
                       <div>
-                        <span className="text-white font-bold text-2xl">{item.contactInfo?.name || 'Seller'}</span>
-                        <div className="flex items-center gap-3 mt-2">
-                          <MdVerified className="text-blue-400 text-2xl" />
-                          <span className="text-blue-400 text-lg font-bold">Verified Seller</span>
+                        <span className="text-white font-semibold text-lg">{item.contactInfo?.name || 'Seller'}</span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <MdVerified className="text-blue-400 text-lg" />
+                          <span className="text-blue-400 text-sm font-medium">Verified Seller</span>
                         </div>
                       </div>
                     </div>
                     
                     {item.contactInfo?.email && (
-                      <div className="flex items-center gap-6 py-6 border-b border-white/10">
-                        <div className="w-14 h-14 bg-blue-500/20 rounded-full flex items-center justify-center">
-                          <MdEmail className="text-blue-400 text-2xl" />
+                      <div className="flex items-center gap-4 py-3 border-b border-white/10">
+                        <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
+                          <MdEmail className="text-blue-400 text-lg" />
                         </div>
-                        <span className="text-white/90 text-xl flex-1 font-semibold">{item.contactInfo.email}</span>
+                        <span className="text-white/90 text-sm flex-1 font-medium">{item.contactInfo.email}</span>
                         <button
                           onClick={() => copyToClipboard(item.contactInfo.email)}
-                          className="p-3 hover:bg-white/10 rounded-xl transition-colors"
+                          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
                         >
-                          <FaCopy className="text-white/60 text-xl" />
+                          <FaCopy className="text-white/60 text-sm" />
                         </button>
                       </div>
                     )}
                     
                     {item.contactInfo?.phone && (
-                      <div className="flex items-center gap-6 py-6">
-                        <div className="w-14 h-14 bg-green-500/20 rounded-full flex items-center justify-center">
-                          <MdPhone className="text-green-400 text-2xl" />
+                      <div className="flex items-center gap-4 py-3">
+                        <div className="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center">
+                          <MdPhone className="text-green-400 text-lg" />
                         </div>
-                        <span className="text-white/90 text-xl flex-1 font-semibold">{item.contactInfo.phone}</span>
+                        <span className="text-white/90 text-sm flex-1 font-medium">{item.contactInfo.phone}</span>
                         <button
                           onClick={() => copyToClipboard(item.contactInfo.phone)}
-                          className="p-3 hover:bg-white/10 rounded-xl transition-colors"
+                          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
                         >
-                          <FaCopy className="text-white/60 text-xl" />
+                          <FaCopy className="text-white/60 text-sm" />
                         </button>
                       </div>
-                    )}
-                  </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          )}
+        </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button
                       onClick={() => window.open(`mailto:${item.contactInfo?.email}`, '_blank')}
-                      className="group py-6 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-3xl font-bold text-xl transition-all duration-200 flex items-center justify-center gap-4 shadow-2xl shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-105"
+                      className="group py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-105"
                     >
-                      <MdEmail className="text-2xl" />
+                      <MdEmail className="text-lg" />
                       Send Email
                     </button>
                     {item.contactInfo?.phone && (
                       <button
                         onClick={() => window.open(`tel:${item.contactInfo.phone}`, '_blank')}
-                        className="group py-6 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-3xl font-bold text-xl transition-all duration-200 flex items-center justify-center gap-4 shadow-2xl shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105"
+                        className="group py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105"
                       >
-                        <MdPhone className="text-2xl" />
+                        <MdPhone className="text-lg" />
                         Call Now
                       </button>
                     )}
@@ -463,6 +485,8 @@ export default function MarketplaceItemDetails() {
           </div>
         </div>
       </div>
+        </div>
+      </section>
 
       {/* Image Modal */}
       {showImageModal && (
@@ -526,8 +550,8 @@ export default function MarketplaceItemDetails() {
                 >
                   <FaCopy className="text-white/60 text-lg" />
                 </button>
-              </div>
-              
+        </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <button
                   onClick={() => shareToSocial('facebook')}
