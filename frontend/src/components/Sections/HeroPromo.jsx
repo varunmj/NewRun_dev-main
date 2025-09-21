@@ -146,32 +146,21 @@ export default function HeroPromo() {
       </div>
 
       <div className="mx-auto w-full max-w-[110rem] px-4 py-14 relative z-10">
-        {/* Modern glassmorphism badges */}
+        {/* Simple, clean badges */}
         <div className={`text-center transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          <div className="flex items-center justify-center gap-4 mb-8 flex-wrap">
-            <div className="group relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 rounded-2xl blur-lg group-hover:blur-xl transition-all duration-300" />
-              <div className="relative inline-flex items-center gap-3 text-sm font-medium text-white/90 rounded-2xl border border-white/20 bg-white/5 px-6 py-3 backdrop-blur-xl shadow-2xl hover:bg-white/10 hover:border-white/30 transition-all duration-300 hover:scale-105">
-                <div className="w-3 h-3 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full animate-pulse shadow-lg shadow-emerald-400/50" />
-                <span>Student-only marketplace</span>
-              </div>
-            </div>
-            
-            <div className="group relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 rounded-2xl blur-lg group-hover:blur-xl transition-all duration-300" />
-              <div className="relative inline-flex items-center gap-3 text-sm font-medium text-white/90 rounded-2xl border border-white/20 bg-white/5 px-6 py-3 backdrop-blur-xl shadow-2xl hover:bg-white/10 hover:border-white/30 transition-all duration-300 hover:scale-105">
-                <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full animate-pulse shadow-lg shadow-blue-400/50" />
-                <span>Verified .edu accounts</span>
-              </div>
-            </div>
-            
-            <div className="group relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-orange-500/20 to-amber-500/20 rounded-2xl blur-lg group-hover:blur-xl transition-all duration-300" />
-              <div className="relative inline-flex items-center gap-3 text-sm font-medium text-white/90 rounded-2xl border border-white/20 bg-white/5 px-6 py-3 backdrop-blur-xl shadow-2xl hover:bg-white/10 hover:border-white/30 transition-all duration-300 hover:scale-105">
-                <div className="w-3 h-3 bg-gradient-to-r from-orange-400 to-amber-400 rounded-full animate-pulse shadow-lg shadow-orange-400/50" />
-                <span>Instant transactions</span>
-              </div>
-            </div>
+          <div className="flex items-center justify-center gap-3 mb-8 flex-wrap">
+            <span className="inline-flex items-center gap-2 text-sm text-white/70 rounded-full bg-white/5 px-3 py-1">
+              <div className="w-2 h-2 bg-green-400 rounded-full" />
+              Student-only marketplace
+            </span>
+            <span className="inline-flex items-center gap-2 text-sm text-white/70 rounded-full bg-white/5 px-3 py-1">
+              <div className="w-2 h-2 bg-blue-400 rounded-full" />
+              Verified .edu accounts
+            </span>
+            <span className="inline-flex items-center gap-2 text-sm text-white/70 rounded-full bg-white/5 px-3 py-1">
+              <div className="w-2 h-2 bg-orange-400 rounded-full" />
+              Instant transactions
+            </span>
           </div>
         </div>
 
