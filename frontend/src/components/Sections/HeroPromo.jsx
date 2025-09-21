@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
  * Enhanced NewRun Marketplace Hero — Framer-style with animations and interactive elements.
  * No external icon libs. Pure Tailwind + tiny CSS utilities.
  */
-export default function HeroPromo() {
+export default function HeroPromo({ onListItem }) {
   const [isVisible, setIsVisible] = useState(false);
   const [searchIndex, setSearchIndex] = useState(0);
   const [step, setStep] = useState(0);
@@ -283,13 +283,13 @@ export default function HeroPromo() {
               <div className="absolute inset-0 rounded-full bg-gradient-to-r from-orange-500 to-orange-600 opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-300" />
             </button>
             
-            <a
-              href="/marketplace/create"
+            <button
+              onClick={onListItem}
               className="group inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-6 py-3 text-sm text-white/85 hover:bg-white/10 hover:border-white/30 transition-all duration-200"
             >
               <span className="text-lg">+</span>
               List an item
-            </a>
+            </button>
           </div>
         </div>
 

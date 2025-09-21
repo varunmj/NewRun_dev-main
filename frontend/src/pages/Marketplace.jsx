@@ -6,6 +6,7 @@ import Navbar from "../components/Navbar/Navbar";
 import MarketplaceItemCard from "../components/Cards/MarketplaceItemCard";
 import HeroPromo from "../components/Sections/HeroPromo";
 import FeatureSplit from "../components/Sections/FeatureSplit";
+import ListingDrawer from "../components/marketplace/ListingDrawer";
 import "../styles/newrun-hero.css"; // once
 import "../styles/neumorphic-button.css";
 
@@ -109,6 +110,9 @@ export default function Marketplace() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [favIds, setFavIds] = useState(new Set());
 
+  // drawer state
+  const [isListingDrawerOpen, setIsListingDrawerOpen] = useState(false);
+
   // derived
   const filters = useMemo(() => {
     const p = {
@@ -182,7 +186,7 @@ export default function Marketplace() {
       
       <Navbar />
       
-      <HeroPromo />
+        <HeroPromo onListItem={() => setIsListingDrawerOpen(true)} />
       <FeatureSplit />
 
       {/* Stats Section */}
@@ -509,6 +513,16 @@ export default function Marketplace() {
         )}
         </div>
       </main>
+
+      {/* Listing Drawer */}
+      <ListingDrawer
+        isOpen={isListingDrawerOpen}
+        onClose={() => setIsListingDrawerOpen(false)}
+        onItemCreated={() => {
+          // Refresh the items list
+          fetchItems();
+        }}
+      />
     </div>
   );
 }
