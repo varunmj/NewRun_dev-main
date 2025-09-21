@@ -11,8 +11,9 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
     price: '',
     category: '',
     condition: 'used',
-    address: { street: '', city: '', state: '', zipCode: '' },
+    address: { city: '' }, // Only general location, no specific address
     contactInfo: { name: '', phone: '', email: '' },
+    exchangeMethod: 'public', // Default to public meeting
     files: [],
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,9 +49,8 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
       const fullName = `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim();
       const userEmail = userInfo.email || '';
       const userCity = userInfo.currentLocation?.city || '';
-      const userState = userInfo.currentLocation?.state || '';
       
-      console.log('Auto-fill values:', { fullName, userEmail, userCity, userState });
+      console.log('Auto-fill values:', { fullName, userEmail, userCity });
       
       // Add a small delay to ensure form is fully rendered
       const timeoutId = setTimeout(() => {
@@ -63,9 +63,7 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
               email: userEmail || prev.contactInfo.email,
             },
             address: {
-              ...prev.address,
-              city: userCity || prev.address.city,
-              state: userState || prev.address.state,
+              city: userCity || prev.address.city, // Only general location
             }
           };
           console.log('New form data after auto-fill:', newData); // Debug log
@@ -133,6 +131,13 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
     }
   };
 
+  const handleExchangeMethodChange = (e) => {
+    setFormData({
+      ...formData,
+      exchangeMethod: e.target.value,
+    });
+  };
+
   const removeImage = (index) => {
     setFormData(prev => ({
       ...prev,
@@ -163,6 +168,7 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log('Form submitted - this should only happen on step 3 with List Item button');
     setIsSubmitting(true);
 
     try {
@@ -178,12 +184,8 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
           name: formData.contactInfo.name,
           phone: formData.contactInfo.phone,
           email: formData.contactInfo.email,
-          address: {
-            street: formData.address.street,
-            city: formData.address.city,
-            state: formData.address.state,
-            zipCode: formData.address.zipCode,
-          }
+          generalLocation: formData.address.city || '', // Only general location
+          exchangeMethod: formData.exchangeMethod,
         },
         images: uploadedImages,
       };
@@ -199,12 +201,13 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
         price: '',
         category: '',
         condition: 'used',
-        address: { street: '', city: '', state: '', zipCode: '' },
+        address: { city: '' }, // Only general location
         contactInfo: { 
           name: userInfo ? `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim() : '', 
           phone: '', 
           email: userInfo?.email || '' 
         },
+        exchangeMethod: 'public',
         files: [],
       };
       setFormData(resetFormData);
@@ -236,12 +239,18 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
       case 3:
         return formData.contactInfo.name.trim() && 
                formData.contactInfo.email.trim();
+               // Address is optional for privacy
       default:
         return true;
     }
   };
 
-  const nextStep = () => {
+  const nextStep = (e) => {
+    e.preventDefault(); // Prevent form submission
+    e.stopPropagation(); // Stop event bubbling
+    
+    console.log('Next step clicked, current step:', currentStep);
+    
     if (currentStep < 3) {
       if (validateStep(currentStep)) {
         setCurrentStep(currentStep + 1);
@@ -268,7 +277,10 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
     }
   };
 
-  const prevStep = () => {
+  const prevStep = (e) => {
+    e.preventDefault(); // Prevent form submission
+    e.stopPropagation(); // Stop event bubbling
+    
     if (currentStep > 1) setCurrentStep(currentStep - 1);
   };
 
@@ -578,52 +590,87 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
                 )}
               </div>
 
+              {/* Privacy Notice */}
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <div className="text-amber-400 mt-0.5">🔒</div>
+                  <div>
+                    <p className="text-sm text-amber-300 font-medium">Privacy & Safety</p>
+                    <p className="text-xs text-amber-200 mt-1">
+                      Address information is optional and only shared with confirmed buyers. 
+                      You can choose to meet in a public place or provide general area only.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* General Location (Optional) */}
               <div>
                 <label className="block text-sm font-medium text-white/90 mb-2">
-                  Street Address
+                  General Location (Optional)
+                  <span className="text-xs text-white/50 ml-1">- for buyer reference only</span>
                 </label>
                 <input
                   type="text"
-                  name="street"
-                  placeholder="123 Main St"
+                  name="city"
+                  placeholder="e.g., 'Near Campus', 'Downtown Area', or leave blank"
                   className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50"
-                  value={formData.address.street}
+                  value={formData.address.city}
                   onChange={handleAddressChange}
                 />
+                <p className="text-xs text-white/50 mt-1">
+                  💡 Tip: Use general areas like "Near University" instead of specific addresses
+                </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-white/90 mb-2">
-                    City
-                    {userInfo?.currentLocation?.city && (
-                      <span className="text-xs text-green-400 ml-2">✓ Auto-filled</span>
-                    )}
+              {/* Delivery Options */}
+              <div>
+                <label className="block text-sm font-medium text-white/90 mb-2">
+                  How would you like to handle the exchange?
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 p-3 bg-white/5 border border-white/20 rounded-lg hover:bg-white/10 transition-colors cursor-pointer">
+                    <input
+                      type="radio"
+                      name="exchangeMethod"
+                      value="public"
+                      className="text-orange-500 focus:ring-orange-500"
+                      checked={formData.exchangeMethod === 'public'}
+                      onChange={handleExchangeMethodChange}
+                    />
+                    <div>
+                      <div className="text-sm text-white font-medium">Public Meeting</div>
+                      <div className="text-xs text-white/70">Meet in a safe, public location (recommended)</div>
+                    </div>
                   </label>
-                  <input
-                    type="text"
-                    name="city"
-                    placeholder={userInfo?.currentLocation?.city ? "Auto-filled from your profile" : "City"}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50"
-                    value={formData.address.city}
-                    onChange={handleAddressChange}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-white/90 mb-2">
-                    State
-                    {userInfo?.currentLocation?.state && (
-                      <span className="text-xs text-green-400 ml-2">✓ Auto-filled</span>
-                    )}
+                  <label className="flex items-center gap-3 p-3 bg-white/5 border border-white/20 rounded-lg hover:bg-white/10 transition-colors cursor-pointer">
+                    <input
+                      type="radio"
+                      name="exchangeMethod"
+                      value="campus"
+                      className="text-orange-500 focus:ring-orange-500"
+                      checked={formData.exchangeMethod === 'campus'}
+                      onChange={handleExchangeMethodChange}
+                    />
+                    <div>
+                      <div className="text-sm text-white font-medium">Campus Pickup</div>
+                      <div className="text-xs text-white/70">Meet on campus grounds</div>
+                    </div>
                   </label>
-                  <input
-                    type="text"
-                    name="state"
-                    placeholder={userInfo?.currentLocation?.state ? "Auto-filled from your profile" : "State"}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50"
-                    value={formData.address.state}
-                    onChange={handleAddressChange}
-                  />
+                  <label className="flex items-center gap-3 p-3 bg-white/5 border border-white/20 rounded-lg hover:bg-white/10 transition-colors cursor-pointer">
+                    <input
+                      type="radio"
+                      name="exchangeMethod"
+                      value="shipping"
+                      className="text-orange-500 focus:ring-orange-500"
+                      checked={formData.exchangeMethod === 'shipping'}
+                      onChange={handleExchangeMethodChange}
+                    />
+                    <div>
+                      <div className="text-sm text-white font-medium">Shipping</div>
+                      <div className="text-xs text-white/70">Ship the item (buyer pays shipping)</div>
+                    </div>
+                  </label>
                 </div>
               </div>
             </div>

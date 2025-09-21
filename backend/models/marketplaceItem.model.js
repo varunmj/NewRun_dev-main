@@ -21,6 +21,16 @@ const LocationSchema = new Schema(
   { _id: false }
 );
 
+const ContactInfoSchema = new Schema(
+  {
+    name: String,
+    email: String,
+    phone: String,
+    exchangeMethod: { type: String, default: 'public' },
+  },
+  { _id: false }
+);
+
 const MarketplaceItemSchema = new Schema(
   {
     // ownership
@@ -49,6 +59,7 @@ const MarketplaceItemSchema = new Schema(
     // logistics
     location: LocationSchema,
     delivery: DeliverySchema,
+    contactInfo: ContactInfoSchema,
 
     // metrics
     views: { type: Number, default: 0 },

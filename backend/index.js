@@ -831,16 +831,40 @@ app.post("/marketplace/item", authenticateToken, async (req, res) => {
       condition,
       thumbnailUrl,
       contactInfo,
+      images = [],
     } = req.body;
   
-    if (!title || !description || !category || !contactInfo) {
+    console.log('Creating marketplace item with data:', {
+      title,
+      description,
+      price,
+      category,
+      condition,
+      contactInfo,
+      images: images?.length || 0
+    });
+  
+    if (!title || !description || !category) {
       return res.status(400).json({
         error: true,
-        message: "Title, description, category, and contact information are required",
+        message: "Title, description, and category are required",
       });
     }
   
     try {
+      // Map contactInfo to location if provided
+      const location = contactInfo?.generalLocation ? {
+        city: contactInfo.generalLocation,
+        state: contactInfo.generalLocation, // Use general location for both
+      } : {};
+      
+      // Map exchange method to delivery options
+      const delivery = {
+        pickup: contactInfo?.exchangeMethod === 'public' || contactInfo?.exchangeMethod === 'campus',
+        localDelivery: false,
+        shipping: contactInfo?.exchangeMethod === 'shipping',
+      };
+      
       const newItem = new MarketplaceItem({
         userId: user._id,
         title,
@@ -848,11 +872,22 @@ app.post("/marketplace/item", authenticateToken, async (req, res) => {
         price: price || 0,
         category,
         condition: condition || 'used',
-        thumbnailUrl,
-        contactInfo,
+        images: images || [],
+        coverIndex: 0,
+        location,
+        delivery,
+        // Store contact info in a custom field for now
+        contactInfo: {
+          name: contactInfo?.name || '',
+          email: contactInfo?.email || '',
+          phone: contactInfo?.phone || '',
+          exchangeMethod: contactInfo?.exchangeMethod || 'public',
+        },
       });
   
       await newItem.save();
+      
+      console.log('Marketplace item created successfully:', newItem._id);
   
       return res.json({
         error: false,
@@ -861,9 +896,15 @@ app.post("/marketplace/item", authenticateToken, async (req, res) => {
       });
     } catch (error) {
       console.error("Error creating marketplace item:", error);
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       return res.status(500).json({
         error: true,
         message: "Internal Server Error",
+        details: error.message
       });
     }
   });
