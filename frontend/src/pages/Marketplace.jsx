@@ -520,7 +520,7 @@ export default function Marketplace() {
         onClose={() => setIsListingDrawerOpen(false)}
         onItemCreated={() => {
           // Refresh the items list
-          fetchItems();
+          load(false);
         }}
       />
     </div>

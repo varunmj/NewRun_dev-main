@@ -146,7 +146,12 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
   };
 
   const uploadImages = async () => {
-    if (formData.files.length === 0) return [];
+    if (formData.files.length === 0) {
+      console.log('No images to upload, returning empty array');
+      return [];
+    }
+    
+    console.log('Uploading images:', formData.files.length);
     
     const formDataUpload = new FormData();
     formData.files.forEach((file) => {
@@ -159,10 +164,12 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
           'Content-Type': 'multipart/form-data',
         },
       });
+      console.log('Images uploaded successfully:', response.data);
       return response.data.imageUrls;
     } catch (error) {
       console.error('Error uploading images:', error);
-      throw new Error('Failed to upload images');
+      console.error('Image upload error details:', error.response?.data);
+      throw new Error(`Failed to upload images: ${error.response?.data?.message || error.message}`);
     }
   };
 
@@ -172,7 +179,18 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
     setIsSubmitting(true);
 
     try {
-      const uploadedImages = await uploadImages();
+      let uploadedImages = [];
+      
+      // Try to upload images first
+      try {
+        uploadedImages = await uploadImages();
+        console.log('Images uploaded successfully:', uploadedImages);
+      } catch (imageError) {
+        console.error('Image upload failed, continuing without images:', imageError);
+        // Continue without images rather than failing completely
+        uploadedImages = [];
+      }
+      
       const payload = {
         title: formData.title,
         description: formData.description,
@@ -218,9 +236,21 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
     } catch (error) {
       console.error('Error creating item:', error);
       console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      console.error('Error headers:', error.response?.headers);
       
       // Show more specific error message
-      const errorMessage = error.response?.data?.message || 'Failed to create item. Please try again.';
+      let errorMessage = 'Failed to create item. Please try again.';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.details) {
+        errorMessage = error.response.data.details;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      console.error('Final error message:', errorMessage);
       alert(`Error: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
