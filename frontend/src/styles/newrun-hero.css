@@ -4,7 +4,7 @@
    ========================================================= */
 
 /* =============== HERO (top section) =============== */
-/* Dot grid + soft vignette + subtle grain */
+/* Dot grid + soft vignette + subtle grain - BRIGHT VERSION */
 .nr-hero-bg{
   position: relative;
   background-color: #0b0c0f;
@@ -370,3 +370,297 @@
 }
 
 .nr-card:hover::after{ opacity:.7; }
+
+/* =============== SMOOTH HERO TO CONTENT TRANSITION =============== */
+.hero-transition {
+  position: relative;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(11, 12, 15, 0.3) 30%,
+    rgba(11, 12, 15, 0.7) 70%,
+    #0b0c0f 100%
+  );
+  backdrop-filter: blur(1px);
+}
+
+.hero-transition::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(#191b20 1px, transparent 1px);
+  background-size: 22px 22px;
+  opacity: 0.2;
+  z-index: 1;
+}
+
+/* Enhanced hero bottom fade */
+.nr-hero-bg::after {
+  /* whisper of grain */
+  opacity:.07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,\
+  <svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'>\
+    <filter id='n'>\
+      <feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/>\
+      <feColorMatrix type='saturate' values='0'/>\
+    </filter>\
+    <rect width='300' height='300' filter='url(%23n)' opacity='.45'/>\
+  </svg>");
+  background-size:300px 300px;
+}
+
+/* Additional bottom fade for hero section */
+.nr-hero-bg {
+  position: relative;
+  background-color: #0b0c0f;
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(255,255,255,.06) 1.2px, transparent 1.2px);
+  background-size: 26px 26px;
+}
+
+.nr-hero-bg::before {
+  /* top glow + bottom fade */
+  background:
+    radial-gradient(1200px 560px at 50% -10%, rgba(255,255,255,.08), transparent 60%),
+    radial-gradient(900px 420px  at 50% 110%, rgba(0,0,0,.65), transparent 55%);
+}
+
+/* Subtle transition that preserves bright hero but blends to main content */
+.hero-to-main-transition {
+  position: relative;
+  height: 60px;
+  margin-top: -30px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(11, 12, 15, 0.2) 40%,
+    rgba(11, 12, 15, 0.6) 80%,
+    #0b0c0f 100%
+  );
+  z-index: 5;
+}
+
+.hero-to-main-transition::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(#191b20 1px, transparent 1px);
+  background-size: 22px 22px;
+  opacity: 0.35;
+  z-index: 1;
+}
+
+/* =============== ENHANCED HERO ANIMATIONS =============== */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Rotating text animation */
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-in-out;
+}
+
+/* Glowing text animation for rotating taglines */
+@keyframes glow {
+  0% {
+    text-shadow: 0 0 3px currentColor, 0 0 6px currentColor;
+    filter: drop-shadow(0 0 2px currentColor) brightness(1);
+  }
+  50% {
+    text-shadow: 0 0 6px currentColor, 0 0 12px currentColor;
+    filter: drop-shadow(0 0 4px currentColor) brightness(1.1);
+  }
+  100% {
+    text-shadow: 0 0 3px currentColor, 0 0 6px currentColor;
+    filter: drop-shadow(0 0 2px currentColor) brightness(1);
+  }
+}
+
+/* Enhanced glow effect for rotating text */
+.rotating-text-glow {
+  animation: glow 4s ease-in-out infinite alternate;
+  transition: all 0.7s ease-in-out;
+}
+
+.rotating-text-glow:hover {
+  transform: scale(1.05);
+  animation-duration: 1s;
+}
+
+/* Letter-by-letter typing animation */
+@keyframes letterGlow {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.8);
+    text-shadow: 0 0 2px currentColor;
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(0) scale(1.02);
+    text-shadow: 0 0 4px currentColor, 0 0 8px currentColor;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    text-shadow: 0 0 3px currentColor, 0 0 6px currentColor;
+  }
+}
+
+.typing-letter {
+  animation: letterGlow 0.3s ease-out forwards;
+  opacity: 0;
+}
+
+/* Cursor removed - no longer needed */
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(255, 153, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(255, 153, 0, 0.5);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Enhanced button hover effects */
+.hero-cta-button {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hero-cta-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.hero-cta-button:hover::before {
+  left: 100%;
+}
+
+/* Animated background orbs */
+.hero-orb {
+  animation: float 6s ease-in-out infinite;
+}
+
+.hero-orb:nth-child(2) {
+  animation-delay: -2s;
+  animation-duration: 8s;
+}
+
+.hero-orb:nth-child(3) {
+  animation-delay: -4s;
+  animation-duration: 10s;
+}
+
+/* Progress dots animation */
+.progress-dot {
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.progress-dot.active {
+  animation: glow 2s ease-in-out infinite;
+}
+
+/* Social proof animation */
+.social-proof-item {
+  animation: fadeInUp 0.6s ease-out forwards;
+  opacity: 0;
+}
+
+.social-proof-item:nth-child(1) {
+  animation-delay: 0.1s;
+}
+
+.social-proof-item:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+/* Text gradient animation */
+.animated-gradient {
+  background: linear-gradient(
+    45deg,
+    #ffb84d,
+    #ff9500,
+    #ff6b00,
+    #ffb84d
+  );
+  background-size: 300% 300%;
+  animation: shimmer 3s ease-in-out infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .hero-cta-button {
+    padding: 12px 24px;
+    font-size: 14px;
+  }
+  
+  .hero-orb {
+    width: 80px;
+    height: 80px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-cta-button {
+    padding: 10px 20px;
+    font-size: 13px;
+  }
+  
+  .hero-orb {
+    width: 60px;
+    height: 60px;
+  }
+}

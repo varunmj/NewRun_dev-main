@@ -435,10 +435,17 @@ async function postHide(userId, reason) {
    ===================================================================== */
 function HeroIntro({ firstName = "", onSkip }) {
   const [step, setStep] = React.useState(0);
+  const [isVisible, setIsVisible] = React.useState(false);
 
   React.useEffect(() => {
     const id = setInterval(() => setStep((s) => Math.min(s + 1, 4)), 1000);
     return () => clearInterval(id);
+  }, []);
+
+  React.useEffect(() => {
+    // Trigger entrance animation
+    const timer = setTimeout(() => setIsVisible(true), 100);
+    return () => clearTimeout(timer);
   }, []);
 
   React.useEffect(() => {
@@ -454,42 +461,105 @@ function HeroIntro({ firstName = "", onSkip }) {
   }, [onSkip]);
 
   const name = String(firstName || "").trim();
-  const line1 = name ? `${name}, we’ve crunched your preferences.` : `We’ve crunched your preferences.`;
+  const line1 = name ? `${name}, we've crunched your preferences.` : `We've crunched your preferences.`;
   const line2 = `Here are the roommates who match your lifestyle best.`;
 
   return (
-    <section className="nr-hero-bg nr-hero-starry relative flex min-h-[52vh] items-center">
-      <div className="mx-auto w-full max-w-[110rem] px-4 py-14">
-        {/* Smaller, responsive, centered */}
-        <h1 className="text-center font-extrabold leading-[1.1] tracking-tight">
-          <span className="block text-[clamp(22px,3.6vw,42px)]">
-            {line1}
-          </span>
-          <span className="block text-[clamp(20px,3.2vw,38px)] mt-1">
-            <span className="bg-gradient-to-r from-[#ffb84d] to-[#ff8a00] bg-clip-text text-transparent">
-              {line2}
+    <section className="nr-hero-bg nr-hero-starry relative flex min-h-[60vh] items-center overflow-hidden">
+      {/* Animated background elements */}
+      <div className="absolute inset-0">
+        <div className="hero-orb absolute top-1/4 left-1/4 w-32 h-32 bg-gradient-to-r from-orange-500/10 to-cyan-500/10 rounded-full blur-3xl" />
+        <div className="hero-orb absolute bottom-1/4 right-1/4 w-48 h-48 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-full blur-3xl" />
+        <div className="hero-orb absolute top-1/2 right-1/3 w-24 h-24 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 rounded-full blur-2xl" />
+      </div>
+
+      <div className="mx-auto w-full max-w-[110rem] px-4 py-14 relative z-10">
+        {/* Enhanced headline with better typography and animations */}
+        <div className={`text-center transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <h1 className="font-extrabold leading-[1.1] tracking-tight">
+            <span className="block text-[clamp(28px,4.5vw,48px)] mb-2">
+              <span className="bg-gradient-to-r from-white via-white to-white/90 bg-clip-text text-transparent drop-shadow-lg">
+                {line1}
+              </span>
             </span>
-          </span>
-        </h1>
-
-        <span className="mt-3 text-center text-[13px] text-white/70 rounded-full border border-white/50 bg-white/5 px-2 py-1 ">
-          Transparent reasons • Quick actions • Safer connections
-        </span>
-
-        <div className="mt-6 flex items-center justify-center gap-3">
-          <button onClick={() => onSkip?.("cta")} className="inline-flex items-center gap-2 rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_24px_rgba(255,153,0,.25)] hover:bg-orange-400" type="button">
-            See your matches
-          </button>
-          <span className="text-white/80 text-xs">Auto scrolling…</span>
+            <span className="block text-[clamp(24px,4vw,44px)] mt-2">
+              <span className="animated-gradient bg-clip-text text-transparent drop-shadow-lg">
+                {line2}
+              </span>
+            </span>
+          </h1>
         </div>
 
-        <div className="mt-5 flex justify-center gap-2">
-          {[0, 1, 2, 3,].map((i) => (
-            <span
-              key={i}
-              className={`h-1.5 w-1.5 rounded-full transition ${step > i ? "bg-white/90" : "bg-white/25"}`}
-            />
+        {/* Enhanced tagline with better styling */}
+        <div className={`mt-6 text-center transition-all duration-1000 delay-300 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+          <span className="inline-flex items-center gap-2 text-[14px] text-white/80 rounded-full border border-white/20 bg-white/10 px-4 py-2 backdrop-blur-sm shadow-lg">
+            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+            Transparent reasons • Quick actions • Safer connections
+          </span>
+        </div>
+
+        {/* Enhanced CTA section */}
+        <div className={`mt-8 text-center transition-all duration-1000 delay-500 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+          <div className="flex flex-col items-center gap-4">
+            <button 
+              onClick={() => onSkip?.("cta")} 
+              className="hero-cta-button group relative inline-flex items-center gap-3 rounded-full bg-gradient-to-r from-orange-500 to-orange-600 px-8 py-4 text-base font-bold text-black shadow-[0_12px_32px_rgba(255,153,0,.4)] hover:shadow-[0_16px_40px_rgba(255,153,0,.5)] hover:scale-105 transition-all duration-300 hover:from-orange-400 hover:to-orange-500" 
+              type="button"
+            >
+              <span>See your matches</span>
+              <div className="w-5 h-5 rounded-full bg-black/20 flex items-center justify-center group-hover:translate-x-1 transition-transform duration-200">
+                <div className="w-2 h-2 bg-black rounded-full" />
+              </div>
+              {/* Glow effect */}
+              <div className="absolute inset-0 rounded-full bg-gradient-to-r from-orange-500 to-orange-600 opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-300" />
+            </button>
+            
+            <div className="flex items-center gap-3 text-white/70">
+              <div className="flex items-center gap-1">
+                <div className="w-1 h-1 bg-white/60 rounded-full animate-bounce" />
+                <div className="w-1 h-1 bg-white/60 rounded-full animate-bounce delay-100" />
+                <div className="w-1 h-1 bg-white/60 rounded-full animate-bounce delay-200" />
+              </div>
+              <span className="text-sm font-medium">Auto scrolling…</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Enhanced progress indicator */}
+        <div className={`mt-8 flex justify-center gap-3 transition-all duration-1000 delay-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="relative">
+              <span
+                className={`progress-dot block h-2 w-2 rounded-full transition-all duration-500 ${
+                  step > i 
+                    ? "bg-gradient-to-r from-orange-400 to-orange-500 shadow-lg shadow-orange-500/50 active" 
+                    : "bg-white/25"
+                }`}
+              />
+              {step > i && (
+                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-orange-400 to-orange-500 animate-ping opacity-30" />
+              )}
+            </div>
           ))}
+        </div>
+
+        {/* Social proof or stats */}
+        <div className={`mt-12 text-center transition-all duration-1000 delay-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+          <div className="inline-flex items-center gap-6 text-sm text-white/60">
+            <div className="social-proof-item flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+              </div>
+              <span>10,000+ students matched</span>
+            </div>
+            <div className="w-px h-4 bg-white/20" />
+            <div className="social-proof-item flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center">
+                <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
+              </div>
+              <span>95% satisfaction rate</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -688,6 +758,9 @@ export default function RoommateMatches() {
       {/* Hero with dotted grid + progress; user or CTA will trigger scroll */}
       <HeroIntro firstName={firstName} onSkip={handleHeroSkip} />
 
+      {/* Subtle transition to blend hero with main content */}
+      <div className="hero-to-main-transition pointer-events-none" />
+
       {/* Anchor for smooth scrolling target */}
       <div ref={matchesRef} />
 
@@ -724,6 +797,7 @@ export default function RoommateMatches() {
             }}
             onOpen={(m) => setDrawerIndex(visibleMatches.findIndex(v => v.userId === m.userId))}
             drawerOpen={!!drawerMatch}
+            navigate={navigate}
           />
         )}
       </main>
@@ -732,7 +806,33 @@ export default function RoommateMatches() {
         match={drawerMatch}
         prefs={prefs}
         onClose={() => { setDrawerMatch(null); setDrawerIndex(-1); }}
-        onStartChat={(id) => navigate(`/messages?to=${id}&ctx=roommate`)}
+        onStartChat={(id) => {
+          const match = visibleMatches.find(m => m.userId === id);
+          if (match) {
+            const matchReasons = match.reasons?.slice(0, 3).map(r => r.text).join(', ') || 'We have compatible preferences';
+            const nameShort = displayName({ full: match.name, firstName: match.firstName, lastName: match.lastName });
+            const hasBudget = typeof match.budget === "number";
+            const preFilledMessage = `Hi ${nameShort}! 👋 
+
+I found you through NewRun's roommate matching and we have a ${Math.round(match.matchScore || 0)}% compatibility score! 
+
+Here's why I think we'd be great roommates:
+• ${matchReasons}
+
+${match.university ? `I see you're also at ${match.university} - that's awesome!` : ''}
+${hasBudget ? `My budget is around $${match.budget}/month.` : ''}
+
+Would you be interested in chatting about potentially being roommates? I'd love to learn more about what you're looking for! 
+
+Looking forward to hearing from you! 😊`;
+            
+            // Use a safer encoding method that handles emojis properly
+            const encodedMessage = encodeURIComponent(preFilledMessage).replace(/'/g, '%27');
+            navigate(`/messaging?to=${id}&ctx=roommate&message=${encodedMessage}`);
+          } else {
+            navigate(`/messaging?to=${id}&ctx=roommate`);
+          }
+        }}
         onSaveToggle={async (id) => {
           const next = new Set(saved); if (next.has(id)) next.delete(id); else next.add(id); setSaved(next);
           const res = await postSave(id); if (!res.ok) console.warn("Save failed:", res.error);
@@ -847,7 +947,7 @@ function FilterChip({ icon, label, value, options, onChange }) {
 /* =====================================================================
    Grid + Cards
    ===================================================================== */
-function MatchGrid({ items, saved, onSaveToggle, onHide, onOpen, drawerOpen }) {
+function MatchGrid({ items, saved, onSaveToggle, onHide, onOpen, drawerOpen, navigate }) {
   if (!items.length) {
     return (
       <div className="mt-12 flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] p-12 text-center">
@@ -863,7 +963,14 @@ function MatchGrid({ items, saved, onSaveToggle, onHide, onOpen, drawerOpen }) {
           key={item.userId}
           item={item}
           onOpen={()=>onOpen(item)}
-          onMessage={(userId) => window.location.assign(`/messages?to=${userId}&ctx=roommate`)}
+          onMessage={(userId, message) => {
+            if (message) {
+              const encodedMessage = encodeURIComponent(message);
+              navigate(`/messaging?to=${userId}&ctx=roommate&message=${encodedMessage}`);
+            } else {
+              navigate(`/messaging?to=${userId}&ctx=roommate`);
+            }
+          }}
           hideOverlays={drawerOpen}
         />
       ))}

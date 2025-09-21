@@ -94,7 +94,7 @@ function ProfileMenu({ onLogout }) {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-[#0f1115] p-1.5 shadow-xl ring-1 ring-black/5"
+          className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-[#0b0c0f] p-1.5 shadow-xl ring-1 ring-black/5"
         >
           <Link
             to="/profile"
@@ -261,9 +261,9 @@ function NotificationBell() {
       {open && (
         <div
           ref={panelRef}
-          className="absolute right-0 top-11 z-50 w-[360px] max-h-[70vh] overflow-auto rounded-2xl border border-white/10 bg-[#0f1115] shadow-2xl ring-1 ring-black/40"
+          className="absolute right-0 top-11 z-50 w-[360px] max-h-[70vh] overflow-auto rounded-2xl border border-white/10 bg-[#0b0c0f] shadow-2xl ring-1 ring-black/40"
         >
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#0f1115] px-3 py-2">
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#0b0c0f] px-3 py-2">
             <div className="text-sm font-semibold text-white">Requests</div>
             <button onClick={() => setOpen(false)} className="rounded-full p-1 text-white/60 hover:bg-white/10">
               <MdClose />
@@ -347,7 +347,7 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-40 w-full">
-      <div className="mx-auto mt-3 flex max-w-7xl items-center justify-between rounded-2xl bg-[#16181c]/85 px-4 py-2.5 backdrop-blur">
+      <div className="mx-auto mt-3 flex max-w-7xl items-center justify-between rounded-2xl bg-[#0b0c0f]/90 px-4 py-2.5 backdrop-blur border border-white/5">
         {/* brand */}
         <Link to="/" className="inline-flex items-center">
           <span className="brand-script text-3xl leading-none bg-gradient-to-r from-blue-600 to-teal-500 bg-clip-text text-transparent drop-shadow-[0_1px_0_rgba(255,255,255,0.06)]">

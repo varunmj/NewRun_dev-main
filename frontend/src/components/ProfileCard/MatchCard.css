@@ -19,6 +19,10 @@
   bottom: 0;
   pointer-events: none;
   z-index: 4; /* above shine(3) similar to glare(4); ensure visible */
+}
+
+/* University badge size variable */
+.match-card-wrapper {
   --uni-badge-size: 48px;
 }
 
