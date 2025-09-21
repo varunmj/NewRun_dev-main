@@ -45,31 +45,35 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
     if (userInfo && isOpen) {
       console.log('Auto-filling with user data:', userInfo); // Debug log
       
-      // Only auto-fill if the fields are currently empty
-      setFormData(prev => {
-        const fullName = `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim();
-        const userEmail = userInfo.email || '';
-        const userCity = userInfo.currentLocation?.city || '';
-        const userState = userInfo.currentLocation?.state || '';
-        
-        console.log('Auto-fill values:', { fullName, userEmail, userCity, userState });
-        
-        const newData = {
-          ...prev,
-          contactInfo: {
-            name: prev.contactInfo.name || fullName, // Only fill if empty
-            phone: prev.contactInfo.phone, // Keep existing phone
-            email: prev.contactInfo.email || userEmail, // Only fill if empty
-          },
-          address: {
-            ...prev.address,
-            city: prev.address.city || userCity, // Only fill if empty
-            state: prev.address.state || userState, // Only fill if empty
-          }
-        };
-        console.log('New form data after auto-fill:', newData); // Debug log
-        return newData;
-      });
+      const fullName = `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim();
+      const userEmail = userInfo.email || '';
+      const userCity = userInfo.currentLocation?.city || '';
+      const userState = userInfo.currentLocation?.state || '';
+      
+      console.log('Auto-fill values:', { fullName, userEmail, userCity, userState });
+      
+      // Add a small delay to ensure form is fully rendered
+      const timeoutId = setTimeout(() => {
+        setFormData(prev => {
+          const newData = {
+            ...prev,
+            contactInfo: {
+              name: fullName || prev.contactInfo.name,
+              phone: prev.contactInfo.phone, // Keep existing phone
+              email: userEmail || prev.contactInfo.email,
+            },
+            address: {
+              ...prev.address,
+              city: userCity || prev.address.city,
+              state: userState || prev.address.state,
+            }
+          };
+          console.log('New form data after auto-fill:', newData); // Debug log
+          return newData;
+        });
+      }, 100);
+
+      return () => clearTimeout(timeoutId);
     }
   }, [userInfo, isOpen]);
 
@@ -188,24 +192,33 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
       const response = await axiosInstance.post('/marketplace/item', payload);
       console.log('API response:', response.data); // Debug log
       
-      // Reset form
-      setFormData({
+      // Reset form but keep auto-filled contact info
+      const resetFormData = {
         title: '',
         description: '',
         price: '',
         category: '',
         condition: 'used',
         address: { street: '', city: '', state: '', zipCode: '' },
-        contactInfo: { name: '', phone: '', email: '' },
+        contactInfo: { 
+          name: userInfo ? `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim() : '', 
+          phone: '', 
+          email: userInfo?.email || '' 
+        },
         files: [],
-      });
+      };
+      setFormData(resetFormData);
       setCurrentStep(1);
       
       onItemCreated?.();
       onClose();
     } catch (error) {
       console.error('Error creating item:', error);
-      alert('Failed to create item. Please try again.');
+      console.error('Error response:', error.response?.data);
+      
+      // Show more specific error message
+      const errorMessage = error.response?.data?.message || 'Failed to create item. Please try again.';
+      alert(`Error: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -490,7 +503,7 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
             <div className="space-y-4">
               <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                 <p className="text-sm text-blue-300">
-                  <span className="font-medium">Step 3:</span> Review your contact information. Required fields are auto-filled from your profile.
+                  <span className="font-medium">Step 3:</span> Contact information for buyers. Only name and email are required. Address is optional for privacy.
                 </p>
               </div>
               {isLoadingUserInfo && (
