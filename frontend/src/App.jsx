@@ -25,6 +25,7 @@ import MessagingPage from './pages/MessagingPage';
 import Roommate from './pages/Roommate';
 import Waitlist from "./pages/Waitlist";
 import OnboardingFlow from "./onboarding/OnboardingFlow";
+import UnifiedOnboarding from "./components/Onboarding/UnifiedOnboarding";
 import ContactRequestsPage from "./pages/ContactRequests";
 import RoommateMatches from "./pages/RoommateMatches";
 import NotFound from "./pages/NotFound";
@@ -54,7 +55,14 @@ const App = () => {
           <Route path="/welcome" element={<ChatbotPage />} />
           <Route path="/experiment" element={<Welcome />} />
           <Route path="/all-properties" element={<AllProperties />} />
-          <Route path="/onboarding" element={<OnboardingFlow />} />
+          <Route
+            path="/onboarding"
+            element={
+              <ProtectedRoute>
+                <UnifiedOnboarding />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/waitlist" element={<Waitlist />} />
 
           {/* Protected */}
@@ -147,9 +155,13 @@ const App = () => {
           <Route path="*" element={<NotFound />} />
             </Routes>
             
-            {/* Development tools */}
-            <RoutingTest />
-            <AuthTest />
+            {/* Development tools - only in development */}
+            {process.env.NODE_ENV === 'development' && (
+              <>
+                <RoutingTest />
+                <AuthTest />
+              </>
+            )}
           </RouteGuard>
         </Router>
       </HeroUIProvider>

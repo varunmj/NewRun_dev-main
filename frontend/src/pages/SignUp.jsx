@@ -70,8 +70,21 @@ export default function SignUp() {
         const loginResult = await login(res.data.user, res.data.accessToken);
         
         if (loginResult.success) {
-          // Redirect to onboarding or dashboard
-          nav("/onboarding");
+          // Check if user has completed onboarding
+          const onboardingData = localStorage.getItem('nr_unified_onboarding');
+          if (onboardingData) {
+            const parsed = JSON.parse(onboardingData);
+            if (parsed.completed) {
+              // User has completed onboarding, go to dashboard
+              nav("/dashboard");
+            } else {
+              // User has partial onboarding data, continue from where they left off
+              nav("/onboarding");
+            }
+          } else {
+            // New user, start onboarding
+            nav("/onboarding");
+          }
         } else {
           setError(loginResult.error || "Account created but login failed. Please try logging in.");
         }

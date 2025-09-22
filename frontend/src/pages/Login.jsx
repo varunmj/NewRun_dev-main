@@ -114,9 +114,22 @@ export default function Login() {
         const loginResult = await login(res.data.user, res.data.accessToken);
         
         if (loginResult.success) {
-          // Redirect to dashboard or intended page
-          const from = new URLSearchParams(window.location.search).get('from') || '/dashboard';
-          nav(from);
+          // Check if user has completed onboarding
+          const onboardingData = localStorage.getItem('nr_unified_onboarding');
+          if (onboardingData) {
+            const parsed = JSON.parse(onboardingData);
+            if (parsed.completed) {
+              // User has completed onboarding, go to intended page or dashboard
+              const from = new URLSearchParams(window.location.search).get('from') || '/dashboard';
+              nav(from);
+            } else {
+              // User has partial onboarding data, continue onboarding
+              nav("/onboarding");
+            }
+          } else {
+            // New user, start onboarding
+            nav("/onboarding");
+          }
         } else {
           setError(loginResult.error || "Login failed. Please try again.");
         }
