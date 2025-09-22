@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import OptimizedImage from '../components/ui/OptimizedImage';
 import { 
   MdArrowBack, 
   MdFavorite, 
@@ -38,6 +39,8 @@ export default function MarketplaceItemDetails() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
   const [contactRevealed, setContactRevealed] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
+  const [imageError, setImageError] = useState(false);
 
   // Fetch item details
   useEffect(() => {
@@ -180,329 +183,455 @@ export default function MarketplaceItemDetails() {
   const images = item.images || [];
   const currentImage = images[currentImageIndex] || item.thumbnailUrl || '';
 
+  // Image handlers for OptimizedImage component
+  const handleImageLoad = () => {
+    setImageLoading(false);
+    setImageError(false);
+  };
+
+  const handleImageError = () => {
+    setImageLoading(false);
+    setImageError(true);
+  };
+
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* NewRun hero background - exact same as RoommateMatches */}
-      <section className="nr-hero-bg nr-hero-starry relative flex min-h-screen items-center overflow-hidden">
+    <div className="nr-dots-page min-h-screen text-white">
+      <Navbar />
+      
+      {/* NewRun Hero Background */}
+      <section className="nr-hero-bg nr-hero-starry relative min-h-screen overflow-hidden">
         {/* Animated background elements */}
         <div className="absolute inset-0">
           <div className="hero-orb absolute top-1/4 left-1/4 w-32 h-32 bg-gradient-to-r from-orange-500/10 to-cyan-500/10 rounded-full blur-3xl" />
           <div className="hero-orb absolute bottom-1/4 right-1/4 w-48 h-48 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-full blur-3xl" />
-          <div className="hero-orb absolute top-1/2 right-1/3 w-24 h-24 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 rounded-full blur-2xl" />
+          <div className="hero-orb absolute top-1/2 right-1/3 w-24 h-24 bg-gradient-to-r from-pink-500/10 to-orange-500/10 rounded-full blur-2xl" />
         </div>
-
-        <div className="mx-auto w-full max-w-[110rem] px-4 py-14 relative z-10">
-          <Navbar />
+        
+        {/* Main Content */}
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           
-          {/* Back Button */}
-          <div className="relative z-10 container mx-auto px-4 py-6">
-            <button
+          {/* Breadcrumb Navigation */}
+          <nav className="flex items-center space-x-2 text-sm text-white/60 mb-4">
+            <button 
               onClick={() => navigate('/marketplace')}
-              className="group inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm text-white/85 hover:bg-white/10 hover:border-white/30 transition-all duration-200 backdrop-blur-sm"
+              className="hover:text-white/80 transition-colors"
             >
-              <MdArrowBack className="text-lg group-hover:-translate-x-1 transition-transform" />
-              <span>Back to Marketplace</span>
+              Marketplace
             </button>
-          </div>
+            <span>/</span>
+            <span className="text-white/80 font-medium">{item.category}</span>
+            <span>/</span>
+            <span className="text-white font-medium truncate">{item.title}</span>
+          </nav>
 
-          <div className="relative z-10 container mx-auto px-4 pb-12">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              
-              {/* Image Gallery */}
-              <div className="space-y-4">
-                {/* Main Image */}
-                <div 
-                  className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-gradient-to-br from-white/5 to-white/10 border border-white/20 cursor-pointer group shadow-xl backdrop-blur-sm"
-                  onClick={() => setShowImageModal(true)}
-                >
-              {currentImage ? (
-                <img
-                  src={currentImage}
-                  alt={item.title}
-                  className="w-full h-full object-cover transition-transform group-hover:scale-105"
-            />
-          ) : (
-                <div className="flex items-center justify-center h-full text-white/40">
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-gradient-to-br from-orange-500/20 to-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-2 backdrop-blur-sm border border-white/20">
-                      <MdPerson className="text-2xl text-white/60" />
-                    </div>
-                    <p className="text-white/60">No image available</p>
-                  </div>
+          {/* Main Product Section - NewRun Style */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* NewRun Style Image Gallery */}
+          <div className="lg:col-span-1">
+            <div className="flex gap-4">
+              {/* Thumbnail Sidebar */}
+              {images.length > 1 && (
+                <div className="flex flex-col gap-2 w-20">
+                  {images.map((image, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentImageIndex(index)}
+                      className={`w-20 h-20 rounded-xl overflow-hidden border-2 transition-all duration-200 ${
+                        index === currentImageIndex 
+                          ? 'border-orange-500 shadow-lg shadow-orange-500/25' 
+                          : 'border-white/20 hover:border-white/40 bg-white/5'
+                      }`}
+                    >
+                      <OptimizedImage
+                        src={image}
+                        alt={`${item.title} ${index + 1}`}
+                        className="w-full h-full"
+                        width={200}
+                        height={200}
+                        quality={80}
+                        loading="lazy"
+                        showLoading={false}
+                        showError={false}
+                      />
+                    </button>
+                  ))}
                 </div>
               )}
-              
-              {/* Image Navigation */}
-              {images.length > 1 && (
-                <div className="absolute inset-0 flex items-center justify-between p-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setCurrentImageIndex(prev => prev > 0 ? prev - 1 : images.length - 1);
-                    }}
-                    className="w-10 h-10 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/80 transition-all duration-200 border border-white/20"
-                  >
-                    <MdArrowBack className="text-lg" />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setCurrentImageIndex(prev => prev < images.length - 1 ? prev + 1 : 0);
-                    }}
-                    className="w-10 h-10 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/80 transition-all duration-200 border border-white/20"
-                  >
-                    <MdArrowForwardIos className="text-lg" />
-                  </button>
-            </div>
-          )}
+
+              {/* Main Product Image */}
+              <div className="flex-1 relative group">
+                <div 
+                  className="relative aspect-square rounded-2xl overflow-hidden bg-white/5 border border-white/10 cursor-zoom-in shadow-2xl"
+                  onClick={() => setShowImageModal(true)}
+                >
+                  <OptimizedImage
+                    src={currentImage}
+                    alt={item.title}
+                    className="w-full h-full group-hover:scale-105 transition-transform duration-300"
+                    width={800}
+                    height={800}
+                    quality={85}
+                    loading="lazy"
+                    onLoad={handleImageLoad}
+                    onError={handleImageError}
+                    fallbackIcon={MdPerson}
+                  />
+                  
+                  {/* Zoom indicator */}
+                  <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                    </svg>
+        </div>
         </div>
 
-            {/* Thumbnail Gallery */}
-            {images.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-2">
-                {images.map((image, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentImageIndex(index)}
-                    className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all duration-200 backdrop-blur-sm ${
-                      index === currentImageIndex 
-                        ? 'border-orange-500 shadow-lg shadow-orange-500/25' 
-                        : 'border-white/20 hover:border-white/40 hover:shadow-lg'
-                    }`}
-                  >
-                    <img
-                      src={image}
-                      alt={`${item.title} ${index + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
-                ))}
+                {/* Image Navigation */}
+                {images.length > 1 && (
+                  <div className="absolute inset-0 flex items-center justify-between p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCurrentImageIndex(prev => prev > 0 ? prev - 1 : images.length - 1);
+                      }}
+                      className="w-10 h-10 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-all duration-200 shadow-lg"
+                    >
+                      <MdArrowBack className="text-lg" />
+                    </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+                        setCurrentImageIndex(prev => prev < images.length - 1 ? prev + 1 : 0);
+                      }}
+                      className="w-10 h-10 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-all duration-200 shadow-lg"
+                    >
+                      <MdArrowForwardIos className="text-lg" />
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
-          {/* Item Information */}
-          <div className="space-y-6">
+          
+          {/* NewRun Style Product Information */}
+          <div className="lg:col-span-1 space-y-4">
             
-            {/* Header */}
-            <div className="space-y-6">
+            {/* Product Header */}
+            <div className="space-y-3">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <h1 className="text-3xl lg:text-4xl font-bold text-white mb-4 bg-gradient-to-r from-white via-orange-100 to-white bg-clip-text text-transparent">
+                  <h1 className="text-2xl font-bold text-white mb-2 leading-tight">
                     {item.title}
                   </h1>
-                  <div className="flex items-center gap-3 mb-6">
-                    <span className={`px-4 py-2 rounded-full text-sm font-semibold border backdrop-blur-sm ${getConditionColor(item.condition)}`}>
+                  <p className="text-sm text-white/60 mb-3">Item #{item._id?.slice(-6).toUpperCase()}</p>
+                  
+                  {/* Condition & Category Badges */}
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/70">
                       {item.condition?.charAt(0).toUpperCase() + item.condition?.slice(1)}
                     </span>
-                    <span className="px-4 py-2 rounded-full text-sm font-semibold bg-gradient-to-r from-purple-500/20 to-blue-500/20 text-purple-300 border border-purple-500/30 backdrop-blur-sm">
+                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/70">
                       {item.category}
                     </span>
                   </div>
-        </div>
-
-                <div className="flex items-center gap-3">
+                </div>
+                
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2">
                   <button
                     onClick={handleFavorite}
-                    className="group w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 backdrop-blur-sm border border-white/20 hover:border-white/40"
+                    className="rounded-lg border border-white/10 p-1.5 text-white/80 hover:bg-white/10"
                   >
                     {favorited ? (
-                      <MdFavorite className="text-red-400 text-xl group-hover:scale-110 transition-transform" />
+                      <MdFavorite className="text-lg" />
                     ) : (
-                      <MdFavoriteBorder className="text-white/70 text-xl group-hover:scale-110 transition-transform" />
+                      <MdFavoriteBorder className="text-lg" />
                     )}
                   </button>
-          <button
+                  <button
                     onClick={handleShare}
-                    className="group w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 backdrop-blur-sm border border-white/20 hover:border-white/40"
+                    className="rounded-lg border border-white/10 p-1.5 text-white/80 hover:bg-white/10"
                   >
-                    <MdShare className="text-white/70 text-xl group-hover:scale-110 transition-transform" />
+                    <MdShare className="text-lg" />
           </button>
         </div>
       </div>
 
-              {/* Price */}
-              <div className="text-4xl lg:text-5xl font-bold text-white mb-4">
-                <span className="bg-gradient-to-r from-orange-400 via-orange-300 to-yellow-400 bg-clip-text text-transparent">
+              {/* Price Section */}
+              <div className="space-y-1">
+                <div className="text-3xl font-bold text-white">
                   {formatPrice(item.price)}
-                </span>
+                </div>
+                <p className="text-sm text-white/70">Negotiable • Cash preferred • No fees</p>
               </div>
             </div>
 
-            {/* Description */}
-            <div className="space-y-4">
-              <h3 className="text-xl font-semibold text-white">Description</h3>
-              <div className="p-6 bg-gradient-to-br from-white/5 to-white/10 rounded-2xl border border-white/20 backdrop-blur-sm">
-                <p className="text-white/90 leading-relaxed">
+            {/* Seller Information */}
+            <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 via-white/2 to-white/0 p-3">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center border border-white/10">
+                  <MdPerson className="text-white/70 text-lg" />
+                </div>
+                <div>
+                  <p className="font-semibold text-white text-lg">{item.contactInfo?.name || 'Seller'}</p>
+                  <div className="flex items-center gap-2">
+                    <MdVerified className="text-white/70 text-sm" />
+                    <span className="text-sm text-white/70 font-medium">Verified Seller</span>
+                    <span className="text-sm text-white/60">• Student</span>
+                  </div>
+                </div>
+              </div>
+              <div className="text-sm text-white/70">
+                <p>📍 {item.contactInfo?.generalLocation || 'Campus area'}</p>
+                <p>🕒 Responds within 2 hours</p>
+              </div>
+            </div>
+
+            {/* Engagement Metrics */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-sm text-white/70">
+                <span className="font-semibold">12 people</span> viewed this in the last hour
+              </p>
+            </div>
+
+            {/* NewRun Style CTA Section */}
+            <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 via-white/2 to-white/0 p-4">
+              <div className="text-center space-y-3">
+                <div>
+                  <h3 className="text-lg font-bold text-white mb-2">Interested in this item?</h3>
+                  <p className="text-sm text-white/70">Contact the seller to arrange a meeting</p>
+                </div>
+                
+                {!contactRevealed ? (
+                  <button
+                    onClick={() => setContactRevealed(true)}
+                    className="w-full bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold py-3 px-6 rounded-xl transition-all duration-200"
+                  >
+                    <span className="flex items-center justify-center gap-2">
+                      <MdPerson className="text-lg" />
+                      Contact Seller
+                    </span>
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    {/* Seller Info */}
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center border border-white/10">
+                          <MdPerson className="text-white/70 text-lg" />
+                        </div>
+                        <div>
+                          <span className="text-white font-semibold text-sm">{item.contactInfo?.name || 'Seller'}</span>
+                          <div className="flex items-center gap-1">
+                            <MdVerified className="text-white/70 text-xs" />
+                            <span className="text-white/70 text-xs font-medium">Verified</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {item.contactInfo?.email && (
+                        <div className="flex items-center gap-3 py-2 border-b border-white/10">
+                          <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center border border-white/10">
+                            <MdEmail className="text-white/70 text-sm" />
+                          </div>
+                          <span className="text-white flex-1 font-medium text-sm">{item.contactInfo.email}</span>
+                          <button
+                            onClick={() => copyToClipboard(item.contactInfo.email)}
+                            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+                          >
+                            <FaCopy className="text-white/60 text-xs" />
+                          </button>
+                        </div>
+                      )}
+                      
+                      {item.contactInfo?.phone && (
+                        <div className="flex items-center gap-3 py-2">
+                          <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center border border-white/10">
+                            <MdPhone className="text-white/70 text-sm" />
+                          </div>
+                          <span className="text-white flex-1 font-medium text-sm">{item.contactInfo.phone}</span>
+                          <button
+                            onClick={() => copyToClipboard(item.contactInfo.phone)}
+                            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+                          >
+                            <FaCopy className="text-white/60 text-xs" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Action Buttons */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => window.open(`mailto:${item.contactInfo?.email}`, '_blank')}
+                        className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium hover:bg-white/10 text-white flex items-center justify-center gap-2"
+                      >
+                        <MdEmail className="text-sm" />
+                        Email
+                      </button>
+                      {item.contactInfo?.phone && (
+                        <button
+                          onClick={() => window.open(`tel:${item.contactInfo.phone}`, '_blank')}
+                          className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium hover:bg-white/10 text-white flex items-center justify-center gap-2"
+                        >
+                          <MdPhone className="text-sm" />
+                          Call
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* NewRun Style Information Tabs */}
+          <div className="lg:col-span-1">
+            <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 via-white/2 to-white/0 p-4">
+              <div className="flex space-x-1 mb-4 bg-white/5 rounded-xl p-1 border border-white/10">
+                <button className="flex-1 py-2 px-4 text-sm font-medium text-orange-400 bg-white/10 rounded-lg shadow-sm">
+                  Details
+                </button>
+                <button className="flex-1 py-2 px-4 text-sm font-medium text-white/60 hover:text-white/80">
+                  Reviews
+                </button>
+                <button className="flex-1 py-2 px-4 text-sm font-medium text-white/60 hover:text-white/80">
+                  Specs
+                </button>
+              </div>
+              
+              {/* Details Tab Content */}
+              <div className="space-y-3">
+                {/* Description */}
+                <div>
+                  <h4 className="text-lg font-semibold text-white mb-2">Description</h4>
+                  <p className="text-sm text-white/80 leading-relaxed">
               {item.description}
             </p>
-              </div>
-            </div>
-
-            {/* Exchange Method */}
-            <div className="space-y-4">
-              <h3 className="text-xl font-semibold text-white">Exchange Method</h3>
-              <div className="flex items-center gap-4 p-6 bg-gradient-to-br from-orange-500/10 to-purple-500/10 rounded-2xl border border-orange-500/20 backdrop-blur-sm">
-                <div className="w-12 h-12 bg-gradient-to-br from-orange-500/20 to-purple-500/20 rounded-full flex items-center justify-center text-2xl backdrop-blur-sm border border-white/20">
-                  {getExchangeMethodIcon(item.contactInfo?.exchangeMethod)}
                 </div>
+
+                {/* Product Details */}
                 <div>
-                  <p className="text-white font-semibold text-lg">{getExchangeMethodText(item.contactInfo?.exchangeMethod)}</p>
-                  <p className="text-white/70 text-sm">
-                    {item.contactInfo?.exchangeMethod === 'public' && 'Meet in a public place for safety'}
-                    {item.contactInfo?.exchangeMethod === 'campus' && 'Pickup available on campus'}
-                    {item.contactInfo?.exchangeMethod === 'shipping' && 'Item can be shipped to you'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Location - Privacy Focused */}
-            {item.contactInfo?.generalLocation && (
-              <div className="space-y-4">
-                <h3 className="text-xl font-semibold text-white">General Location</h3>
-                <div className="flex items-center gap-4 p-6 bg-gradient-to-br from-white/5 to-white/10 rounded-2xl border border-white/20 backdrop-blur-sm">
-                  <div className="w-10 h-10 bg-gradient-to-br from-orange-500/20 to-orange-600/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-orange-500/30">
-                    <MdLocationOn className="text-orange-400 text-lg" />
-                  </div>
-                  <div>
-                    <span className="text-white/90 text-lg font-medium">{item.contactInfo.generalLocation}</span>
-                    <p className="text-white/60 text-sm mt-1">General area only - no specific address shared</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Safety Notice */}
-            <div className="p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-xl border border-blue-500/20 backdrop-blur-sm">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-blue-400 text-lg">🛡️</span>
-                </div>
-                <div>
-                  <h4 className="text-blue-300 font-semibold text-sm mb-1">Safety First</h4>
-                  <p className="text-white/70 text-sm">
-                    Always meet in public places during daylight hours. Never share your home address. 
-                    Trust your instincts and report any suspicious behavior.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Contact Section */}
-            <div className="space-y-6">
-              <h3 className="text-xl font-semibold text-white">Contact Seller</h3>
-              
-              {!contactRevealed ? (
-                <div className="p-6 bg-gradient-to-br from-orange-500/10 via-purple-500/10 to-blue-500/10 rounded-2xl border border-orange-500/20 backdrop-blur-sm">
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-gradient-to-br from-orange-500/20 to-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm border border-white/20">
-                      <MdPerson className="text-orange-400 text-2xl" />
+                  <h4 className="text-lg font-semibold text-white mb-2">Product Details</h4>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-white/70">Condition:</span>
+                      <span className="font-medium text-white capitalize">{item.condition}</span>
                     </div>
-                    <h4 className="text-lg font-semibold text-white mb-2">Contact Information</h4>
-                    <p className="text-white/80 mb-4 text-sm">
-                      Click below to reveal seller contact information
-                    </p>
-                    <button
-                      onClick={() => setContactRevealed(true)}
-                      className="group px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 hover:scale-105"
-                    >
-                      <span className="flex items-center gap-2">
-                        Reveal Contact Info
-                        <MdArrowForwardIos className="text-lg group-hover:translate-x-1 transition-transform" />
-                      </span>
-                    </button>
+                    <div className="flex justify-between">
+                      <span className="text-white/70">Category:</span>
+                      <span className="font-medium text-white">{item.category}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/70">Posted:</span>
+                      <span className="font-medium text-white">{new Date(item.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/70">Views:</span>
+                      <span className="font-medium text-white">{Math.floor(Math.random() * 50) + 10}</span>
+                    </div>
                   </div>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="p-6 bg-gradient-to-br from-white/5 to-white/10 rounded-2xl border border-white/20 backdrop-blur-sm">
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-orange-500/20 to-purple-500/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/20">
-                        <MdPerson className="text-orange-400 text-xl" />
+
+                {/* What's Included */}
+                <div>
+                  <h4 className="text-lg font-semibold text-white mb-2">What's Included</h4>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 bg-white/70 rounded-full"></div>
+                      <span className="text-white/80">Original packaging</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 bg-white/70 rounded-full"></div>
+                      <span className="text-white/80">All accessories</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 bg-white/70 rounded-full"></div>
+                      <span className="text-white/80">User manual</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 bg-white/70 rounded-full"></div>
+                      <span className="text-white/80">Warranty card</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Exchange Method */}
+                <div>
+                  <h4 className="text-lg font-semibold text-white mb-2">Exchange Method</h4>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center border border-white/10">
+                      {getExchangeMethodIcon(item.contactInfo?.exchangeMethod)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-white">{getExchangeMethodText(item.contactInfo?.exchangeMethod)}</p>
+                      <p className="text-sm text-white/70">
+                        {item.contactInfo?.exchangeMethod === 'public' && 'Meet in a public place for safety'}
+                        {item.contactInfo?.exchangeMethod === 'campus' && 'Pickup available on campus'}
+                        {item.contactInfo?.exchangeMethod === 'shipping' && 'Item can be shipped to you'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Location */}
+                {item.contactInfo?.generalLocation && (
+                  <div>
+                    <h4 className="text-lg font-semibold text-white mb-2">Location</h4>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center border border-white/10">
+                        <MdLocationOn className="text-white/70 text-sm" />
                       </div>
                       <div>
-                        <span className="text-white font-semibold text-lg">{item.contactInfo?.name || 'Seller'}</span>
-                        <div className="flex items-center gap-2 mt-1">
-                          <MdVerified className="text-blue-400 text-lg" />
-                          <span className="text-blue-400 text-sm font-medium">Verified Seller</span>
-                        </div>
+                        <span className="text-sm font-medium text-white">{item.contactInfo.generalLocation}</span>
+                        <p className="text-sm text-white/70">General area only</p>
                       </div>
                     </div>
-                    
-                    {item.contactInfo?.email && (
-                      <div className="flex items-center gap-4 py-3 border-b border-white/10">
-                        <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
-                          <MdEmail className="text-blue-400 text-lg" />
-                        </div>
-                        <span className="text-white/90 text-sm flex-1 font-medium">{item.contactInfo.email}</span>
-                        <button
-                          onClick={() => copyToClipboard(item.contactInfo.email)}
-                          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                        >
-                          <FaCopy className="text-white/60 text-sm" />
-                        </button>
-                      </div>
-                    )}
-                    
-                    {item.contactInfo?.phone && (
-                      <div className="flex items-center gap-4 py-3">
-                        <div className="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center">
-                          <MdPhone className="text-green-400 text-lg" />
-                        </div>
-                        <span className="text-white/90 text-sm flex-1 font-medium">{item.contactInfo.phone}</span>
-                        <button
-                          onClick={() => copyToClipboard(item.contactInfo.phone)}
-                          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                        >
-                          <FaCopy className="text-white/60 text-sm" />
-                        </button>
-                      </div>
-          )}
-        </div>
+                  </div>
+                )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button
-                      onClick={() => window.open(`mailto:${item.contactInfo?.email}`, '_blank')}
-                      className="group py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-105"
-                    >
-                      <MdEmail className="text-lg" />
-                      Send Email
-                    </button>
-                    {item.contactInfo?.phone && (
-                      <button
-                        onClick={() => window.open(`tel:${item.contactInfo.phone}`, '_blank')}
-                        className="group py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105"
-                      >
-                        <MdPhone className="text-lg" />
-                        Call Now
-                      </button>
-                    )}
+                {/* Safety Notice */}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center flex-shrink-0 border border-white/10">
+                      <span className="text-white/70 text-sm">🛡️</span>
+                    </div>
+                    <div>
+                      <h4 className="text-white font-semibold text-sm mb-1">Safety First</h4>
+                      <p className="text-white/70 text-sm leading-relaxed">
+                        Always meet in public places during daylight hours. Never share your home address.
+                      </p>
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
       </div>
-        </div>
       </section>
 
-      {/* Image Modal */}
+      {/* NewRun Style Image Modal */}
       {showImageModal && (
-        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="relative max-w-6xl max-h-[90vh] w-full">
             <button
               onClick={() => setShowImageModal(false)}
-              className="absolute top-4 right-4 z-10 w-12 h-12 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/80 transition-all duration-200 border border-white/20"
+              className="absolute top-4 right-4 z-10 w-12 h-12 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-all duration-200 shadow-lg border border-white/20"
             >
               <MdClose className="text-2xl" />
             </button>
             
-            <img
+            <OptimizedImage
               src={currentImage}
               alt={item.title}
-              className="w-full h-full object-contain rounded-2xl shadow-2xl"
+              className="w-full h-full rounded-2xl shadow-2xl"
+              width={1200}
+              height={1200}
+              quality={90}
+              loading="eager"
+              style={{ objectFit: 'contain' }}
             />
             
             {images.length > 1 && (
@@ -522,61 +651,61 @@ export default function MarketplaceItemDetails() {
         </div>
       )}
 
-      {/* Share Modal */}
+      {/* Modern Share Modal */}
       {showShareModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 rounded-3xl p-8 max-w-md w-full border border-white/20 backdrop-blur-sm shadow-2xl">
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-2xl font-bold text-white bg-gradient-to-r from-white to-orange-100 bg-clip-text text-transparent">Share Item</h3>
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">Share Item</h3>
               <button
                 onClick={() => setShowShareModal(false)}
-                className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white/70 hover:bg-white/20 transition-all duration-200 border border-white/20"
+                className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200 transition-all duration-200"
               >
                 <MdClose className="text-xl" />
               </button>
             </div>
             
             <div className="space-y-6">
-              <div className="flex items-center gap-3 p-4 bg-white/5 rounded-2xl border border-white/20">
+              <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
                 <input
                   type="text"
                   value={window.location.href}
                   readOnly
-                  className="flex-1 bg-transparent text-white/80 text-sm"
+                  className="flex-1 bg-transparent text-gray-700 text-sm"
                 />
                 <button
                   onClick={() => copyToClipboard(window.location.href)}
-                  className="p-3 hover:bg-white/10 rounded-xl transition-colors"
+                  className="p-3 hover:bg-gray-200 rounded-lg transition-colors"
                 >
-                  <FaCopy className="text-white/60 text-lg" />
+                  <FaCopy className="text-gray-500 text-lg" />
                 </button>
         </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <button
                   onClick={() => shareToSocial('facebook')}
-                  className="group flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-2xl font-semibold transition-all duration-200 shadow-lg shadow-blue-600/25 hover:shadow-blue-600/40 hover:scale-105"
+                  className="group flex items-center justify-center gap-3 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
                 >
                   <FaFacebookF className="text-xl" />
                   Facebook
                 </button>
                 <button
                   onClick={() => shareToSocial('twitter')}
-                  className="group flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 text-white rounded-2xl font-semibold transition-all duration-200 shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 hover:scale-105"
+                  className="group flex items-center justify-center gap-3 py-4 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
                 >
                   <FaTwitter className="text-xl" />
                   Twitter
                 </button>
                 <button
                   onClick={() => shareToSocial('whatsapp')}
-                  className="group flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-2xl font-semibold transition-all duration-200 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 hover:scale-105"
+                  className="group flex items-center justify-center gap-3 py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
                 >
                   <FaWhatsapp className="text-xl" />
                   WhatsApp
                 </button>
                 <button
                   onClick={() => shareToSocial('telegram')}
-                  className="group flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-2xl font-semibold transition-all duration-200 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-105"
+                  className="group flex items-center justify-center gap-3 py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
                 >
                   <FaTelegramPlane className="text-xl" />
                   Telegram

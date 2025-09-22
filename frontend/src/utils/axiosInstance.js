@@ -55,19 +55,44 @@ axiosInstance.interceptors.response.use(
   (res) => res,
   (err) => {
     const status = err?.response?.status;
+    const errorMessage = err?.response?.data?.message || err.message || 'An error occurred';
+    
+    // Handle 401 Unauthorized
     if (status === 401 && !isHandling401) {
       isHandling401 = true;
+      console.warn('401 Unauthorized - clearing tokens and redirecting to login');
+      
       // clear token and kick to login once
       localStorage.removeItem("accessToken");
       localStorage.removeItem("token");
       localStorage.removeItem("userToken");
+      
       // redirect
       try {
-        navigate("/login");
+        navigate("/login?error=session_expired");
       } finally {
         isHandling401 = false;
       }
     }
+    
+    // Handle 403 Forbidden
+    if (status === 403) {
+      console.warn('403 Forbidden - insufficient permissions');
+    }
+    
+    // Handle 500 Internal Server Error
+    if (status >= 500) {
+      console.error('Server error:', errorMessage);
+    }
+    
+    // Enhanced error logging
+    console.error('API Error:', {
+      status,
+      message: errorMessage,
+      url: err.config?.url,
+      method: err.config?.method,
+    });
+    
     return Promise.reject(err);
   }
 );

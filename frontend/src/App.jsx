@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { HeroUIProvider } from '@heroui/react'; // ⬅️ moved from @heroui/react
+import { AuthProvider } from './context/AuthContext.jsx';
 
 // pages
 import LandingPage from './pages/LandingPage';
@@ -26,15 +27,21 @@ import Waitlist from "./pages/Waitlist";
 import OnboardingFlow from "./onboarding/OnboardingFlow";
 import ContactRequestsPage from "./pages/ContactRequests";
 import RoommateMatches from "./pages/RoommateMatches";
+import NotFound from "./pages/NotFound";
+import RoutingTest from "./components/RoutingTest";
+import AuthTest from "./components/Auth/AuthTest";
+import RouteGuard from "./components/Auth/RouteGuard";
 // guards
 import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
 
 const App = () => {
   return (
-    <HeroUIProvider>
-      <Router>
-        <Routes>
-          {/* Public */}
+    <AuthProvider>
+      <HeroUIProvider>
+        <Router>
+          <RouteGuard>
+            <Routes>
+          {/* Public Routes */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/home" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
@@ -47,6 +54,8 @@ const App = () => {
           <Route path="/welcome" element={<ChatbotPage />} />
           <Route path="/experiment" element={<Welcome />} />
           <Route path="/all-properties" element={<AllProperties />} />
+          <Route path="/onboarding" element={<OnboardingFlow />} />
+          <Route path="/waitlist" element={<Waitlist />} />
 
           {/* Protected */}
           <Route
@@ -130,30 +139,21 @@ const App = () => {
             }
           />
 
-          <Route path="/onboarding" element={<OnboardingFlow />} />
-          <Route path="/waitlist" element={<Waitlist />} />
-          {/* <Route path="/property/:id" element={<PropertyDetails />} /> */}
+          {/* Additional Routes */}
+          <Route path="/requests" element={<ContactRequestsPage />} />
+          <Route path="/Synapsematches" element={<RoommateMatches />} />
 
-          {/* Catch-all → home (prevents blank screens) */}
-          <Route path="*" element={<Navigate to="/home" replace />} />
-          
-        
-        
-          
+          {/* 404 Page - Catch-all route must be LAST */}
+          <Route path="*" element={<NotFound />} />
+            </Routes>
             
-
-           
-            <Route path="/requests" element={<ContactRequestsPage />} />
-
-            {/* Keep any catch-all LAST */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-
-            <Route path="/Synapsematches" element={<RoommateMatches />} />
-          </Routes>
-          
-        
-      </Router>
-    </HeroUIProvider>
+            {/* Development tools */}
+            <RoutingTest />
+            <AuthTest />
+          </RouteGuard>
+        </Router>
+      </HeroUIProvider>
+    </AuthProvider>
   );
 };
 

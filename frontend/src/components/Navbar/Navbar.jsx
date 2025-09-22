@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import MegaMenu from "./MegaMenu";
 import { hasDraft } from "../../utils/onboardingProgress";
 import axiosInstance from "../../utils/axiosInstance";
+import { useAuth } from "../../context/AuthContext.jsx";
+import { forceLogout } from "../../utils/logoutUtils";
 
 import {
   MdHomeWork,
@@ -335,6 +337,7 @@ export default function Navbar() {
   const nav = useNavigate();
   const loc = useLocation();
   const showResume = hasDraft();
+  const { logout } = useAuth();
 
   const productItems = [
     { title: "Housing", desc: "Verified listings near campus.", to: "/all-properties", icon: MdHomeWork },
@@ -399,9 +402,18 @@ export default function Navbar() {
           <NotificationBell />
 
           <ProfileMenu
-            onLogout={() => {
-              localStorage.removeItem("token");
-              nav("/login");
+            onLogout={async () => {
+              // BULLETPROOF LOGOUT
+              try {
+                await logout();
+              } catch (error) {
+                console.error('AuthContext logout error:', error);
+              }
+              
+              // Always force logout regardless of AuthContext result
+              setTimeout(() => {
+                forceLogout();
+              }, 100);
             }}
           />
         </div>

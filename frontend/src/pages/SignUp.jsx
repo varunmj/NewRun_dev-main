@@ -1,18 +1,26 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import axiosInstance from "../utils/axiosInstance";
+import { useAuth } from "../context/AuthContext.jsx";
 import { validateEmail } from "../utils/helper";
+import { validatePassword, validatePasswordMatch } from "../utils/passwordValidator";
+import PasswordStrengthIndicator from "../components/Auth/PasswordStrengthIndicator";
 
 export default function SignUp() {
   const nav = useNavigate();
   const location = useLocation();
+  const { login } = useAuth();
 
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");                 // NEW
   const [email, setEmail] = useState(location.state?.email || "");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");   // NEW
   const [agree, setAgree] = useState(false);
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);      // NEW
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false); // NEW
 
   function splitName(name) {
     const parts = name.trim().split(/\s+/);
@@ -24,15 +32,27 @@ export default function SignUp() {
   async function handleSubmit(e) {
     e.preventDefault();
 
+    // Basic validation
     if (!validateEmail(email))      return setError("Please enter a valid email.");
-    if (!password || password.length < 8)
-      return setError("Password must be at least 8 characters.");
     if (!fullName.trim())           return setError("Please enter your full name.");
     if (!username.trim())           return setError("Please choose a username.");
     if (!agree)                     return setError("Please accept the Terms and Privacy Policy.");
 
+    // Comprehensive password validation
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+      return setError(`Password requirements not met: ${passwordValidation.errors[0]}`);
+    }
+
+    // Confirm password validation
+    const passwordMatchValidation = validatePasswordMatch(password, confirmPassword);
+    if (!passwordMatchValidation.isValid) {
+      return setError(passwordMatchValidation.error);
+    }
+
     const [firstName, lastName] = splitName(fullName);
     setError("");
+    setIsLoading(true);
 
     try {
       const res = await axiosInstance.post("/create-account", {
@@ -47,15 +67,26 @@ export default function SignUp() {
         setError(res.data.message || "Could not create account.");
         return;
       }
+      
       if (res?.data?.accessToken) {
-        localStorage.setItem("token", res.data.accessToken);
-        nav("/chatbot");
+        // Use AuthContext login method
+        const loginResult = await login(res.data.user, res.data.accessToken);
+        
+        if (loginResult.success) {
+          // Redirect to onboarding or dashboard
+          nav("/onboarding");
+        } else {
+          setError(loginResult.error || "Account created but login failed. Please try logging in.");
+        }
       } else {
         setError("Unexpected response. Please try again.");
       }
     } catch (err) {
+      console.error('Signup error:', err);
       const msg = err?.response?.data?.message || "An unexpected error occurred. Please try again!";
       setError(msg);
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -87,6 +118,18 @@ export default function SignUp() {
               Sign up to access housing, essentials, and community curated by your
               university.
             </p>
+            
+            {/* Password Requirements */}
+            <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+              <h3 className="text-sm font-semibold text-blue-300 mb-2">Password Requirements:</h3>
+              <ul className="text-xs text-blue-200 space-y-1">
+                <li>• At least 8 characters long</li>
+                <li>• Mix of uppercase and lowercase letters</li>
+                <li>• At least one number</li>
+                <li>• At least one special character (!@#$%^&*)</li>
+                <li>• No common passwords or patterns</li>
+              </ul>
+            </div>
           </div>
 
           {/* social */}
@@ -114,14 +157,59 @@ export default function SignUp() {
               className={inputClass}
             />
 
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password (8+ characters)"
-              autoComplete="new-password"
-              className={inputClass}
-            />
+            {/* Password Field with Strength Indicator */}
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Create a strong password"
+                autoComplete="new-password"
+                className={inputClass}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showPassword ? "👁️" : "👁️‍🗨️"}
+              </button>
+              <PasswordStrengthIndicator password={password} />
+            </div>
+
+            {/* Confirm Password Field */}
+            <div className="relative">
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm your password"
+                autoComplete="new-password"
+                className={inputClass}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showConfirmPassword ? "👁️" : "👁️‍🗨️"}
+              </button>
+              {confirmPassword && (
+                <div className="mt-1">
+                  {password === confirmPassword ? (
+                    <div className="flex items-center gap-2 text-sm text-green-500">
+                      <span className="w-1 h-1 bg-green-500 rounded-full"></span>
+                      <span>Passwords match</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm text-red-500">
+                      <span className="w-1 h-1 bg-red-500 rounded-full"></span>
+                      <span>Passwords do not match</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             <input
               type="text"
@@ -178,9 +266,17 @@ export default function SignUp() {
 
             <button
               type="submit"
-              className="mt-2 inline-flex h-10 w-full items-center justify-center rounded-md bg-[#2f64ff] text-[14px] font-medium text-white hover:bg-[#2958e3]"
+              disabled={isLoading}
+              className="mt-2 inline-flex h-10 w-full items-center justify-center rounded-md bg-[#2f64ff] text-[14px] font-medium text-white hover:bg-[#2958e3] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Sign Up
+              {isLoading ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Creating account...
+                </div>
+              ) : (
+                'Sign Up'
+              )}
             </button>
           </form>
 

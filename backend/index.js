@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const multerS3 = require('multer-s3');
 const AWS = require('aws-sdk');
@@ -152,11 +153,15 @@ app.post("/create-account", async(req,res)=>{
         });
     }
 
+    // Hash the password before saving
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
     const user = new User({
         firstName,
         lastName,
         email,
-        password,
+        password: hashedPassword, // Store hashed password
         username
     });
 
@@ -221,6 +226,8 @@ app.post("/create-account", async(req,res)=>{
 app.post('/login', async (req, res) => {
   let { identifier, email, password } = req.body;
 
+  console.log('Login attempt:', { identifier, email: email ? 'provided' : 'not provided', password: password ? 'provided' : 'not provided' });
+
   if (!identifier && email) identifier = email;
 
   if (!identifier) {
@@ -238,11 +245,43 @@ app.post('/login', async (req, res) => {
       : { username: identifier.toLowerCase().trim() };
     const userInfo = await User.findOne(query, 'email username password firstName lastName');
 
+    console.log('User found:', { 
+      found: !!userInfo, 
+      email: userInfo?.email, 
+      username: userInfo?.username,
+      passwordType: userInfo?.password ? (userInfo.password.startsWith('$2') ? 'hashed' : 'plain') : 'none'
+    });
+
     if (!userInfo) {
       return res.status(400).json({ message: 'User not found' });
     }
 
-    if (userInfo.password === password) {
+    // Compare password - handle both hashed and plain text (for existing users)
+    let isPasswordValid = false;
+    
+    // Check if password is already hashed (starts with $2a$ or $2b$)
+    if (userInfo.password.startsWith('$2a$') || userInfo.password.startsWith('$2b$')) {
+      // Password is hashed, use bcrypt compare
+      isPasswordValid = await bcrypt.compare(password, userInfo.password);
+    } else {
+      // Password is plain text (legacy), compare directly
+      isPasswordValid = (userInfo.password === password);
+      
+      // If login successful with plain text, hash the password for future use
+      if (isPasswordValid) {
+        try {
+          const saltRounds = 12;
+          const hashedPassword = await bcrypt.hash(password, saltRounds);
+          await User.findByIdAndUpdate(userInfo._id, { password: hashedPassword });
+          console.log(`Updated password for user ${userInfo.email} to hashed format`);
+        } catch (hashError) {
+          console.error('Error hashing password during login:', hashError);
+          // Continue with login even if hashing fails
+        }
+      }
+    }
+    
+    if (isPasswordValid) {
       const user = { user: userInfo };
       const accessToken = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
         expiresIn: '36000m',
@@ -251,9 +290,10 @@ app.post('/login', async (req, res) => {
       return res.json({
         error: false,
         message: 'Login Successful',
-        email,
+        email: userInfo.email,
         identifier,
         accessToken,
+        user: userInfo, // Include user data in response
       });
     } else {
       return res.status(400).json({
@@ -267,6 +307,29 @@ app.post('/login', async (req, res) => {
   }
 });
 
+// Logout API (optional - mainly for logging purposes)
+app.post('/logout', authenticateToken, async (req, res) => {
+  try {
+    const { user } = req.user;
+    console.log(`User ${user.email || user.username} logged out`);
+    
+    // In a more sophisticated setup, you might:
+    // 1. Add token to a blacklist
+    // 2. Log the logout event
+    // 3. Clean up user sessions
+    
+    res.json({
+      error: false,
+      message: 'Logout successful'
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Logout failed'
+    });
+  }
+});
 
 // Get user API:
 // app.get("/get-user", authenticateToken, async (req, res) => {
