@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import axiosInstance from "../utils/axiosInstance";
 import { useAuth } from "../context/AuthContext.jsx";
 import { motion } from "framer-motion";
+import { Eye, EyeOff } from "lucide-react";
 
 // --- tiny helper for consistent input styling ---
 const inputClass =
@@ -169,14 +170,14 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Password"
                   autoComplete="current-password"
-                  className={inputClass}
+                  className={inputClass + " pr-10"}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
                 >
-                  {showPassword ? "👁️" : "👁️‍🗨️"}
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
 

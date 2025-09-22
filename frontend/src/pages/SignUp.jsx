@@ -5,13 +5,15 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { validateEmail } from "../utils/helper";
 import { validatePassword, validatePasswordMatch } from "../utils/passwordValidator";
 import PasswordStrengthIndicator from "../components/Auth/PasswordStrengthIndicator";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function SignUp() {
   const nav = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
 
-  const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");                 // NEW
   const [email, setEmail] = useState(location.state?.email || "");
   const [password, setPassword] = useState("");
@@ -22,19 +24,15 @@ export default function SignUp() {
   const [showPassword, setShowPassword] = useState(false);      // NEW
   const [showConfirmPassword, setShowConfirmPassword] = useState(false); // NEW
 
-  function splitName(name) {
-    const parts = name.trim().split(/\s+/);
-    if (parts.length === 0) return ["", ""];
-    if (parts.length === 1) return [parts[0], ""];
-    return [parts[0], parts.slice(1).join(" ")];
-  }
+  // Removed splitName function - now using separate firstName and lastName fields
 
   async function handleSubmit(e) {
     e.preventDefault();
 
     // Basic validation
     if (!validateEmail(email))      return setError("Please enter a valid email.");
-    if (!fullName.trim())           return setError("Please enter your full name.");
+    if (!firstName.trim())          return setError("Please enter your first name.");
+    if (!lastName.trim())           return setError("Please enter your last name.");
     if (!username.trim())           return setError("Please choose a username.");
     if (!agree)                     return setError("Please accept the Terms and Privacy Policy.");
 
@@ -50,16 +48,15 @@ export default function SignUp() {
       return setError(passwordMatchValidation.error);
     }
 
-    const [firstName, lastName] = splitName(fullName);
     setError("");
     setIsLoading(true);
 
     try {
       const res = await axiosInstance.post("/create-account", {
-        firstName,
-        lastName,
-        username, // NEW
-        email,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        username: username.trim(), // NEW
+        email: email.trim(),
         password,
       });
 
@@ -148,12 +145,43 @@ export default function SignUp() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-3">
+            {/* Email */}
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="University email"
               autoComplete="email"
+              className={inputClass}
+            />
+
+            {/* First Name */}
+            <input
+              type="text"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              placeholder="First name"
+              autoComplete="given-name"
+              className={inputClass}
+            />
+
+            {/* Last Name */}
+            <input
+              type="text"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              placeholder="Last name"
+              autoComplete="family-name"
+              className={inputClass}
+            />
+
+            {/* Username */}
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Username"
+              autoComplete="username"
               className={inputClass}
             />
 
@@ -165,14 +193,14 @@ export default function SignUp() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Create a strong password"
                 autoComplete="new-password"
-                className={inputClass}
+                className={inputClass + " pr-10"}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
               >
-                {showPassword ? "👁️" : "👁️‍🗨️"}
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
               <PasswordStrengthIndicator password={password} />
             </div>
@@ -185,14 +213,14 @@ export default function SignUp() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Confirm your password"
                 autoComplete="new-password"
-                className={inputClass}
+                className={inputClass + " pr-10"}
               />
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
               >
-                {showConfirmPassword ? "👁️" : "👁️‍🗨️"}
+                {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
               {confirmPassword && (
                 <div className="mt-1">
@@ -210,25 +238,6 @@ export default function SignUp() {
                 </div>
               )}
             </div>
-
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Full name"
-              autoComplete="name"
-              className={inputClass}
-            />
-
-            {/* NEW: Username */}
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Username"
-              autoComplete="username"
-              className={inputClass}
-            />
 
             {/* legal copy (uniform text size) */}
             <p className="mt-3 text-[12px] leading-5 text-white/70">
