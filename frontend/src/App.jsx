@@ -24,13 +24,10 @@ import Welcome from './pages/welcomepage';
 import MessagingPage from './pages/MessagingPage';
 import Roommate from './pages/Roommate';
 import Waitlist from "./pages/Waitlist";
-import OnboardingFlow from "./onboarding/OnboardingFlow";
 import UnifiedOnboarding from "./components/Onboarding/UnifiedOnboarding";
 import ContactRequestsPage from "./pages/ContactRequests";
 import RoommateMatches from "./pages/RoommateMatches";
 import NotFound from "./pages/NotFound";
-import RoutingTest from "./components/RoutingTest";
-import AuthTest from "./components/Auth/AuthTest";
 import RouteGuard from "./components/Auth/RouteGuard";
 // guards
 import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
@@ -154,14 +151,6 @@ const App = () => {
           {/* 404 Page - Catch-all route must be LAST */}
           <Route path="*" element={<NotFound />} />
             </Routes>
-            
-            {/* Development tools - only in development */}
-            {process.env.NODE_ENV === 'development' && (
-              <>
-                <RoutingTest />
-                <AuthTest />
-              </>
-            )}
           </RouteGuard>
         </Router>
       </HeroUIProvider>

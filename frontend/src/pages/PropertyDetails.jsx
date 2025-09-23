@@ -400,45 +400,53 @@ export default function PropertyDetailPage() {
             <h1 className="text-4xl font-bold text-white">{property.title}</h1>
             <p className="text-2xl font-semibold text-white/90">{`USD $${money(property.price)}`}</p>
 
-            {/* like + CTAs */}
-            <div className="flex items-center gap-4">
-              <button
-                className={`grid h-10 w-10 place-items-center rounded-full transition ${
-                  likedByUser ? "bg-rose-500" : "bg-white/10 hover:bg-white/15"
-                }`}
-                onClick={toggleLike}
-                title="Like"
-              >
-                {likedByUser ? <AiFillHeart className="text-white" /> : <AiOutlineHeart className="text-rose-400" />}
-              </button>
-              <span className="text-white/70">
-                {likesCount} {likesCount === 1 ? "Like" : "Likes"}
-              </span>
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              {/* Like Button */}
+              <div className="flex items-center gap-3">
+                <button
+                  className={`grid h-12 w-12 place-items-center rounded-full transition ${
+                    likedByUser ? "bg-rose-500" : "bg-white/10 hover:bg-white/15"
+                  }`}
+                  onClick={toggleLike}
+                  title="Like this property"
+                >
+                  {likedByUser ? <AiFillHeart className="text-white text-lg" /> : <AiOutlineHeart className="text-rose-400 text-lg" />}
+                </button>
+                <span className="text-white/70 font-medium">
+                  {likesCount} {likesCount === 1 ? "Like" : "Likes"}
+                </span>
+              </div>
 
-              <button
-                className="ml-auto rounded-lg bg-violet-500 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500/90"
-                onClick={startDM}
-              >
-                Message host
-              </button>
+              {/* Main Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                <button
+                  className="group flex-1 sm:flex-none px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-semibold transition-all duration-300 flex items-center justify-center gap-2 hover:scale-105 hover:shadow-lg hover:shadow-violet-500/25"
+                  onClick={startDM}
+                >
+                  <FaEnvelope className="text-sm group-hover:scale-110 transition-transform duration-300" />
+                  Message Host
+                </button>
 
-              {!isOwner && !canShowContact && (
-                isPending ? (
-                  <span className="rounded-full border border-yellow-400/30 bg-yellow-400/10 px-3 py-1 text-xs text-yellow-200">
-                    Contact access pending host approval
-                  </span>
-                ) : (
-                  <button
-                    className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
-                    onClick={() => {
-                      setReqState("idle");
-                      setRequestOpen(true);
-                    }}
-                  >
-                    Request contact
-                  </button>
-                )
-              )}
+                {!isOwner && !canShowContact && (
+                  isPending ? (
+                    <div className="flex-1 sm:flex-none px-6 py-3 rounded-xl border border-yellow-400/30 bg-yellow-400/10 text-yellow-200 text-center font-medium animate-pulse">
+                      ⏳ Contact Request Pending
+                    </div>
+                  ) : (
+                    <button
+                      className="group flex-1 sm:flex-none px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-all duration-300 flex items-center justify-center gap-2 hover:scale-105 hover:shadow-lg hover:shadow-blue-500/25"
+                      onClick={() => {
+                        setReqState("idle");
+                        setRequestOpen(true);
+                      }}
+                    >
+                      <FaEnvelope className="text-sm group-hover:scale-110 transition-transform duration-300" />
+                      Request Contact Info
+                    </button>
+                  )
+                )}
+              </div>
             </div>
 
             {/* facts */}
@@ -470,26 +478,62 @@ export default function PropertyDetailPage() {
                 <span className="text-white/70">{property.bathrooms || "N/A"}</span>
               </p>
 
-              {/* contact */}
-              <div className="grid grid-cols-1 gap-6 pt-6 sm:grid-cols-3">
-                <div>
-                  <p className="font-bold text-white/90">Host</p>
-                  <p className="text-white/70">
-                    {property?.userId?.firstName || contact.name || "—"} {property?.userId?.lastName || ""}
-                  </p>
-                </div>
-                <div>
-                  <p className="font-bold text-white/90">Phone</p>
-                  <div className="flex items-center gap-2">
-                    <FaWhatsapp className="text-emerald-400" />
-                    <span className="whitespace-nowrap text-white/70">{phoneDisplay}</span>
+              {/* Contact Section */}
+              <div className="mt-8 rounded-2xl bg-white/5 border border-white/10 p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-white">Contact Information</h3>
+                  <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30">
+                    <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+                    <span className="text-xs font-medium text-emerald-300">Privacy Protected</span>
                   </div>
                 </div>
-                <div>
-                  <p className="font-bold text-white/90">Email</p>
-                  <div className="flex items-center gap-2">
-                    <FaEnvelope className="text-sky-400" />
-                    <span className="whitespace-nowrap text-white/70">{emailDisplay}</span>
+                
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10">
+                    <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                      <span className="text-lg">👤</span>
+                    </div>
+                    <div>
+                      <p className="text-sm text-white/70">Host Name</p>
+                      <p className="text-white font-medium">
+                        {property?.userId?.firstName || contact.name || "—"} {property?.userId?.lastName || ""}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10">
+                    <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                      <FaWhatsapp className="text-emerald-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-white/70">Phone</p>
+                      <p className="text-white font-medium">{phoneDisplay}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10">
+                    <div className="w-10 h-10 rounded-full bg-sky-500/20 flex items-center justify-center">
+                      <FaEnvelope className="text-sky-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-white/70">Email</p>
+                      <p className="text-white font-medium">{emailDisplay}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Privacy Notice */}
+                <div className="mt-6 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-xs">🔒</span>
+                    </div>
+                    <div>
+                      <p className="text-sm text-blue-300 font-medium">Privacy Protected</p>
+                      <p className="text-xs text-blue-300/80 mt-1">
+                        Contact information is only shared with approved users to ensure your safety and prevent spam.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -575,58 +619,125 @@ export default function PropertyDetailPage() {
 
       {/* request contact modal */}
       {requestOpen && (
-        <div className="fixed inset-0 z-[60] grid place-items-center bg-black/60 px-4">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#121318] p-5 text-white shadow-2xl">
-            <div className="mb-3 text-lg font-semibold">Request host contact</div>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+          <div className="w-full max-w-md rounded-3xl bg-white/10 backdrop-blur-xl border border-white/20 p-8 text-white shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-500">
+            {/* Header */}
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center animate-in zoom-in-50 duration-700 delay-200 shadow-lg shadow-blue-500/25">
+                <FaEnvelope className="text-2xl text-white animate-in bounce-in duration-1000 delay-500" />
+              </div>
+              <h3 className="text-2xl font-bold mb-2 animate-in fade-in slide-in-from-top-2 duration-700 delay-300">Request Contact Info</h3>
+              <p className="text-white/70 text-sm animate-in fade-in slide-in-from-top-2 duration-700 delay-400">Get direct contact details for this property</p>
+            </div>
 
+            {/* Content based on state */}
             {reqState === "idle" && (
-              <p className="text-white/70">
-                To protect hosts from spam, we gate direct contact. You can always use in-app messaging.
-                Do you want to request the host’s phone/email for this listing?
-              </p>
-            )}
-
-            {reqState === "self" && <p className="text-white/80">You are the host of this listing.</p>}
-
-            {reqState === "pending" && (
-              <p className="text-white/80">Your previous request is still pending host approval.</p>
-            )}
-
-            {reqState === "approved" && (
-              <p className="text-white/80">This request was already approved. Details are visible now.</p>
-            )}
-
-            {reqState === "sent" && (
-              <p className="text-white/80">
-                ✅ Request sent. The host has been notified. You’ll see the contact details once they approve.
-              </p>
-            )}
-
-            {reqState === "error" && (
-              <div className="text-white/80">
-                <div className="mb-2">⚠️ {reqError || "We couldn’t send the request right now."}</div>
-                <div className="text-white/60">You can still message the host or try again.</div>
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-700 delay-500">
+                <div className="text-center">
+                  <p className="text-white/80 mb-4">
+                    To protect your privacy and safety, contact information is only shared with approved users.
+                  </p>
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 animate-in slide-in-from-bottom-1 duration-700 delay-600">
+                    <p className="text-blue-300 text-sm font-medium">
+                      The host will be notified and can approve your request
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
 
-            <div className="mt-5 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setRequestOpen(false)}
-                className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/85 hover:bg-white/[0.07]"
-              >
-                Close
-              </button>
+            {reqState === "self" && (
+              <div className="text-center">
+                <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
+                  <span className="text-2xl">👤</span>
+                </div>
+                <p className="text-green-300 font-medium">You own this property</p>
+                <p className="text-white/70 text-sm mt-2">No need to request contact information</p>
+              </div>
+            )}
+
+            {reqState === "pending" && (
+              <div className="text-center">
+                <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                  <span className="text-2xl">⏳</span>
+                </div>
+                <p className="text-yellow-300 font-medium">Request Pending</p>
+                <p className="text-white/70 text-sm mt-2">The host will be notified and you'll see contact details once approved</p>
+              </div>
+            )}
+
+            {reqState === "approved" && (
+              <div className="text-center">
+                <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
+                  <span className="text-2xl">✅</span>
+                </div>
+                <p className="text-green-300 font-medium">Request Approved!</p>
+                <p className="text-white/70 text-sm mt-2">Contact information is now visible above</p>
+              </div>
+            )}
+
+            {reqState === "sent" && (
+              <div className="text-center">
+                <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
+                  <span className="text-2xl">📤</span>
+                </div>
+                <p className="text-green-300 font-medium">Request Sent!</p>
+                <p className="text-white/70 text-sm mt-2">The host has been notified. You'll see contact details once they approve</p>
+              </div>
+            )}
+
+            {reqState === "error" && (
+              <div className="text-center">
+                <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
+                  <span className="text-2xl">⚠️</span>
+                </div>
+                <p className="text-red-300 font-medium">Request Failed</p>
+                <p className="text-white/70 text-sm mt-2">
+                  {reqError || "Please try again or use in-app messaging"}
+                </p>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="mt-8 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-700 delay-700">
               {(reqState === "idle" || reqState === "error") && (
                 <button
                   type="button"
                   disabled={requesting}
                   onClick={requestContact}
-                  className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
+                  className="group relative w-full py-4 bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 disabled:opacity-60 text-white font-bold rounded-2xl transition-all duration-300 transform hover:scale-[1.02] hover:shadow-2xl hover:shadow-blue-500/25 overflow-hidden"
                 >
-                  {requesting ? "Sending…" : "Send request"}
+                  {/* Animated background */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-400 via-blue-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  
+                  {/* Shimmer effect */}
+                  <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+                  
+                  <span className="relative z-10">
+                    {requesting ? (
+                      <div className="flex items-center justify-center gap-3">
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        <span className="animate-pulse">Sending Request...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2">
+                        <span>Send Request</span>
+                        <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                      </div>
+                    )}
+                  </span>
                 </button>
               )}
+              
+              <button
+                type="button"
+                onClick={() => setRequestOpen(false)}
+                className="w-full py-3 text-white/70 hover:text-white font-medium transition-all duration-300 hover:bg-white/5 rounded-xl hover:scale-[1.01]"
+              >
+                {reqState === "idle" || reqState === "error" ? "Cancel" : "Close"}
+              </button>
             </div>
           </div>
         </div>

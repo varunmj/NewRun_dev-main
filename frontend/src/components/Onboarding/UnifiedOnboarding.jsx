@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import AutocompleteInput from './AutocompleteInput';
+import { searchCities, searchUniversities } from '../../data/autocompleteData';
 import { 
   Home, 
   Users, 
@@ -13,7 +15,11 @@ import {
   DollarSign,
   CheckCircle,
   ArrowRight,
-  ArrowLeft
+  ArrowLeft,
+  Building,
+  Building2,
+  Clock,
+  HelpCircle
 } from 'lucide-react';
 
 // Onboarding steps configuration
@@ -73,10 +79,10 @@ const ONBOARDING_STEPS = [
     subtitle: 'Help us find the perfect match',
     type: 'selection',
     options: [
-      { label: 'On-campus', description: 'University housing' },
-      { label: 'Off-campus', description: 'Private apartments/houses' },
-      { label: 'Sublet', description: 'Temporary housing' },
-      { label: 'Undecided', description: 'I need help deciding' }
+      { label: 'On-campus', icon: Building, description: 'University housing' },
+      { label: 'Off-campus', icon: Building2, description: 'Private apartments/houses' },
+      { label: 'Sublet', icon: Clock, description: 'Temporary housing' },
+      { label: 'Undecided', icon: HelpCircle, description: 'I need help deciding' }
     ]
   },
   {
@@ -130,43 +136,183 @@ export default function UnifiedOnboarding() {
   const [profile, setProfile] = useState(() => {
     try {
       const saved = localStorage.getItem('nr_unified_onboarding');
-      return saved ? JSON.parse(saved) : initProfile();
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // If onboarding is completed, redirect to appropriate page
+        if (parsed.completed) {
+          const from = new URLSearchParams(window.location.search).get('from') || '/dashboard';
+          setTimeout(() => navigate(from, { replace: true }), 100);
+          return parsed;
+        }
+        return parsed;
+      }
+      return initProfile();
     } catch {
       return initProfile();
     }
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [citySuggestions, setCitySuggestions] = useState([]);
+  const [universitySuggestions, setUniversitySuggestions] = useState([]);
 
   // Save profile to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('nr_unified_onboarding', JSON.stringify(profile));
   }, [profile]);
 
-  // Add keyboard navigation
+  // Save current step to profile
   useEffect(() => {
-    const handleKeyPress = (e) => {
-      if (e.key === 'Enter' && (stepConfig.type === 'welcome' || isStepValid())) {
-        nextStep();
-      }
-    };
+    setProfile(prev => ({ ...prev, currentStep }));
+  }, [currentStep]);
 
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [stepConfig.type, isStepValid]);
+  // Resume from last completed step on component mount
+  useEffect(() => {
+    if (profile.currentStep && profile.currentStep < ONBOARDING_STEPS.length && !profile.completed) {
+      setCurrentStep(profile.currentStep);
+    }
+  }, [profile.currentStep, profile.completed]);
 
   // Get current step configuration
   const stepConfig = ONBOARDING_STEPS[currentStep];
   const isLastStep = currentStep === ONBOARDING_STEPS.length - 1;
   const isFirstStep = currentStep === 0;
 
+  // Get personalized next steps message
+  const getNextStepsMessage = (focus) => {
+    switch (focus) {
+      case 'Housing':
+        return 'We\'ll show you verified housing options near your campus. Browse properties, schedule viewings, and find your perfect place!';
+      case 'Roommate':
+        return 'Take our compatibility quiz to find your ideal roommate. We\'ll match you with students who share your lifestyle and preferences.';
+      case 'Essentials':
+        return 'Browse our marketplace for everything you need. From SIM cards to bedding, we\'ve got your essentials covered with student-friendly prices.';
+      case 'Community':
+        return 'Connect with your campus community! Join clubs, attend events, and meet students who share your interests.';
+      case 'Everything':
+        return 'We\'ll guide you through everything step by step. From housing to roommates to essentials, we\'ve got your entire journey covered.';
+      default:
+        return 'We\'ll personalize your experience based on your needs. Explore our features and let us know how we can help!';
+    }
+  };
+
+  // Check if current step is valid
+  const isStepValid = useCallback(() => {
+    switch (stepConfig.type) {
+      case 'welcome':
+        return true;
+      case 'selection':
+        return profile[stepConfig.field] !== null;
+      case 'date':
+        return profile[stepConfig.field] !== '';
+      case 'text':
+        return profile[stepConfig.field] !== '';
+      case 'budget':
+        return profile.budget_range.min !== '' && profile.budget_range.max !== '';
+      case 'boolean':
+        return profile[stepConfig.field] !== null;
+      case 'multi-select':
+        return profile[stepConfig.field].length > 0;
+      case 'completion':
+        return true;
+      default:
+        return false;
+    }
+  }, [stepConfig.type, stepConfig.field, profile]);
+
+  // Handle completion
+  const handleCompletion = useCallback(async () => {
+    if (isLoading) return; // Prevent multiple calls
+    
+    setIsLoading(true);
+    
+    try {
+      // Mark as completed
+      const completedProfile = {
+        ...profile,
+        completed: true,
+        completed_at: new Date().toISOString()
+      };
+      
+      setProfile(completedProfile);
+      localStorage.setItem('nr_unified_onboarding', JSON.stringify(completedProfile));
+      
+      // Clear old onboarding data
+      localStorage.removeItem('nr_onboarding');
+      localStorage.removeItem('nr_onboarding_focus');
+      localStorage.removeItem('profileCompleted');
+      
+      // Show loading for 2 seconds then navigate
+      const redirectTimeout = setTimeout(() => {
+        try {
+          switch (profile.focus) {
+            case 'Housing':
+              navigate('/all-properties', { state: { from: 'onboarding' } });
+              break;
+            case 'Roommate':
+              navigate('/Synapsematches', { state: { from: 'onboarding' } });
+              break;
+            case 'Essentials':
+              navigate('/marketplace', { state: { from: 'onboarding', category: 'essentials' } });
+              break;
+            case 'Community':
+              navigate('/community', { state: { from: 'onboarding' } });
+              break;
+            default:
+              navigate('/dashboard', { state: { from: 'onboarding' } });
+          }
+        } catch (error) {
+          console.error('Navigation error:', error);
+          // Fallback to dashboard
+          navigate('/dashboard', { state: { from: 'onboarding' } });
+        }
+      }, 2000);
+
+      // Fallback: if still loading after 10 seconds, force redirect
+      const fallbackTimeout = setTimeout(() => {
+        if (isLoading) {
+          console.warn('Onboarding completion timeout, forcing redirect');
+          navigate('/dashboard', { state: { from: 'onboarding' } });
+        }
+      }, 10000);
+
+      // Cleanup timeouts
+      return () => {
+        clearTimeout(redirectTimeout);
+        clearTimeout(fallbackTimeout);
+      };
+    } catch (error) {
+      console.error('Error during completion:', error);
+      setIsLoading(false);
+    }
+  }, [profile, navigate, isLoading]);
+
   // Navigation functions
-  const nextStep = () => {
+  const nextStep = useCallback(() => {
+    // Save progress before moving to next step
+    localStorage.setItem('nr_unified_onboarding', JSON.stringify(profile));
+    
     if (isLastStep) {
       handleCompletion();
     } else {
       setCurrentStep(prev => prev + 1);
     }
-  };
+  }, [isLastStep, handleCompletion, profile]);
+
+  // Add keyboard navigation
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      if (e.key === 'Enter') {
+        if (stepConfig.type === 'completion' && !isLoading) {
+          handleCompletion();
+        } else if (stepConfig.type === 'welcome' || isStepValid()) {
+          nextStep();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [stepConfig.type, isStepValid, nextStep, handleCompletion, isLoading]);
 
   const prevStep = () => {
     if (!isFirstStep) {
@@ -174,44 +320,6 @@ export default function UnifiedOnboarding() {
     }
   };
 
-  const handleCompletion = async () => {
-    setIsLoading(true);
-    
-    // Mark as completed
-    const completedProfile = {
-      ...profile,
-      completed: true,
-      completed_at: new Date().toISOString()
-    };
-    
-    setProfile(completedProfile);
-    localStorage.setItem('nr_unified_onboarding', JSON.stringify(completedProfile));
-    
-    // Clear old onboarding data
-    localStorage.removeItem('nr_onboarding');
-    localStorage.removeItem('nr_onboarding_focus');
-    localStorage.removeItem('profileCompleted');
-    
-    // Navigate based on focus
-    setTimeout(() => {
-      switch (profile.focus) {
-        case 'Housing':
-          navigate('/all-properties', { state: { from: 'onboarding' } });
-          break;
-        case 'Roommate':
-          navigate('/Synapse', { state: { from: 'onboarding' } });
-          break;
-        case 'Essentials':
-          navigate('/marketplace', { state: { from: 'onboarding', category: 'essentials' } });
-          break;
-        case 'Community':
-          navigate('/community', { state: { from: 'onboarding' } });
-          break;
-        default:
-          navigate('/dashboard', { state: { from: 'onboarding' } });
-      }
-    }, 1000);
-  };
 
   // Handle different input types
   const handleInputChange = (field, value) => {
@@ -240,28 +348,15 @@ export default function UnifiedOnboarding() {
     }));
   };
 
-  // Check if current step is valid
-  const isStepValid = () => {
-    switch (stepConfig.type) {
-      case 'welcome':
-        return true;
-      case 'selection':
-        return profile[stepConfig.field] !== null;
-      case 'date':
-        return profile[stepConfig.field] !== '';
-      case 'text':
-        return profile[stepConfig.field] !== '';
-      case 'budget':
-        return profile.budget_range.min !== '' && profile.budget_range.max !== '';
-      case 'boolean':
-        return profile[stepConfig.field] !== null;
-      case 'multi-select':
-        return profile[stepConfig.field].length > 0;
-      case 'completion':
-        return true;
-      default:
-        return false;
-    }
+  // Autocomplete search functions
+  const handleCitySearch = async (query) => {
+    const suggestions = await searchCities(query);
+    setCitySuggestions(suggestions);
+  };
+
+  const handleUniversitySearch = async (query) => {
+    const suggestions = await searchUniversities(query);
+    setUniversitySuggestions(suggestions);
   };
 
   // Render different step types
@@ -311,15 +406,15 @@ export default function UnifiedOnboarding() {
                 }}
                 className={`p-6 rounded-2xl border-2 transition-all duration-200 text-left ${
                   profile[stepConfig.field] === option.label
-                    ? 'border-blue-500 bg-blue-500/10'
-                    : 'border-white/20 hover:border-white/40 hover:bg-white/5'
+                    ? 'border-blue-500 bg-blue-500/10 text-white'
+                    : 'border-white/20 hover:border-white/40 hover:bg-white/5 text-white/90'
                 }`}
               >
                 <div className="flex items-center gap-4">
-                  <option.icon size={24} className="text-blue-400" />
+                  {option.icon && <option.icon size={24} className="text-blue-400" />}
                   <div>
-                    <h3 className="font-semibold text-lg">{option.label}</h3>
-                    <p className="text-white/60 text-sm">{option.description}</p>
+                    <h3 className="font-semibold text-lg text-white">{option.label}</h3>
+                    <p className="text-white/70 text-sm">{option.description}</p>
                   </div>
                 </div>
               </motion.button>
@@ -334,7 +429,7 @@ export default function UnifiedOnboarding() {
               type="date"
               value={profile[stepConfig.field]}
               onChange={(e) => handleInputChange(stepConfig.field, e.target.value)}
-              className="w-full p-4 rounded-xl bg-white/5 border border-white/20 text-white text-center text-lg focus:outline-none focus:border-blue-500"
+              className="w-full p-4 rounded-xl bg-white/10 border border-white/30 text-white text-center text-lg focus:outline-none focus:border-blue-500"
             />
           </div>
         );
@@ -342,13 +437,33 @@ export default function UnifiedOnboarding() {
       case 'text':
         return (
           <div className="max-w-md mx-auto">
-            <input
-              type="text"
-              value={profile[stepConfig.field]}
-              onChange={(e) => handleInputChange(stepConfig.field, e.target.value)}
-              placeholder={stepConfig.placeholder}
-              className="w-full p-4 rounded-xl bg-white/5 border border-white/20 text-white text-center text-lg focus:outline-none focus:border-blue-500"
-            />
+            {stepConfig.field === 'city' ? (
+              <AutocompleteInput
+                value={profile[stepConfig.field]}
+                onChange={(value) => handleInputChange(stepConfig.field, value)}
+                onSearch={handleCitySearch}
+                suggestions={citySuggestions}
+                placeholder={stepConfig.placeholder}
+                className="w-full p-4 rounded-xl bg-white/10 border border-white/30 text-white text-center text-lg focus:outline-none focus:border-blue-500 placeholder-white/50"
+              />
+            ) : stepConfig.field === 'university' ? (
+              <AutocompleteInput
+                value={profile[stepConfig.field]}
+                onChange={(value) => handleInputChange(stepConfig.field, value)}
+                onSearch={handleUniversitySearch}
+                suggestions={universitySuggestions}
+                placeholder={stepConfig.placeholder}
+                className="w-full p-4 rounded-xl bg-white/10 border border-white/30 text-white text-center text-lg focus:outline-none focus:border-blue-500 placeholder-white/50"
+              />
+            ) : (
+              <input
+                type="text"
+                value={profile[stepConfig.field]}
+                onChange={(e) => handleInputChange(stepConfig.field, e.target.value)}
+                placeholder={stepConfig.placeholder}
+                className="w-full p-4 rounded-xl bg-white/10 border border-white/30 text-white text-center text-lg focus:outline-none focus:border-blue-500 placeholder-white/50"
+              />
+            )}
           </div>
         );
 
@@ -357,23 +472,23 @@ export default function UnifiedOnboarding() {
           <div className="max-w-md mx-auto space-y-4">
             <div className="flex gap-4">
               <div className="flex-1">
-                <label className="block text-white/70 text-sm mb-2">Min Budget</label>
+                <label className="block text-white text-sm mb-2 font-medium">Min Budget</label>
                 <input
                   type="number"
                   value={profile.budget_range.min}
                   onChange={(e) => handleBudgetChange('min', e.target.value)}
                   placeholder="0"
-                  className="w-full p-3 rounded-lg bg-white/5 border border-white/20 text-white text-center focus:outline-none focus:border-blue-500"
+                  className="w-full p-3 rounded-lg bg-white/10 border border-white/30 text-white text-center focus:outline-none focus:border-blue-500 placeholder-white/50"
                 />
               </div>
               <div className="flex-1">
-                <label className="block text-white/70 text-sm mb-2">Max Budget</label>
+                <label className="block text-white text-sm mb-2 font-medium">Max Budget</label>
                 <input
                   type="number"
                   value={profile.budget_range.max}
                   onChange={(e) => handleBudgetChange('max', e.target.value)}
                   placeholder="1000"
-                  className="w-full p-3 rounded-lg bg-white/5 border border-white/20 text-white text-center focus:outline-none focus:border-blue-500"
+                  className="w-full p-3 rounded-lg bg-white/10 border border-white/30 text-white text-center focus:outline-none focus:border-blue-500 placeholder-white/50"
                 />
               </div>
             </div>
@@ -428,8 +543,8 @@ export default function UnifiedOnboarding() {
                 onClick={() => handleMultiSelect(stepConfig.field, option.value)}
                 className={`p-4 rounded-xl border-2 transition-all duration-200 text-left ${
                   profile[stepConfig.field].includes(option.value)
-                    ? 'border-blue-500 bg-blue-500/10'
-                    : 'border-white/20 hover:border-white/40 hover:bg-white/5'
+                    ? 'border-blue-500 bg-blue-500/10 text-white'
+                    : 'border-white/20 hover:border-white/40 hover:bg-white/5 text-white/90'
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -442,7 +557,7 @@ export default function UnifiedOnboarding() {
                       <CheckCircle size={16} className="text-white" />
                     )}
                   </div>
-                  <span className="font-medium">{option.label}</span>
+                  <span className="font-medium text-white">{option.label}</span>
                 </div>
               </motion.button>
             ))}
@@ -460,16 +575,54 @@ export default function UnifiedOnboarding() {
             >
               🎉
             </motion.div>
-            <h2 className="text-2xl font-bold mb-4">Welcome to NewRun!</h2>
-            <p className="text-white/70 text-lg mb-8">
+            <h2 className="text-3xl font-bold mb-4 text-white">Welcome to NewRun!</h2>
+            <p className="text-white/80 text-lg mb-8">
               Your profile is complete. Let's get started with your personalized experience!
             </p>
-            {isLoading && (
-              <div className="flex items-center justify-center gap-2 text-blue-400">
-                <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
-                <span>Setting up your experience...</span>
-              </div>
-            )}
+            
+            {/* What's Next Section */}
+            <div className="bg-white/5 rounded-xl p-6 mb-8 border border-white/10">
+              <h3 className="text-xl font-semibold mb-3 text-white">What's Next?</h3>
+              <p className="text-white/70 text-sm mb-4">
+                {getNextStepsMessage(profile.focus)}
+              </p>
+              {isLoading ? (
+                <div className="flex items-center justify-center gap-2 text-blue-400 text-sm">
+                  <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                  <span>Setting up your experience...</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-2 text-blue-400 text-sm mb-4">
+                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                  <span>Redirecting you in a moment...</span>
+                </div>
+              )}
+            </div>
+            
+            {/* Manual Continue Button */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleCompletion}
+              disabled={isLoading}
+              className={`flex items-center gap-2 px-8 py-4 rounded-xl font-semibold transition-all mx-auto ${
+                isLoading
+                  ? 'opacity-50 cursor-not-allowed bg-gray-600'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Setting up...
+                </>
+              ) : (
+                <>
+                  Continue to NewRun
+                  <ArrowRight size={20} />
+                </>
+              )}
+            </motion.button>
           </div>
         );
 
@@ -508,10 +661,10 @@ export default function UnifiedOnboarding() {
         >
           {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl md:text-4xl font-bold mb-4">
+            <h1 className="text-3xl md:text-4xl font-bold mb-4 text-white">
               {stepConfig.title}
             </h1>
-            <p className="text-white/70 text-lg">
+            <p className="text-white/80 text-lg">
               {stepConfig.subtitle}
             </p>
           </div>

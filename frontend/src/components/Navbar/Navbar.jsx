@@ -343,7 +343,7 @@ export default function Navbar() {
     { title: "Housing", desc: "Verified listings near campus.", to: "/all-properties", icon: MdHomeWork },
     { title: "Roommate matcher", desc: "2-minute quiz for a great fit.", to: "/Synapse", icon: MdPeople },
     { title: "Essentials pack", desc: "Day-1 kit: buy or rent.", to: "/marketplace", icon: MdShoppingBag },
-    { title: "Arrival checklist", desc: "7-day plan + airport transit.", to: "/chatbot", icon: MdChecklistRtl },
+    { title: "Arrival checklist", desc: "7-day plan + airport transit.", to: "/dashboard", icon: MdChecklistRtl },
     { title: "Community", desc: "Clubs, events, and groups.", to: "/community", icon: MdDiversity3 },
     { title: "Build my plan", desc: "Let AI craft everything for me.", to: "/onboarding", icon: MdAutoAwesome },
   ];
@@ -362,10 +362,10 @@ export default function Navbar() {
         <nav className="hidden items-center gap-8 md:flex">
           <MegaMenu label="Products" items={productItems} />
           <Link
-            to="/chatbot"
-            className={`text-sm ${loc.pathname.startsWith("/chatbot") ? "text-white" : "text-white/80 hover:text-white"}`}
+            to="/community"
+            className={`text-sm ${loc.pathname.startsWith("/community") ? "text-white" : "text-white/80 hover:text-white"}`}
           >
-            Chat with Us
+            Get Help
           </Link>
           <Link
             to="/blogs"

@@ -661,41 +661,139 @@ app.put("/update-property-pinned/:propertyId",authenticateToken,async(req,res)=>
     }
 });
 
-//Search API:
-app.get("/search-properties/",authenticateToken,async(req,res)=>{
-    const {user} = req.user;
-    const {query} = req.query;
+// Advanced Property Search API with Filters:
+app.get("/search-properties", async (req, res) => {
+  try {
+    const {
+      query = '',
+      minPrice,
+      maxPrice,
+      minBedrooms,
+      maxBedrooms,
+      minBathrooms,
+      maxBathrooms,
+      maxDistance,
+      city,
+      state,
+      availabilityStatus = 'available',
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+      page = 1,
+      limit = 12
+    } = req.query;
 
-    if(!query){
-        return res
-        .status(400)
-        .json({error: true, message: "Search query is required"});
+    // Build filter object
+    const filter = {
+      availabilityStatus: availabilityStatus
+    };
+
+    // Text search across multiple fields
+    if (query) {
+      filter.$or = [
+        { title: { $regex: query, $options: 'i' } },
+        { content: { $regex: query, $options: 'i' } },
+        { description: { $regex: query, $options: 'i' } },
+        { tags: { $regex: query, $options: 'i' } },
+        { 'address.street': { $regex: query, $options: 'i' } },
+        { 'address.city': { $regex: query, $options: 'i' } }
+      ];
     }
 
-    try{
-        const matchingProperties = await Property.find({
-            userId: user._id,
-            $or: [
-                {title: { $regex : new RegExp(query,"i")}},
-                {content : {$regex: new RegExp(query,"i")}},
-                {tags : {$regex: new RegExp(query,"i")}},
-            ],
-        });
-
-        return res.json({
-            error: false,
-            properties:matchingProperties,
-            message: " Properties matching the search query retreived successfully",
-        });
-    }catch(error){
-        return res.status(500).json(
-            {
-                error: true,
-                message: "Internal Server Error"
-            }
-        )
+    // Price range filter
+    if (minPrice || maxPrice) {
+      filter.price = {};
+      if (minPrice) filter.price.$gte = Number(minPrice);
+      if (maxPrice) filter.price.$lte = Number(maxPrice);
     }
-})
+
+    // Bedrooms filter
+    if (minBedrooms || maxBedrooms) {
+      filter.bedrooms = {};
+      if (minBedrooms) filter.bedrooms.$gte = Number(minBedrooms);
+      if (maxBedrooms) filter.bedrooms.$lte = Number(maxBedrooms);
+    }
+
+    // Bathrooms filter
+    if (minBathrooms || maxBathrooms) {
+      filter.bathrooms = {};
+      if (minBathrooms) filter.bathrooms.$gte = Number(minBathrooms);
+      if (maxBathrooms) filter.bathrooms.$lte = Number(maxBathrooms);
+    }
+
+    // Distance filter
+    if (maxDistance) {
+      filter.distanceFromUniversity = { $lte: Number(maxDistance) };
+    }
+
+    // Location filters
+    if (city) {
+      filter['address.city'] = { $regex: city, $options: 'i' };
+    }
+    if (state) {
+      filter['address.state'] = { $regex: state, $options: 'i' };
+    }
+
+    // Build sort object
+    const sort = {};
+    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    // Calculate pagination
+    const skip = (Number(page) - 1) * Number(limit);
+
+    // Execute query with pagination
+    const properties = await Property.find(filter)
+      .populate('userId', 'firstName lastName')
+      .sort(sort)
+      .skip(skip)
+      .limit(Number(limit))
+      .lean();
+
+    // Get total count for pagination
+    const totalCount = await Property.countDocuments(filter);
+    const totalPages = Math.ceil(totalCount / Number(limit));
+
+    // Add likes count and liked status for each property
+    const userId = req.user ? req.user._id : null;
+    const propertiesWithLikes = properties.map((property) => ({
+      ...property,
+      likesCount: property.likes ? property.likes.length : 0,
+      likedByUser: userId ? property.likes?.includes(userId) : false
+    }));
+
+    return res.json({
+      error: false,
+      properties: propertiesWithLikes,
+      pagination: {
+        currentPage: Number(page),
+        totalPages,
+        totalCount,
+        hasNextPage: Number(page) < totalPages,
+        hasPrevPage: Number(page) > 1
+      },
+      filters: {
+        query,
+        minPrice: minPrice ? Number(minPrice) : null,
+        maxPrice: maxPrice ? Number(maxPrice) : null,
+        minBedrooms: minBedrooms ? Number(minBedrooms) : null,
+        maxBedrooms: maxBedrooms ? Number(maxBedrooms) : null,
+        minBathrooms: minBathrooms ? Number(minBathrooms) : null,
+        maxBathrooms: maxBathrooms ? Number(maxBathrooms) : null,
+        maxDistance: maxDistance ? Number(maxDistance) : null,
+        city,
+        state,
+        availabilityStatus
+      },
+      message: "Properties retrieved successfully"
+    });
+
+  } catch (error) {
+    console.error("Search properties error:", error);
+    return res.status(500).json({
+      error: true,
+      message: "Internal Server Error"
+    });
+  }
+});
 
 // Toggle Like API
 app.put('/property/:propertyId/like', authenticateToken, async (req, res) => {
