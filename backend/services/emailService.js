@@ -20,7 +20,7 @@ class EmailService {
       console.log('📨 From Email:', process.env.FROM_EMAIL);
 
       this.transporter = nodemailer.createTransport({
-        host: process.env.SES_SMTP_HOST || 'email-smtp.us-east-1.amazonaws.com',
+        host: process.env.SES_SMTP_HOST || 'email-smtp.us-east-2.amazonaws.com',
         port: process.env.SES_SMTP_PORT || 587,
         secure: false, // true for 465, false for other ports
         auth: {
