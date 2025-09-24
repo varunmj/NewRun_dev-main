@@ -27,6 +27,7 @@ import Waitlist from "./pages/Waitlist";
 import UnifiedOnboarding from "./components/Onboarding/UnifiedOnboarding";
 import ContactRequestsPage from "./pages/ContactRequests";
 import RoommateMatches from "./pages/RoommateMatches";
+import SolveThreads from "./pages/SolveThreads";
 import NotFound from "./pages/NotFound";
 import RouteGuard from "./components/Auth/RouteGuard";
 // guards
@@ -140,6 +141,14 @@ const App = () => {
             element={
               <ProtectedRoute>
                 <Roommate />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/solve-threads"
+            element={
+              <ProtectedRoute>
+                <SolveThreads />
               </ProtectedRoute>
             }
           />

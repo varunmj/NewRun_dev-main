@@ -6,6 +6,7 @@ import {
   MdPlace,
   MdVerified,
 } from "react-icons/md";
+import { useAuth } from "../../context/AuthContext";
 
 /** ------- helpers ------- */
 const FALLBACK_IMG =
@@ -46,6 +47,7 @@ const formatAddress = (addr) => {
 export default function PropertyCard({ property }) {
   if (!property) return null;
 
+  const { user } = useAuth();
   const {
     _id,
     title,
@@ -56,7 +58,11 @@ export default function PropertyCard({ property }) {
     address,
     images,
     isVerified, // optional
+    userId, // property owner ID
   } = property;
+
+  // Check if current user is the owner
+  const isOwner = user && userId && user._id === userId;
 
   const cover = useMemo(() => pickCover(images), [images]);
   const [loaded, setLoaded] = useState(false);
@@ -88,7 +94,7 @@ export default function PropertyCard({ property }) {
 
       {/* body */}
       <div className="p-4">
-        {/* title + price/badge */}
+        {/* title + price */}
         <div className="mb-1 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -106,6 +112,15 @@ export default function PropertyCard({ property }) {
             {formatPrice(price)}
           </div>
         </div>
+
+        {/* ownership badge - second line */}
+        {isOwner && (
+          <div className="mb-2">
+            <span className="inline-flex items-center gap-1 rounded-full border border-blue-400/40 bg-black/80 px-2 py-[2px] text-[10px] text-white font-medium">
+              Created by you
+            </span>
+          </div>
+        )}
 
         {/* meta: beds • baths • distance */}
         <div className="mb-2 flex items-center gap-3 text-[13px] text-white/70">

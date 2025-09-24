@@ -340,6 +340,7 @@ export default function Navbar() {
   const { logout } = useAuth();
 
   const productItems = [
+    { title: "Solve Threads", desc: "AI-powered campus life solutions.", to: "/solve-threads", icon: MdAutoAwesome, featured: true },
     { title: "Housing", desc: "Verified listings near campus.", to: "/all-properties", icon: MdHomeWork },
     { title: "Roommate matcher", desc: "2-minute quiz for a great fit.", to: "/Synapse", icon: MdPeople },
     { title: "Essentials pack", desc: "Day-1 kit: buy or rent.", to: "/marketplace", icon: MdShoppingBag },
@@ -361,6 +362,12 @@ export default function Navbar() {
         {/* center links */}
         <nav className="hidden items-center gap-8 md:flex">
           <MegaMenu label="Products" items={productItems} />
+          <Link
+            to="/solve-threads"
+            className={`text-sm font-semibold ${loc.pathname.startsWith("/solve-threads") ? "text-orange-400" : "text-orange-400/80 hover:text-orange-400"}`}
+          >
+            Solve Threads
+          </Link>
           <Link
             to="/community"
             className={`text-sm ${loc.pathname.startsWith("/community") ? "text-white" : "text-white/80 hover:text-white"}`}

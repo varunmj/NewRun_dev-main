@@ -4,6 +4,7 @@ import {
   MdFavorite,
   MdArrowForwardIos,
 } from "react-icons/md";
+import { useAuth } from "../../context/AuthContext";
 
 /* ---------- helpers ---------- */
 function coverOf(item) {
@@ -34,11 +35,15 @@ export default function MarketplaceItemCard({
   onToggleFav,
   onClick,
 }) {
+  const { user } = useAuth();
   const cover = coverOf(item);
   const price =
     typeof item?.price === "number"
       ? `$${item.price.toLocaleString("en-US")}`
       : item?.price || "";
+
+  // Check if current user is the owner
+  const isOwner = user && item?.userId && user._id === item.userId;
 
   return (
     <button
@@ -104,6 +109,14 @@ export default function MarketplaceItemCard({
             <p className="mt-1 line-clamp-2 text-[13.5px] leading-relaxed text-white/70">
               {item.description}
             </p>
+          )}
+          {/* ownership badge */}
+          {isOwner && (
+            <div className="mt-2">
+              <span className="inline-flex items-center gap-1 rounded-full border border-blue-400/40 bg-black/80 px-2 py-[2px] text-[10px] text-white font-medium">
+                Created by you
+              </span>
+            </div>
           )}
         </div>
 
