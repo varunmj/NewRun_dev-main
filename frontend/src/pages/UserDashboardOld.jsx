@@ -1,21 +1,14 @@
 // src/pages/UserDashboard.jsx
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import Modal from "react-modal";
 import {
-  MdClose, MdArrowForwardIos, MdMicNone, MdTune,
-  MdKingBed, MdBathtub, MdSquareFoot, MdPets,
-  MdLocalParking, MdLocalLaundryService, MdCalendarToday, MdLocationOn,
-  MdFavoriteBorder, MdFavorite, MdVisibilityOff, MdInfoOutline
+  MdHome, MdShoppingBag, MdGroups, MdChat, MdSearch, MdFavorite,
+  MdTrendingUp, MdVisibility, MdMessage, MdAdd, MdArrowForward,
+  MdPerson, MdSettings, MdNotifications, MdHistory, MdStar
 } from "react-icons/md";
 
-
 import Navbar from "../components/Navbar/Navbar";
-import AddEditProperty from "../pages/AddEditProperty";
-import AddEditItem from "../pages/AddEditItem";
-import Toast from "../components/ToastMessage/Toast";
 import axiosInstance from "../utils/axiosInstance";
-
 import "../styles/newrun-hero.css";
 
 /* -------------------------- feature flags -------------------------- */
@@ -434,6 +427,20 @@ function SolveHero({
             </div>
           </div>
 
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            <button
+              onClick={onNewProperty}
+              className="rounded-lg border border-white/15 bg-white/[0.06] px-3.5 py-1.5 text-sm text-white hover:bg-white/[0.12]"
+            >
+              New property
+            </button>
+            <button
+              onClick={onNewItem}
+              className="rounded-lg border border-white/15 bg-white/[0.06] px-3.5 py-1.5 text-sm text-white hover:bg-white/[0.12]"
+            >
+              New item
+            </button>
+          </div>
         </div>
 
         <p className="mt-5 text-center text-xs text-white/70">
@@ -1770,7 +1777,7 @@ const buildDefaultMessages = (data) => {
 
 
 /* ============================ PAGE ============================ */
-export default function SolveThreads() {
+export default function UserDashboard() {
   const nav = useNavigate();
 
   const [openAddEditModal, setOpenAddEditModal] = useState({
@@ -1832,6 +1839,22 @@ export default function SolveThreads() {
             type: "add",
             data: { __solveText: solveText },
             modalType: "solve-housing",
+          })
+        }
+        onNewProperty={() =>
+          setOpenAddEditModal({
+            isShown: true,
+            type: "add",
+            data: null,
+            modalType: "property",
+          })
+        }
+        onNewItem={() =>
+          setOpenAddEditModal({
+            isShown: true,
+            type: "add",
+            data: null,
+            modalType: "item",
           })
         }
       />

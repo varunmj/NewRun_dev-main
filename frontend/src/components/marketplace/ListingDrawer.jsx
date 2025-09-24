@@ -3,7 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import NewRunDrawer from '../ui/NewRunDrawer';
 import axiosInstance from '../../utils/axiosInstance';
 
-const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
+const ListingDrawer = ({ isOpen, onClose, itemData, onItemCreated, onItemUpdated }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     title: '',
@@ -20,6 +20,25 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
   const [userInfo, setUserInfo] = useState(null);
   const [isLoadingUserInfo, setIsLoadingUserInfo] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
+
+  const isEdit = !!itemData;
+
+  // Load item data for editing
+  useEffect(() => {
+    if (isEdit && itemData) {
+      setFormData({
+        title: itemData.title || '',
+        description: itemData.description || '',
+        price: itemData.price || '',
+        category: itemData.category || '',
+        condition: itemData.condition || 'used',
+        address: itemData.location || { city: '' },
+        contactInfo: itemData.contactInfo || { name: '', phone: '', email: '' },
+        exchangeMethod: itemData.contactInfo?.exchangeMethod || 'public',
+        files: []
+      });
+    }
+  }, [isEdit, itemData]);
 
   // Fetch user info on component mount
   useEffect(() => {
@@ -209,8 +228,17 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
       };
 
       console.log('Submitting payload:', payload); // Debug log
-      const response = await axiosInstance.post('/marketplace/item', payload);
-      console.log('API response:', response.data); // Debug log
+      
+      let response;
+      if (isEdit) {
+        response = await axiosInstance.put(`/marketplace/item/${itemData._id}`, payload);
+        console.log('API response (edit):', response.data); // Debug log
+        onItemUpdated?.(response.data);
+      } else {
+        response = await axiosInstance.post('/marketplace/item', payload);
+        console.log('API response (create):', response.data); // Debug log
+        onItemCreated?.(response.data);
+      }
       
       // Reset form but keep auto-filled contact info
       const resetFormData = {
@@ -231,7 +259,6 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
       setFormData(resetFormData);
       setCurrentStep(1);
       
-      onItemCreated?.();
       onClose();
     } catch (error) {
       console.error('Error creating item:', error);
@@ -331,7 +358,7 @@ const ListingDrawer = ({ isOpen, onClose, onItemCreated }) => {
     <NewRunDrawer 
       isOpen={isOpen} 
       onClose={onClose} 
-      title="List New Item"
+      title={isEdit ? "Edit Item" : "List New Item"}
       width="w-full sm:w-96"
       maxWidth="max-w-md"
     >

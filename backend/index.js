@@ -13,6 +13,27 @@ const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const { Upload } = require("@aws-sdk/lib-storage");
 const axios = require('axios');
 const { authenticateToken, getAuthUserId } = require('./utilities');
+
+// Helper function to track user activities
+async function trackActivity(userId, activityType, targetType, targetId, metadata = {}, location = {}) {
+  try {
+    if (!userId) return;
+    
+    const activity = new UserActivity({
+      userId,
+      activityType,
+      targetType,
+      targetId,
+      metadata,
+      location
+    });
+    
+    await activity.save();
+  } catch (error) {
+    console.error('Error tracking activity:', error);
+    // Don't throw error to avoid breaking main functionality
+  }
+}
 const Thread = require('./models/thread.model');
 
 
@@ -26,6 +47,9 @@ const MarketplaceItem = require('./models/marketplaceItem.model');
 const Message = require('./models/message.model');
 const Conversation = require('./models/conversation.model');
 const ContactAccessRequest = require('./models/contactAccessRequest.model');
+const UserActivity = require('./models/UserActivity.model');
+const UserInteraction = require('./models/UserInteraction.model');
+const RoommateRequest = require('./models/RoommateRequest.model');
 const { extractHousingCriteria } = require('./services/newrun-llm/newrunLLM');
 
 
@@ -41,6 +65,36 @@ const io = require('socket.io')(server, {
 
 app.use(express.json());
 app.use(cors({ origin: '*' }));
+
+// Activity tracking middleware
+app.use((req, res, next) => {
+  // Track certain activities automatically
+  const trackableRoutes = {
+    'GET /properties/:id': { activityType: 'view', targetType: 'property' },
+    'GET /marketplace/item/:id': { activityType: 'view', targetType: 'marketplace_item' },
+    'GET /search-properties': { activityType: 'search', targetType: 'property' },
+    'GET /marketplace/items': { activityType: 'search', targetType: 'marketplace_item' }
+  };
+
+  const routeKey = `${req.method} ${req.route?.path || req.path}`;
+  const trackingInfo = trackableRoutes[routeKey];
+
+  if (trackingInfo && req.user) {
+    // Store tracking info in request for later use
+    req.trackingInfo = {
+      ...trackingInfo,
+      targetId: req.params.id,
+      metadata: {
+        searchQuery: req.query.q || req.query.query,
+        searchFilters: req.query,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      }
+    };
+  }
+
+  next();
+});
 
 // AWS configuration
 AWS.config.update({
@@ -631,6 +685,7 @@ app.delete("/delete-property/:propertyId",authenticateToken,async(req,res)=>{
 //API for // Find the property by ID
 app.get("/properties/:id", async (req, res) => {
   const propertyId = req.params.id;
+  const userId = req.user ? req.user._id : null;
 
   try {
       // Find the property by ID
@@ -638,6 +693,25 @@ app.get("/properties/:id", async (req, res) => {
 
       if (!property) {
           return res.status(404).json({ error: true, message: "Property not found" });
+      }
+
+      // Track view activity if user is authenticated
+      if (userId) {
+          await trackActivity(
+              userId,
+              'view',
+              'property',
+              propertyId,
+              {
+                  viewSource: 'direct',
+                  ipAddress: req.ip,
+                  userAgent: req.get('User-Agent')
+              },
+              {
+                  campus: req.user?.campusLabel || '',
+                  university: req.user?.university || ''
+              }
+          );
       }
 
       return res.json({
@@ -848,8 +922,38 @@ app.put('/property/:propertyId/like', authenticateToken, async (req, res) => {
 
     if (hasLike) {
       property.likes = property.likes.filter((u) => String(u) !== String(userId));
+      // Track unlike activity
+      await trackActivity(
+        userId,
+        'unlike',
+        'property',
+        propertyId,
+        {
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent')
+        },
+        {
+          campus: req.user?.campusLabel || '',
+          university: req.user?.university || ''
+        }
+      );
     } else {
       property.likes.push(userId);
+      // Track like activity
+      await trackActivity(
+        userId,
+        'like',
+        'property',
+        propertyId,
+        {
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent')
+        },
+        {
+          campus: req.user?.campusLabel || '',
+          university: req.user?.university || ''
+        }
+      );
     }
 
     await property.save();
@@ -1021,6 +1125,10 @@ app.set('io', io);
 // require the router
 // const marketplaceRouter = require('./routes/marketplace');
 // app.use('/marketplace', marketplaceRouter);
+
+// Activity tracking routes
+const activityRouter = require('./routes/activity');
+app.use('/activity', activityRouter);
 
 // Create a new marketplace item
 app.post("/marketplace/item", authenticateToken, async (req, res) => {
@@ -1201,6 +1309,7 @@ app.get('/marketplace/items', async (req, res) => {
   // Get details of a single marketplace item
   app.get("/marketplace/item/:id", authenticateToken, async (req, res) => {
     const itemId = req.params.id;
+    const userId = req.user.user?._id || req.user._id;
 
     try {
         const item = await MarketplaceItem.findById(itemId)
@@ -1209,6 +1318,23 @@ app.get('/marketplace/items', async (req, res) => {
         if (!item) {
             return res.status(404).json({ error: true, message: "Item not found" });
         }
+
+        // Track view activity
+        await trackActivity(
+          userId,
+          'view',
+          'marketplace_item',
+          itemId,
+          {
+            viewSource: 'direct',
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+          },
+          {
+            campus: req.user?.campusLabel || '',
+            university: req.user?.university || ''
+          }
+        );
 
         return res.json({
             error: false,
@@ -1685,12 +1811,154 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
     try {
       const authed = req.user?.user || req.user;
       const userId = authed?._id;
+      
+      console.log('Dashboard API called for user:', userId);
+      console.log('Authenticated user:', authed);
+      
+      if (!userId) {
+        console.error('No user ID found in request');
+        return res.status(401).json({ error: true, message: 'User not authenticated' });
+      }
+      
+      // Ensure userId is properly converted to ObjectId
+      const mongoose = require('mongoose');
+      const userObjectId = new mongoose.Types.ObjectId(userId);
+      console.log('Using ObjectId:', userObjectId);
 
-      // latest 6 of each, owned by user
-      const [properties, marketplace, conversations] = await Promise.all([
-        Property.find({ userId }).sort({ createdAt: -1 }).limit(6).lean(),
-        MarketplaceItem.find({ userId }).sort({ createdAt: -1 }).limit(6).lean(),
-        Conversation.find({ participants: userId })
+      // Get comprehensive dashboard data
+      const [
+        // User's properties with stats
+        userProperties,
+        userPropertiesStats,
+        
+        // User's marketplace items with stats
+        userMarketplaceItems,
+        userMarketplaceStats,
+        
+        // Recent community interactions
+        recentInteractions,
+        
+        // Solve thread history
+        solveThreads,
+        
+        // Recent searches
+        recentSearches,
+        
+        // Likes given/received
+        likesGiven,
+        likesReceived,
+        
+        // Roommate requests
+        roommateRequestsSent,
+        roommateRequestsReceived,
+        
+        // Recent conversations
+        conversations
+      ] = await Promise.all([
+        // User's properties (latest 6)
+        Property.find({ userId: userId }).sort({ createdAt: -1 }).limit(6).lean(),
+        
+        // Properties statistics
+        Property.aggregate([
+          { $match: { userId: userId } },
+          {
+            $group: {
+              _id: null,
+              totalProperties: { $sum: 1 },
+              totalViews: { $sum: { $size: '$likes' } },
+              averagePrice: { $avg: '$price' },
+              availableProperties: {
+                $sum: { $cond: [{ $eq: ['$availabilityStatus', 'available'] }, 1, 0] }
+              },
+              rentedProperties: {
+                $sum: { $cond: [{ $eq: ['$availabilityStatus', 'rented'] }, 1, 0] }
+              }
+            }
+          }
+        ]),
+        
+        // User's marketplace items (latest 6)
+        MarketplaceItem.find({ userId: userObjectId }).sort({ createdAt: -1 }).limit(6).lean(),
+        
+        // Marketplace statistics
+        MarketplaceItem.aggregate([
+          { $match: { userId: userObjectId } },
+          {
+            $group: {
+              _id: null,
+              totalItems: { $sum: 1 },
+              totalViews: { $sum: '$views' },
+              totalFavorites: { $sum: '$favorites' },
+              averagePrice: { $avg: '$price' },
+              activeItems: {
+                $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] }
+              },
+              soldItems: {
+                $sum: { $cond: [{ $eq: ['$status', 'sold'] }, 1, 0] }
+              },
+              reservedItems: {
+                $sum: { $cond: [{ $eq: ['$status', 'reserved'] }, 1, 0] }
+              }
+            }
+          }
+        ]),
+        
+        // Recent community interactions (last 7 days)
+        UserInteraction.find({
+          userId: userObjectId,
+          interactionType: { $in: ['community_post', 'community_comment', 'community_like'] },
+          timestamp: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+        })
+        .sort({ timestamp: -1 })
+        .limit(10)
+        .populate('targetUserId', 'firstName lastName avatar')
+        .lean(),
+        
+        // Solve thread history (latest 5)
+        Thread.find({ userId: userObjectId })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .lean(),
+        
+        // Recent searches (last 7 days)
+        UserActivity.find({
+          userId: userObjectId,
+          activityType: 'search',
+          timestamp: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+        })
+        .sort({ timestamp: -1 })
+        .limit(10)
+        .lean(),
+        
+        // Likes given by user
+        UserActivity.find({
+          userId: userObjectId,
+          activityType: 'like',
+          timestamp: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+        })
+        .sort({ timestamp: -1 })
+        .limit(10)
+        .lean(),
+        
+        // Likes received by user (on their properties/items) - will be handled separately
+        Promise.resolve([]),
+        
+        // Roommate requests sent by user
+        RoommateRequest.find({ requesterId: userObjectId })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .populate('targetUserId', 'firstName lastName avatar university')
+        .lean(),
+        
+        // Roommate requests received by user
+        RoommateRequest.find({ targetUserId: userObjectId })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .populate('requesterId', 'firstName lastName avatar university')
+        .lean(),
+        
+        // Recent conversations
+        Conversation.find({ participants: userObjectId })
           .sort({ lastUpdated: -1 })
           .limit(3)
           .populate({
@@ -1701,36 +1969,203 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
           .lean(),
       ]);
 
-      // simple needs-attention rules on properties
+      // Get likes received by user (on their properties/items)
+      const userPropertyIds = await Property.find({ userId: userId }).distinct('_id');
+      const userMarketplaceIds = await MarketplaceItem.find({ userId: userObjectId }).distinct('_id');
+      const likesReceivedData = await UserActivity.find({
+        targetId: { $in: [...userPropertyIds, ...userMarketplaceIds] },
+        activityType: 'like',
+        timestamp: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+      })
+      .sort({ timestamp: -1 })
+      .limit(10)
+      .lean();
+
+      // Process statistics
+      const propertiesStats = userPropertiesStats[0] || {
+        totalProperties: 0,
+        totalViews: 0,
+        averagePrice: 0,
+        availableProperties: 0,
+        rentedProperties: 0
+      };
+
+      const marketplaceStats = userMarketplaceStats[0] || {
+        totalItems: 0,
+        totalViews: 0,
+        totalFavorites: 0,
+        averagePrice: 0,
+        activeItems: 0,
+        soldItems: 0,
+        reservedItems: 0
+      };
+      
+      console.log('Properties found:', userProperties.length);
+      console.log('Properties stats:', propertiesStats);
+      console.log('Marketplace items found:', userMarketplaceItems.length);
+      console.log('Marketplace stats:', marketplaceStats);
+
+      // Calculate engagement metrics
+      const totalEngagement = recentInteractions.length + recentSearches.length;
+      const likesGivenCount = likesGiven.length;
+      const likesReceivedCount = likesReceivedData.length;
+
+      // Simple needs-attention rules on properties
       const needsAttention = [];
-      for (const p of properties) {
+      for (const p of userProperties) {
         if (!p.images || p.images.length === 0)
           needsAttention.push({ type: 'missingImages', targetType: 'property', targetId: String(p._id), label: `Add images to "${p.title}"` });
         if (!p.description || !p.description.trim())
           needsAttention.push({ type: 'missingDescription', targetType: 'property', targetId: String(p._id), label: `Add description to "${p.title}"` });
-        if (!p.address || !p.address.trim())
+        // Fix: Handle address as both string and object
+        const addressStr = typeof p.address === 'string' ? p.address : (p.address?.street || p.address?.full || '');
+        if (!addressStr || !addressStr.trim())
           needsAttention.push({ type: 'missingAddress', targetType: 'property', targetId: String(p._id), label: `Add address to "${p.title}"` });
       }
 
-      // campus pulse v1: latest public marketplace items (can later filter by campus/university)
+      // Campus pulse: latest public marketplace items
       const campusPulse = await MarketplaceItem.find({})
         .sort({ createdAt: -1 })
         .limit(6)
-        .select('title price thumbnailUrl createdAt')
+        .select('title price images createdAt')
         .lean();
 
       const payload = {
         userSummary: {
           firstName: authed.firstName,
           university: authed.university || '',
-          digest: `${conversations.length} recent chats • ${properties.length} properties • ${marketplace.length} items`,
+          digest: `${conversations.length} recent chats • ${propertiesStats.totalProperties} properties • ${marketplaceStats.totalItems} items`,
         },
-        myListings: {
-          counts: { propertiesCount: properties.length, marketplaceCount: marketplace.length },
-          properties,
-          marketplace,
+        
+        // Enhanced properties data with statistics
+        myProperties: {
+          items: userProperties,
+          statistics: {
+            totalProperties: propertiesStats.totalProperties,
+            totalViews: propertiesStats.totalViews,
+            averagePrice: Math.round(propertiesStats.averagePrice || 0),
+            availableProperties: propertiesStats.availableProperties,
+            rentedProperties: propertiesStats.rentedProperties,
+            occupancyRate: propertiesStats.totalProperties > 0 
+              ? Math.round((propertiesStats.rentedProperties / propertiesStats.totalProperties) * 100) 
+              : 0
+          }
         },
+        
+        // Enhanced marketplace data with statistics
+        myMarketplace: {
+          items: userMarketplaceItems,
+          statistics: {
+            totalItems: marketplaceStats.totalItems,
+            totalViews: marketplaceStats.totalViews,
+            totalFavorites: marketplaceStats.totalFavorites,
+            averagePrice: Math.round(marketplaceStats.averagePrice || 0),
+            activeItems: marketplaceStats.activeItems,
+            soldItems: marketplaceStats.soldItems,
+            reservedItems: marketplaceStats.reservedItems,
+            salesRate: marketplaceStats.totalItems > 0 
+              ? Math.round((marketplaceStats.soldItems / marketplaceStats.totalItems) * 100) 
+              : 0
+          }
+        },
+        
+        // Recent community interactions
+        communityInteractions: {
+          recent: recentInteractions.map(interaction => ({
+            id: String(interaction._id),
+            type: interaction.interactionType,
+            content: interaction.content,
+            timestamp: interaction.timestamp,
+            targetUser: interaction.targetUserId ? {
+              name: `${interaction.targetUserId.firstName} ${interaction.targetUserId.lastName}`,
+              avatar: interaction.targetUserId.avatar
+            } : null
+          })),
+          totalEngagement: totalEngagement
+        },
+        
+        // Solve thread history
+        solveThreads: {
+          recent: solveThreads.map(thread => ({
+            id: String(thread._id),
+            kind: thread.kind,
+            prompt: thread.prompt,
+            status: thread.status,
+            createdAt: thread.createdAt,
+            candidatesCount: thread.candidatesSnapshot ? thread.candidatesSnapshot.length : 0
+          })),
+          totalThreads: solveThreads.length
+        },
+        
+        // Recent searches
+        recentSearches: {
+          searches: recentSearches.map(search => ({
+            id: String(search._id),
+            query: search.metadata?.searchQuery || 'Unknown search',
+            targetType: search.targetType,
+            timestamp: search.timestamp,
+            results: search.metadata?.searchResults || 0
+          })),
+          totalSearches: recentSearches.length
+        },
+        
+        // Likes data
+        likes: {
+          given: {
+            count: likesGivenCount,
+            recent: likesGiven.map(like => ({
+              id: String(like._id),
+              targetType: like.targetType,
+              timestamp: like.timestamp
+            }))
+          },
+          received: {
+            count: likesReceivedCount,
+            recent: likesReceivedData.map(like => ({
+              id: String(like._id),
+              targetType: like.targetType,
+              timestamp: like.timestamp
+            }))
+          },
+          ratio: likesGivenCount > 0 ? Math.round((likesReceivedCount / likesGivenCount) * 100) / 100 : 0
+        },
+        
+        // Roommate requests
+        roommateRequests: {
+          sent: {
+            requests: roommateRequestsSent.map(req => ({
+              id: String(req._id),
+              title: req.title,
+              requestType: req.requestType,
+              status: req.status,
+              createdAt: req.createdAt,
+              targetUser: req.targetUserId ? {
+                name: `${req.targetUserId.firstName} ${req.targetUserId.lastName}`,
+                university: req.targetUserId.university,
+                avatar: req.targetUserId.avatar
+              } : null
+            })),
+            count: roommateRequestsSent.length
+          },
+          received: {
+            requests: roommateRequestsReceived.map(req => ({
+              id: String(req._id),
+              title: req.title,
+              requestType: req.requestType,
+              status: req.status,
+              createdAt: req.createdAt,
+              requester: req.requesterId ? {
+                name: `${req.requesterId.firstName} ${req.requesterId.lastName}`,
+                university: req.requesterId.university,
+                avatar: req.requesterId.avatar
+              } : null
+            })),
+            count: roommateRequestsReceived.length
+          }
+        },
+        
         needsAttention,
+        
         messagesPreview: conversations.map(c => ({
           id: String(c._id),
           lastUpdated: c.lastUpdated,
@@ -1741,10 +2176,18 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
           } : null,
           participants: (c.participants || []).map(String),
         })),
+        
         campusPulse,
         tasks: [], // can fill later
         profileProgress: { percent: 60, steps: [{ key: 'avatar', done: Boolean(authed.avatar) }] },
       };
+
+      console.log('Dashboard payload prepared:', {
+        propertiesCount: payload.myProperties.items.length,
+        propertiesStats: payload.myProperties.statistics,
+        marketplaceCount: payload.myMarketplace.items.length,
+        marketplaceStats: payload.myMarketplace.statistics
+      });
 
       res.json(payload);
     } catch (err) {
