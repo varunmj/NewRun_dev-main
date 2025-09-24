@@ -29,6 +29,22 @@ const userSchema = new Schema({
   campusPlaceId:      { type: String, default: '' }, // Google Place ID
   campusDisplayName:  { type: String, default: '' }, // e.g. "Barsema Hall"
 
+  // onboarding preferences
+  onboardingData: {
+    focus: { type: String, enum: ['Housing', 'Roommate', 'Essentials', 'Community', 'Everything'], default: null },
+    arrivalDate: { type: Date, default: null },
+    city: { type: String, default: '' },
+    budgetRange: {
+      min: { type: Number, default: null },
+      max: { type: Number, default: null }
+    },
+    housingNeed: { type: String, enum: ['On-campus', 'Off-campus', 'Sublet', 'Undecided'], default: null },
+    roommateInterest: { type: Boolean, default: null },
+    essentials: [{ type: String, enum: ['SIM', 'Bedding', 'Bank', 'Cookware', 'Transit'] }],
+    completed: { type: Boolean, default: false },
+    completedAt: { type: Date, default: null }
+  }
+
   // Email verification and security
   emailVerified:      { type: Boolean, default: false },
   emailVerificationToken: { type: String, default: null },
@@ -41,6 +57,7 @@ const userSchema = new Schema({
   
   // Password reset
   passwordResetToken: { type: String, default: null },
+  passwordResetTokenId: { type: String, default: null },
   passwordResetExpires: { type: Date, default: null },
 
   createdOn: { type: Date, default: Date.now },

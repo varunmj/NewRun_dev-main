@@ -236,6 +236,35 @@ export default function UnifiedOnboarding() {
       setProfile(completedProfile);
       localStorage.setItem('nr_unified_onboarding', JSON.stringify(completedProfile));
       
+      // Save onboarding data to backend
+      try {
+        const response = await fetch('/api/save-onboarding', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({
+            onboardingData: {
+              focus: profile.focus,
+              arrivalDate: profile.arrival_date,
+              city: profile.city,
+              university: profile.university,
+              budgetRange: profile.budget_range,
+              housingNeed: profile.housing_need,
+              roommateInterest: profile.roommate_interest,
+              essentials: profile.essentials
+            }
+          })
+        });
+
+        if (!response.ok) {
+          console.error('Failed to save onboarding data to backend');
+        }
+      } catch (error) {
+        console.error('Error saving onboarding data:', error);
+      }
+      
       // Clear old onboarding data
       localStorage.removeItem('nr_onboarding');
       localStorage.removeItem('nr_onboarding_focus');

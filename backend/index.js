@@ -481,17 +481,17 @@ app.post('/verify-otp', async (req, res) => {
       });
     }
 
-    // Clear OTP
-    user.otp = null;
-    user.otpExpires = null;
-    user.otpPurpose = null;
-
     // Handle different purposes
     if (purpose === 'email_verification') {
       user.emailVerified = true;
       user.emailVerificationToken = null;
       user.emailVerificationExpires = null;
+      // Clear OTP for email verification
+      user.otp = null;
+      user.otpExpires = null;
+      user.otpPurpose = null;
     }
+    // For password reset, keep OTP until password is actually reset
 
     await user.save();
 
@@ -649,18 +649,18 @@ app.post('/forgot-password', async (req, res) => {
       });
     }
 
-    // Generate reset token
-    const resetToken = jwt.sign(
-      { userId: user._id, email: user.email },
-      process.env.ACCESS_TOKEN_SECRET,
-      { expiresIn: '1h' }
-    );
+    // Generate secure random token (NOT JWT)
+    const crypto = require('crypto');
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    
+    // Create secure reset link with token ID, not the actual token
+    const tokenId = crypto.randomBytes(16).toString('hex');
+    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?tokenId=${tokenId}`;
 
-    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
-
-    // Update user with reset token
+    // Update user with secure token data
     user.passwordResetToken = resetToken;
-    user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    user.passwordResetTokenId = tokenId;
+    user.passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes only
     await user.save();
 
     // Send reset email
@@ -694,37 +694,25 @@ app.post('/forgot-password', async (req, res) => {
 // Reset password
 app.post('/reset-password', async (req, res) => {
   try {
-    const { token, newPassword } = req.body;
+    const { tokenId, newPassword } = req.body;
 
-    if (!token || !newPassword) {
+    if (!tokenId || !newPassword) {
       return res.status(400).json({
         error: true,
-        message: 'Token and new password are required'
+        message: 'Token ID and new password are required'
       });
     }
 
-    // Verify token
-    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-    const user = await User.findById(decoded.userId);
+    // Find user by token ID (secure lookup)
+    const user = await User.findOne({ 
+      passwordResetTokenId: tokenId,
+      passwordResetExpires: { $gt: new Date() }
+    });
 
     if (!user) {
-      return res.status(404).json({
-        error: true,
-        message: 'User not found'
-      });
-    }
-
-    if (user.passwordResetToken !== token) {
       return res.status(400).json({
         error: true,
-        message: 'Invalid reset token'
-      });
-    }
-
-    if (user.passwordResetExpires < new Date()) {
-      return res.status(400).json({
-        error: true,
-        message: 'Reset token expired'
+        message: 'Invalid or expired reset token'
       });
     }
 
@@ -732,9 +720,10 @@ app.post('/reset-password', async (req, res) => {
     const saltRounds = 12;
     const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
-    // Update password and clear reset token
+    // Update password and clear all reset tokens
     user.password = hashedPassword;
     user.passwordResetToken = null;
+    user.passwordResetTokenId = null;
     user.passwordResetExpires = null;
     await user.save();
 
@@ -744,6 +733,163 @@ app.post('/reset-password', async (req, res) => {
     });
   } catch (error) {
     console.error('Error resetting password:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Internal Server Error'
+    });
+  }
+});
+
+// Validate reset token ID
+app.post('/validate-reset-token', async (req, res) => {
+  try {
+    const { tokenId } = req.body;
+
+    if (!tokenId) {
+      return res.status(400).json({
+        error: true,
+        message: 'Token ID is required'
+      });
+    }
+
+    // Find user by token ID
+    const user = await User.findOne({ 
+      passwordResetTokenId: tokenId,
+      passwordResetExpires: { $gt: new Date() }
+    }).select('firstName email');
+
+    if (!user) {
+      return res.status(400).json({
+        error: true,
+        message: 'Invalid or expired reset token'
+      });
+    }
+
+    res.json({
+      error: false,
+      message: 'Token is valid',
+      user: {
+        firstName: user.firstName,
+        email: user.email
+      }
+    });
+  } catch (error) {
+    console.error('Error validating reset token:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Internal Server Error'
+    });
+  }
+});
+
+// Reset password with OTP
+app.post('/reset-password-otp', async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({
+        error: true,
+        message: 'Email, OTP, and new password are required'
+      });
+    }
+
+    const user = await User.findOne({ 
+      email, 
+      otp, 
+      otpPurpose: 'password_reset',
+      otpExpires: { $gt: new Date() }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        error: true,
+        message: 'Invalid or expired OTP'
+      });
+    }
+
+    // Hash new password
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update password and clear OTP
+    user.password = hashedPassword;
+    user.otp = null;
+    user.otpExpires = null;
+    user.otpPurpose = null;
+    await user.save();
+
+    res.json({
+      error: false,
+      message: 'Password reset successfully'
+    });
+  } catch (error) {
+    console.error('Error resetting password with OTP:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Internal Server Error'
+    });
+  }
+});
+
+// Save onboarding data
+app.post('/save-onboarding', authenticateToken, async (req, res) => {
+  try {
+    const { user } = req.user;
+    const { onboardingData } = req.body;
+
+    if (!onboardingData) {
+      return res.status(400).json({
+        error: true,
+        message: 'Onboarding data is required'
+      });
+    }
+
+    // Update user with onboarding data
+    user.onboardingData = {
+      ...onboardingData,
+      completed: true,
+      completedAt: new Date()
+    };
+
+    // Also update basic profile fields
+    if (onboardingData.city) {
+      user.currentLocation = onboardingData.city;
+    }
+    if (onboardingData.university) {
+      user.university = onboardingData.university;
+    }
+
+    await user.save();
+
+    res.json({
+      error: false,
+      message: 'Onboarding data saved successfully',
+      user: {
+        id: user._id,
+        onboardingData: user.onboardingData
+      }
+    });
+  } catch (error) {
+    console.error('Error saving onboarding data:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Internal Server Error'
+    });
+  }
+});
+
+// Get user onboarding data
+app.get('/onboarding-data', authenticateToken, async (req, res) => {
+  try {
+    const { user } = req.user;
+
+    res.json({
+      error: false,
+      onboardingData: user.onboardingData || {}
+    });
+  } catch (error) {
+    console.error('Error getting onboarding data:', error);
     res.status(500).json({
       error: true,
       message: 'Internal Server Error'

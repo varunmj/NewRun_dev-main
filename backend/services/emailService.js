@@ -220,14 +220,15 @@ class EmailService {
             <div style="text-align: center;">
               <a href="${resetLink}" class="button">Reset Password</a>
             </div>
-            <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+            <p>If the button doesn't work, you can copy and paste this secure link into your browser:</p>
             <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; font-family: monospace; word-break: break-all; margin: 20px 0;">${resetLink}</div>
             <div class="warning">
-              <strong>⚠️ Security Notice:</strong>
+              <strong>🔒 Security Notice:</strong>
               <ul>
-                <li>This link will expire in 1 hour</li>
+                <li>This secure link will expire in 15 minutes</li>
                 <li>If you didn't request this reset, please ignore this email</li>
                 <li>Your password will remain unchanged until you create a new one</li>
+                <li>This link can only be used once for security</li>
               </ul>
             </div>
             <p>If you didn't request a password reset, please secure your account and contact our support team.</p>

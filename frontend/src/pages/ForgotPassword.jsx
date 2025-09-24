@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import axiosInstance from "../utils/axiosInstance";
 import { motion, AnimatePresence } from "framer-motion";
 import { Eye, EyeOff, ArrowLeft, Mail, Shield, CheckCircle, AlertCircle } from "lucide-react";
+import { validatePassword, validatePasswordMatch } from "../utils/passwordValidator";
+import PasswordStrengthIndicator from "../components/Auth/PasswordStrengthIndicator";
 
 // --- Input styling helper ---
 const inputClass =
@@ -209,8 +211,10 @@ function NewPasswordStep({ password, setPassword, confirmPassword, setConfirmPas
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const isPasswordValid = password.length >= 8;
-  const isConfirmPasswordValid = confirmPassword === password && confirmPassword.length > 0;
+  const passwordValidation = validatePassword(password);
+  const passwordMatchValidation = validatePasswordMatch(password, confirmPassword);
+  const isPasswordValid = passwordValidation.isValid;
+  const isConfirmPasswordValid = passwordMatchValidation.isValid && confirmPassword.length > 0;
 
   return (
     <motion.div
@@ -252,12 +256,7 @@ function NewPasswordStep({ password, setPassword, confirmPassword, setConfirmPas
             </button>
           </div>
           {password && (
-            <div className="mt-2 text-xs">
-              <div className={`flex items-center gap-1 ${isPasswordValid ? 'text-green-400' : 'text-red-400'}`}>
-                <div className={`w-1 h-1 rounded-full ${isPasswordValid ? 'bg-green-400' : 'bg-red-400'}`} />
-                At least 8 characters
-              </div>
-            </div>
+            <PasswordStrengthIndicator password={password} showDetails={true} />
           )}
         </div>
 
@@ -286,7 +285,7 @@ function NewPasswordStep({ password, setPassword, confirmPassword, setConfirmPas
             <div className="mt-2 text-xs">
               <div className={`flex items-center gap-1 ${isConfirmPasswordValid ? 'text-green-400' : 'text-red-400'}`}>
                 <div className={`w-1 h-1 rounded-full ${isConfirmPasswordValid ? 'bg-green-400' : 'bg-red-400'}`} />
-                Passwords match
+                {isConfirmPasswordValid ? 'Passwords match' : 'Passwords do not match'}
               </div>
             </div>
           )}
@@ -385,8 +384,9 @@ export default function ForgotPassword() {
     setError("");
 
     try {
-      const response = await axiosInstance.post("/forgot-password", {
-        email: email.trim()
+      const response = await axiosInstance.post("/send-otp", {
+        email: email.trim(),
+        purpose: 'password_reset'
       });
 
       if (response.data.error) {
@@ -440,8 +440,9 @@ export default function ForgotPassword() {
     setError("");
 
     try {
-      const response = await axiosInstance.post("/forgot-password", {
-        email: email.trim()
+      const response = await axiosInstance.post("/send-otp", {
+        email: email.trim(),
+        purpose: 'password_reset'
       });
 
       if (response.data.error) {
@@ -462,13 +463,17 @@ export default function ForgotPassword() {
 
   // Step 3: Reset Password
   const handleResetPassword = async () => {
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters long.");
+    // Comprehensive password validation
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+      setError(`Password requirements not met: ${passwordValidation.errors[0]}`);
       return;
     }
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+    // Confirm password validation
+    const passwordMatchValidation = validatePasswordMatch(password, confirmPassword);
+    if (!passwordMatchValidation.isValid) {
+      setError(passwordMatchValidation.error);
       return;
     }
 
@@ -476,7 +481,7 @@ export default function ForgotPassword() {
     setError("");
 
     try {
-      const response = await axiosInstance.post("/reset-password", {
+      const response = await axiosInstance.post("/reset-password-otp", {
         email: email.trim(),
         otp: otp,
         newPassword: password

@@ -18,6 +18,7 @@ import {
 import Navbar from "../components/Navbar/Navbar";
 import PropertyDrawer from "../components/Property/PropertyDrawer";
 import ListingDrawer from "../components/marketplace/ListingDrawer";
+import { useOnboardingData } from "../hooks/useOnboardingData";
 import axiosInstance from "../utils/axiosInstance";
 import "../styles/newrun-hero.css";
 
@@ -99,8 +100,11 @@ export default function UserDashboard() {
   const [editingItem, setEditingItem] = useState(null);
         const [showPropertyDrawer, setShowPropertyDrawer] = useState(false);
         const [showMarketplaceDrawer, setShowMarketplaceDrawer] = useState(false);
-        const [agentMode, setAgentMode] = useState(false);
-        const [prompt, setPrompt] = useState("");
+  const [agentMode, setAgentMode] = useState(false);
+  const [prompt, setPrompt] = useState("");
+
+  // Get onboarding data for personalization
+  const { onboardingData, getPersonalizedGreeting, getNextSteps, getPersonalizedRecommendations } = useOnboardingData();
 
   // Fetch user data
   const fetchUser = async () => {
@@ -427,7 +431,7 @@ export default function UserDashboard() {
                   <div className="inline-flex items-center gap-2">
                     <TypewriterWelcome />
                     <span className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight text-white">
-                      {userInfo?.firstName || "User"}!
+                      {getPersonalizedGreeting()}
                     </span>
         </div>
                 </motion.div>

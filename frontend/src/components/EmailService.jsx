@@ -333,4 +333,88 @@ export const OTPInput = ({ value, onChange, length = 6, disabled = false }) => {
   );
 };
 
+// Email Action Button Component
+export const EmailActionButton = ({ 
+  action, 
+  onAction, 
+  isLoading, 
+  disabled, 
+  children, 
+  className = '' 
+}) => {
+  const getButtonStyles = () => {
+    switch (action) {
+      case 'send':
+        return 'bg-blue-600 hover:bg-blue-700 text-white';
+      case 'verify':
+        return 'bg-green-600 hover:bg-green-700 text-white';
+      case 'resend':
+        return 'bg-amber-600 hover:bg-amber-700 text-white';
+      case 'cancel':
+        return 'bg-gray-600 hover:bg-gray-700 text-white';
+      default:
+        return 'bg-gray-600 hover:bg-gray-700 text-white';
+    }
+  };
+
+  return (
+    <button
+      onClick={onAction}
+      disabled={isLoading || disabled}
+      className={`
+        inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium
+        transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed
+        ${getButtonStyles()} ${className}
+      `}
+    >
+      {isLoading ? (
+        <>
+          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          Processing...
+        </>
+      ) : (
+        children
+      )}
+    </button>
+  );
+};
+
+// Email Progress Steps Component
+export const EmailProgressSteps = ({ currentStep, totalSteps, steps }) => {
+  return (
+    <div className="flex items-center justify-center space-x-2 mb-6">
+      {Array.from({ length: totalSteps }, (_, index) => {
+        const stepNumber = index + 1;
+        const isCompleted = stepNumber < currentStep;
+        const isCurrent = stepNumber === currentStep;
+        
+        return (
+          <div key={stepNumber} className="flex items-center">
+            <div
+              className={`
+                w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium
+                transition-colors duration-200
+                ${isCompleted || isCurrent 
+                  ? 'bg-[#2f64ff] text-white' 
+                  : 'bg-white/10 text-white/40'
+                }
+              `}
+            >
+              {isCompleted ? '✓' : stepNumber}
+            </div>
+            {stepNumber < totalSteps && (
+              <div
+                className={`
+                  w-8 h-0.5 mx-2 transition-colors duration-200
+                  ${stepNumber < currentStep ? 'bg-[#2f64ff]' : 'bg-white/10'}
+                `}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 export default EmailServiceProvider;
