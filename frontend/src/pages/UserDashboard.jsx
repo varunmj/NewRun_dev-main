@@ -465,37 +465,37 @@ export default function UserDashboard() {
                   className="mx-auto mt-12 w-full max-w-4xl"
                 >
                   {/* Outer box */}
-                  <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,.35)] p-4">
+                  <div className="rounded-2xl border border-white/5 bg-black/20 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,.35)] p-4">
                     {/* Inner box with textarea */}
-                    <div className="relative rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm">
+                    <div className="relative rounded-xl border border-white/15 bg-black/40 backdrop-blur-sm">
                       <textarea
                         value={prompt}
                         onChange={e => setPrompt(e.target.value)}
                         placeholder="Ask AI anything..."
                         rows={2}
-                        className="w-full resize-none bg-transparent text-white/90 placeholder-white/50 text-sm leading-relaxed outline-none p-5 pr-40"
+                        className="w-full resize-none bg-transparent text-white/80 placeholder-white/60 text-sm leading-relaxed outline-none p-5 pr-40"
                       />
                       
                       {/* Agent Mode in top-right of inner box */}
                       <button
                         onClick={() => setAgentMode(v => !v)}
-                        className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-black/50 px-2.5 py-1 text-[9px] font-medium uppercase tracking-wider text-white/80 hover:bg-black/60"
+                        className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-black/50 px-2.5 py-1 text-[9px] font-medium uppercase tracking-wider text-white/70 hover:bg-black/60"
                       >
                         <span className="text-[7px]">⚙</span>
                         AGENT MODE
-                        <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[8px] ${agentMode ? 'bg-blue-500 text-white' : 'bg-white/20 text-white/60'}`}>
+                        <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[8px] border ${agentMode ? 'bg-blue-500 border-blue-500 text-white' : 'bg-transparent border-white/25 text-white/60'}`}>
                           {agentMode ? 'ON' : 'OFF'}
                         </span>
                       </button>
 
                       {/* Bottom controls inside inner box */}
                       <div className="absolute bottom-3 right-3 flex items-center gap-2">
-                        <button className="inline-flex items-center justify-center rounded border border-white/30 bg-black/40 p-1.5 text-white/70 hover:bg-black/60">
+                        <button className="inline-flex items-center justify-center rounded border border-white/25 bg-black/40 p-1.5 text-white/70 hover:bg-black/60">
                           <MdUpload className="w-3 h-3" />
                         </button>
                         <button
                           onClick={() => {/* send stub */}}
-                          className="inline-flex items-center gap-1 rounded border border-white/30 bg-black/40 px-2 py-1.5 text-[10px] text-white/80 hover:bg-black/60"
+                          className="inline-flex items-center gap-1 rounded border border-white/25 bg-black/40 px-2 py-1.5 text-[10px] text-white/80 hover:bg-black/60"
                         >
                           start
                           <MdArrowDropDown className="w-3 h-3" />
@@ -506,12 +506,12 @@ export default function UserDashboard() {
                     {/* Bottom toolbar outside inner box */}
                     <div className="flex items-center justify-between mt-3 px-2">
                       <div className="flex items-center gap-2">
-                        <button className="inline-flex items-center gap-1 rounded-full border border-white/30 bg-black/40 px-2.5 py-1 text-[9px] text-white/70 hover:bg-black/60">
+                        <button className="inline-flex items-center gap-1 rounded-full border border-white/25 bg-black/40 px-2.5 py-1 text-[9px] text-white/70 hover:bg-black/60">
                           <span className="text-[7px]">◆</span>
                           Regular
                           <MdArrowDropDown className="w-3 h-3" />
                         </button>
-                        <button className="inline-flex items-center gap-1 rounded-full border border-white/30 bg-black/40 px-2.5 py-1 text-[9px] text-white/70 hover:bg-black/60">
+                        <button className="inline-flex items-center gap-1 rounded-full border border-white/25 bg-black/40 px-2.5 py-1 text-[9px] text-white/70 hover:bg-black/60">
                           <span className="text-[7px]">🧠</span>
                           GPT 4.1
                           <MdArrowDropDown className="w-3 h-3" />
@@ -532,17 +532,6 @@ export default function UserDashboard() {
           </div>
                   </div>
 
-                  {/* Explore button below */}
-                  <motion.button
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: 0.8 }}
-                    className="mx-auto mt-4 inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-black/40 px-3 py-1.5 text-[10px] text-white/70 hover:bg-black/60"
-                  >
-                    <span className="text-[7px]">⚙</span>
-                    Explore agent mode cases
-                    <MdArrowDropDown className="w-3 h-3" />
-                  </motion.button>
                 </motion.div>
 
                 {/* Floating Stats with 3D Cards */}

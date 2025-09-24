@@ -51,6 +51,7 @@ const UserActivity = require('./models/UserActivity.model');
 const UserInteraction = require('./models/UserInteraction.model');
 const RoommateRequest = require('./models/RoommateRequest.model');
 const { extractHousingCriteria } = require('./services/newrun-llm/newrunLLM');
+const emailService = require('./services/emailService');
 
 
 const app = express();
@@ -394,6 +395,445 @@ app.post('/logout', authenticateToken, async (req, res) => {
       message: 'Logout failed'
     });
   }
+});
+
+// ==================== EMAIL ENDPOINTS ====================
+
+// Send OTP for various purposes
+app.post('/send-otp', async (req, res) => {
+  try {
+    const { email, purpose = 'login' } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        error: true,
+        message: 'Email is required'
+      });
+    }
+
+    // Check if user exists
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({
+        error: true,
+        message: 'User not found'
+      });
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Update user with OTP
+    user.otp = otp;
+    user.otpExpires = otpExpires;
+    user.otpPurpose = purpose;
+    await user.save();
+
+    // Send OTP email
+    const emailResult = await emailService.sendOTP(email, user.firstName, otp);
+    
+    if (emailResult.success) {
+      res.json({
+        error: false,
+        message: 'OTP sent successfully',
+        purpose: purpose
+      });
+    } else {
+      console.error('Failed to send OTP email:', emailResult.error);
+      res.status(500).json({
+        error: true,
+        message: 'Failed to send OTP email'
+      });
+    }
+  } catch (error) {
+    console.error('Error sending OTP:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Internal Server Error'
+    });
+  }
+});
+
+// Verify OTP
+app.post('/verify-otp', async (req, res) => {
+  try {
+    const { email, otp, purpose = 'login' } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({
+        error: true,
+        message: 'Email and OTP are required'
+      });
+    }
+
+    const user = await User.findOne({ 
+      email, 
+      otp, 
+      otpPurpose: purpose,
+      otpExpires: { $gt: new Date() }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        error: true,
+        message: 'Invalid or expired OTP'
+      });
+    }
+
+    // Clear OTP
+    user.otp = null;
+    user.otpExpires = null;
+    user.otpPurpose = null;
+
+    // Handle different purposes
+    if (purpose === 'email_verification') {
+      user.emailVerified = true;
+      user.emailVerificationToken = null;
+      user.emailVerificationExpires = null;
+    }
+
+    await user.save();
+
+    res.json({
+      error: false,
+      message: 'OTP verified successfully',
+      emailVerified: user.emailVerified
+    });
+  } catch (error) {
+    console.error('Error verifying OTP:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Internal Server Error'
+    });
+  }
+});
+
+// Send email verification
+app.post('/send-email-verification', authenticateToken, async (req, res) => {
+  try {
+    const { user } = req.user;
+    
+    if (user.emailVerified) {
+      return res.status(400).json({
+        error: true,
+        message: 'Email already verified'
+      });
+    }
+
+    // Generate verification token
+    const verificationToken = jwt.sign(
+      { userId: user._id, email: user.email },
+      process.env.ACCESS_TOKEN_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`;
+
+    // Update user with verification token
+    user.emailVerificationToken = verificationToken;
+    user.emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    await user.save();
+
+    // Send verification email
+    const emailResult = await emailService.sendEmailVerification(
+      user.email, 
+      user.firstName, 
+      verificationLink
+    );
+
+    if (emailResult.success) {
+      res.json({
+        error: false,
+        message: 'Verification email sent successfully'
+      });
+    } else {
+      console.error('Failed to send verification email:', emailResult.error);
+      res.status(500).json({
+        error: true,
+        message: 'Failed to send verification email'
+      });
+    }
+  } catch (error) {
+    console.error('Error sending email verification:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Internal Server Error'
+    });
+  }
+});
+
+// Verify email with token
+app.post('/verify-email', async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        error: true,
+        message: 'Verification token is required'
+      });
+    }
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    const user = await User.findById(decoded.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        error: true,
+        message: 'User not found'
+      });
+    }
+
+    if (user.emailVerified) {
+      return res.status(400).json({
+        error: true,
+        message: 'Email already verified'
+      });
+    }
+
+    if (user.emailVerificationToken !== token) {
+      return res.status(400).json({
+        error: true,
+        message: 'Invalid verification token'
+      });
+    }
+
+    if (user.emailVerificationExpires < new Date()) {
+      return res.status(400).json({
+        error: true,
+        message: 'Verification token expired'
+      });
+    }
+
+    // Mark email as verified
+    user.emailVerified = true;
+    user.emailVerificationToken = null;
+    user.emailVerificationExpires = null;
+    await user.save();
+
+    // Send welcome email
+    await emailService.sendWelcomeEmail(user.email, user.firstName);
+
+    res.json({
+      error: false,
+      message: 'Email verified successfully'
+    });
+  } catch (error) {
+    console.error('Error verifying email:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Internal Server Error'
+    });
+  }
+});
+
+// Forgot password
+app.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        error: true,
+        message: 'Email is required'
+      });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({
+        error: true,
+        message: 'User not found'
+      });
+    }
+
+    // Generate reset token
+    const resetToken = jwt.sign(
+      { userId: user._id, email: user.email },
+      process.env.ACCESS_TOKEN_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+
+    // Update user with reset token
+    user.passwordResetToken = resetToken;
+    user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    await user.save();
+
+    // Send reset email
+    const emailResult = await emailService.sendPasswordReset(
+      user.email, 
+      user.firstName, 
+      resetLink
+    );
+
+    if (emailResult.success) {
+      res.json({
+        error: false,
+        message: 'Password reset email sent successfully'
+      });
+    } else {
+      console.error('Failed to send password reset email:', emailResult.error);
+      res.status(500).json({
+        error: true,
+        message: 'Failed to send password reset email'
+      });
+    }
+  } catch (error) {
+    console.error('Error sending password reset:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Internal Server Error'
+    });
+  }
+});
+
+// Reset password
+app.post('/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({
+        error: true,
+        message: 'Token and new password are required'
+      });
+    }
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    const user = await User.findById(decoded.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        error: true,
+        message: 'User not found'
+      });
+    }
+
+    if (user.passwordResetToken !== token) {
+      return res.status(400).json({
+        error: true,
+        message: 'Invalid reset token'
+      });
+    }
+
+    if (user.passwordResetExpires < new Date()) {
+      return res.status(400).json({
+        error: true,
+        message: 'Reset token expired'
+      });
+    }
+
+    // Hash new password
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update password and clear reset token
+    user.password = hashedPassword;
+    user.passwordResetToken = null;
+    user.passwordResetExpires = null;
+    await user.save();
+
+    res.json({
+      error: false,
+      message: 'Password reset successfully'
+    });
+  } catch (error) {
+    console.error('Error resetting password:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Internal Server Error'
+    });
+  }
+});
+
+// Test email service endpoint
+app.post('/test-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({
+        error: true,
+        message: 'Email is required for testing'
+      });
+    }
+
+    console.log('🧪 Testing email service...');
+    console.log('📧 Target email:', email);
+    console.log('🔧 SMTP Config:', {
+      host: process.env.SES_SMTP_HOST,
+      port: process.env.SES_SMTP_PORT,
+      username: process.env.SES_SMTP_USERNAME ? 'Set' : 'Not Set',
+      password: process.env.SES_SMTP_PASSWORD ? 'Set' : 'Not Set'
+    });
+
+    // Check if transporter exists
+    console.log('📡 Transporter status:', emailService.transporter ? 'Initialized' : 'Not initialized');
+    
+    // Force reinitialize if needed
+    if (!emailService.transporter) {
+      console.log('🔄 Forcing transporter initialization...');
+      emailService.reinitialize();
+    }
+
+    // Test sending a simple OTP email
+    const testOTP = '123456';
+    const emailResult = await emailService.sendOTP(email, 'Test User', testOTP);
+    
+    if (emailResult.success) {
+      console.log('✅ Email sent successfully!');
+      console.log('📨 Message ID:', emailResult.messageId);
+      
+      res.json({
+        error: false,
+        message: 'Email test successful!',
+        messageId: emailResult.messageId,
+        config: {
+          host: process.env.SES_SMTP_HOST,
+          port: process.env.SES_SMTP_PORT,
+          fromEmail: process.env.FROM_EMAIL
+        }
+      });
+    } else {
+      console.error('❌ Email test failed:', emailResult.error);
+      
+      res.status(500).json({
+        error: true,
+        message: 'Email test failed',
+        errorDetails: emailResult.error,
+        config: {
+          host: process.env.SES_SMTP_HOST,
+          port: process.env.SES_SMTP_PORT,
+          fromEmail: process.env.FROM_EMAIL
+        }
+      });
+    }
+  } catch (error) {
+    console.error('❌ Email test error:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Email test failed',
+      errorDetails: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+// Check environment variables endpoint
+app.get('/check-env', (req, res) => {
+  res.json({
+    SES_SMTP_HOST: process.env.SES_SMTP_HOST,
+    SES_SMTP_PORT: process.env.SES_SMTP_PORT,
+    SES_SMTP_USERNAME: process.env.SES_SMTP_USERNAME ? 'Set' : 'Not Set',
+    SES_SMTP_PASSWORD: process.env.SES_SMTP_PASSWORD ? 'Set' : 'Not Set',
+    FROM_EMAIL: process.env.FROM_EMAIL,
+    FRONTEND_URL: process.env.FRONTEND_URL
+  });
 });
 
 // Get user API:

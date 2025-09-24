@@ -124,7 +124,7 @@ export default function Login() {
               nav(from);
             } else {
               // User has partial onboarding data, continue onboarding
-              nav("/onboarding");
+              nav("/dashboard");
             }
           } else {
             // New user, start onboarding

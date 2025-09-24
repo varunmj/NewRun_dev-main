@@ -29,6 +29,20 @@ const userSchema = new Schema({
   campusPlaceId:      { type: String, default: '' }, // Google Place ID
   campusDisplayName:  { type: String, default: '' }, // e.g. "Barsema Hall"
 
+  // Email verification and security
+  emailVerified:      { type: Boolean, default: false },
+  emailVerificationToken: { type: String, default: null },
+  emailVerificationExpires: { type: Date, default: null },
+  
+  // OTP for various purposes
+  otp:                { type: String, default: null },
+  otpExpires:         { type: Date, default: null },
+  otpPurpose:         { type: String, enum: ['email_verification', 'password_reset', 'login', 'two_factor'], default: null },
+  
+  // Password reset
+  passwordResetToken: { type: String, default: null },
+  passwordResetExpires: { type: Date, default: null },
+
   createdOn: { type: Date, default: Date.now },
 });
 
