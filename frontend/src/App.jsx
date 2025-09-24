@@ -2,10 +2,13 @@ import React from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { HeroUIProvider } from '@heroui/react'; // ⬅️ moved from @heroui/react
 import { AuthProvider } from './context/AuthContext.jsx';
+import { EmailServiceProvider } from './components/EmailService.jsx';
 
 // pages
 import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import EmailVerification from './pages/EmailVerification';
 import AllProperties from './pages/AllProperties';
 import UserDashboard from './pages/UserDashboard';
 import SignUp from './pages/SignUp';
@@ -36,14 +39,17 @@ import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
 const App = () => {
   return (
     <AuthProvider>
-      <HeroUIProvider>
-        <Router>
-          <RouteGuard>
+      <EmailServiceProvider>
+        <HeroUIProvider>
+          <Router>
+            <RouteGuard>
             <Routes>
           {/* Public Routes */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/home" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/forgot" element={<ForgotPassword />} />
+          <Route path="/verify-email" element={<EmailVerification />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/marketplace" element={<Marketplace />} />
           <Route path="/blogs" element={<Blogs />} />
@@ -160,9 +166,10 @@ const App = () => {
           {/* 404 Page - Catch-all route must be LAST */}
           <Route path="*" element={<NotFound />} />
             </Routes>
-          </RouteGuard>
-        </Router>
-      </HeroUIProvider>
+            </RouteGuard>
+          </Router>
+        </HeroUIProvider>
+      </EmailServiceProvider>
     </AuthProvider>
   );
 };
