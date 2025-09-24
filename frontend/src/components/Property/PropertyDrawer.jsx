@@ -3,13 +3,16 @@ import { useDropzone } from 'react-dropzone';
 import { MdClose, MdAdd, MdDelete, MdLocationOn, MdHome, MdAttachMoney, MdPhone, MdEmail, MdPerson } from 'react-icons/md';
 import NewRunDrawer from '../ui/NewRunDrawer';
 import axiosInstance from '../../utils/axiosInstance';
+import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 
 const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPropertyUpdated }) => {
+  console.log('PropertyDrawer rendering, isOpen:', isOpen);
+  
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
-  const { user } = useAuth();
+  // const { user } = useAuth();
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -40,52 +43,23 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
 
   // Auto-fill user info on component mount
   useEffect(() => {
-    const autoFillUserInfo = () => {
-      // Try to get user info from API first
-      const fetchUserInfo = async () => {
-        try {
-          console.log('Fetching user info for auto-fill...');
-          const response = await axiosInstance.get('/get-user');
-          console.log('User API response:', response.data);
+    if (!isOpen) return;
+    
+    const autoFillUserInfo = async () => {
+      try {
+        console.log('Fetching user info for auto-fill...');
+        const response = await axiosInstance.get('/get-user');
+        console.log('User API response:', response.data);
+        
+        if (response.data && response.data.user) {
+          const apiUser = response.data.user;
+          setUserInfo(apiUser);
           
-          if (response.data && response.data.user) {
-            const apiUser = response.data.user;
-            setUserInfo(apiUser);
-            
-            const fullName = `${apiUser.firstName || ''} ${apiUser.lastName || ''}`.trim();
-            const phone = apiUser.phone || '';
-            const email = apiUser.email || '';
-            
-            console.log('Auto-filling contact info from API:', { fullName, phone, email });
-            
-            // Auto-fill contact info
-            setFormData(prev => ({
-              ...prev,
-              contactInfo: {
-                name: fullName,
-                phone: phone,
-                email: email
-              }
-            }));
-            return true;
-          }
-        } catch (error) {
-          console.error('Error fetching user info from API:', error);
-        }
-        return false;
-      };
-
-      // Fallback to AuthContext user
-      const useAuthUser = () => {
-        if (user) {
-          console.log('Using AuthContext user for auto-fill:', user);
-          setUserInfo(user);
+          const fullName = `${apiUser.firstName || ''} ${apiUser.lastName || ''}`.trim();
+          const phone = apiUser.phone || '';
+          const email = apiUser.email || '';
           
-          const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
-          const phone = user.phone || '';
-          const email = user.email || '';
-          
-          console.log('Auto-filling contact info from AuthContext:', { fullName, phone, email });
+          console.log('Auto-filling contact info from API:', { fullName, phone, email });
           
           setFormData(prev => ({
             ...prev,
@@ -95,20 +69,36 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
               email: email
             }
           }));
+          return;
         }
-      };
-
-      if (isOpen) {
-        fetchUserInfo().then(success => {
-          if (!success) {
-            useAuthUser();
-          }
-        });
+      } catch (error) {
+        console.error('Error fetching user info from API:', error);
       }
+
+      // Fallback to AuthContext user
+      // if (user) {
+      //   console.log('Using AuthContext user for auto-fill:', user);
+      //   setUserInfo(user);
+      //   
+      //   const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+      //   const phone = user.phone || '';
+      //   const email = user.email || '';
+      //   
+      //   console.log('Auto-filling contact info from AuthContext:', { fullName, phone, email });
+      //   
+      //   setFormData(prev => ({
+      //     ...prev,
+      //     contactInfo: {
+      //       name: fullName,
+      //       phone: phone,
+      //       email: email
+      //     }
+      //   }));
+      // }
     };
 
     autoFillUserInfo();
-  }, [isOpen, user]);
+  }, [isOpen]);
 
   // Load property data for editing
   useEffect(() => {
@@ -139,11 +129,18 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
     }
   }, [isEdit, propertyData]);
 
+  // Clear step errors when navigating between steps
+  useEffect(() => {
+    setErrors({});
+  }, [currentStep]);
+
   const { getRootProps, getInputProps } = useDropzone({
     onDrop: (acceptedFiles) => {
       setFiles(prev => [...prev, ...acceptedFiles]);
     },
-    accept: 'image/*',
+    accept: {
+      'image/*': ['.jpeg', '.jpg', '.png', '.gif', '.webp']
+    },
     multiple: true
   });
 
@@ -159,8 +156,12 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
       formData.append('images', file);
     });
 
+    console.log('Uploading images:', files.length, 'files');
+    console.log('FormData entries:', Array.from(formData.entries()));
+
     try {
-      const response = await axiosInstance.post('/upload-images', formData, {
+      // Use a separate axios instance for file uploads to avoid header conflicts
+      const response = await axios.post('http://localhost:8000/upload-images', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -172,41 +173,55 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
     }
   };
 
-  const validateStep = (step) => {
-    const newErrors = {};
-    
+  // PURE validation (no setState here)
+  const getStepErrors = (step, data) => {
+    const e = {};
     switch (step) {
       case 1:
-        if (!formData.title.trim()) newErrors.title = 'Property title is required';
-        if (!formData.content.trim()) newErrors.content = 'Property description is required';
-        if (!formData.price || formData.price <= 0) newErrors.price = 'Valid price is required';
+        if (!data.title.trim()) e.title = 'Property title is required';
+        if (!data.content.trim()) e.content = 'Property description is required';
+        if (!data.price || Number(data.price) <= 0) e.price = 'Valid price is required';
         break;
       case 2:
-        if (!formData.bedrooms || formData.bedrooms < 1) newErrors.bedrooms = 'Number of bedrooms is required';
-        if (!formData.bathrooms || formData.bathrooms < 1) newErrors.bathrooms = 'Number of bathrooms is required';
-        if (!formData.distanceFromUniversity) newErrors.distanceFromUniversity = 'Distance from university is required';
+        if (!data.bedrooms || data.bedrooms < 1) e.bedrooms = 'Number of bedrooms is required';
+        if (!data.bathrooms || Number(data.bathrooms) < 1) e.bathrooms = 'Number of bathrooms is required';
+        if (!data.distanceFromUniversity) e.distanceFromUniversity = 'Distance from university is required';
         break;
       case 3:
-        if (!formData.address.street.trim()) newErrors.street = 'Street address is required';
-        if (!formData.address.city.trim()) newErrors.city = 'City is required';
-        if (!formData.address.state.trim()) newErrors.state = 'State is required';
+        if (!data.address.street.trim()) e.street = 'Street address is required';
+        if (!data.address.city.trim()) e.city = 'City is required';
+        if (!data.address.state.trim()) e.state = 'State is required';
         break;
       case 4:
-        if (!formData.contactInfo.name.trim()) newErrors.contactName = 'Contact name is required';
-        if (!formData.contactInfo.phone.trim()) newErrors.contactPhone = 'Phone number is required';
-        if (!formData.contactInfo.email.trim()) newErrors.contactEmail = 'Email is required';
+        if (!data.contactInfo.name.trim()) e.contactName = 'Contact name is required';
+        if (!data.contactInfo.phone.trim()) e.contactPhone = 'Phone number is required';
+        if (!data.contactInfo.email.trim()) e.contactEmail = 'Email is required';
+        break;
+      default:
         break;
     }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return e;
+  };
+
+  // Memoized validity for the current render
+  const stepErrors = React.useMemo(() => {
+    console.log('Recalculating stepErrors for step:', currentStep);
+    return getStepErrors(currentStep, formData);
+  }, [currentStep, formData]);
+  const isStepValid = Object.keys(stepErrors).length === 0;
+
+  // Stateful validator only for buttons/actions
+  const validateStep = (step, data = formData) => {
+    const e = getStepErrors(step, data);
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
   const nextStep = (e) => {
     e.preventDefault();
     e.stopPropagation();
     
-    if (validateStep(currentStep)) {
+    if (validateStep(currentStep, formData)) {
       setCurrentStep(prev => Math.min(prev + 1, 5));
     }
   };
@@ -221,7 +236,15 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
     e.preventDefault();
     e.stopPropagation();
     
-    if (!validateStep(currentStep)) return;
+    if (!validateStep(currentStep, formData)) return;
+    
+    // Additional validation for required fields
+    if (!formData.title || !formData.price || !formData.address.street || 
+        !formData.address.city || !formData.address.state || 
+        !formData.contactInfo.name || !formData.contactInfo.phone || !formData.contactInfo.email) {
+      setErrors({ submit: 'Please fill in all required fields before submitting.' });
+      return;
+    }
     
     setIsSubmitting(true);
     
@@ -229,19 +252,41 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
       // Upload images if any
       const imageUrls = await uploadImages();
       
-      // Prepare payload
+      // Prepare payload with all required fields
       const payload = {
-        ...formData,
+        title: formData.title,
+        content: formData.content || formData.title, // Use title as content if content is empty
+        price: Number(formData.price),
+        bedrooms: Number(formData.bedrooms),
+        bathrooms: Number(formData.bathrooms),
+        distanceFromUniversity: Number(formData.distanceFromUniversity) || 0,
+        address: {
+          street: formData.address.street,
+          city: formData.address.city,
+          state: formData.address.state,
+          zipCode: formData.address.zipCode || '00000' // Default zipCode if empty
+        },
+        availabilityStatus: formData.availabilityStatus,
         images: imageUrls,
-        price: Number(formData.price)
+        contactInfo: {
+          name: formData.contactInfo.name,
+          phone: formData.contactInfo.phone,
+          email: formData.contactInfo.email
+        },
+        description: formData.description,
+        isFeatured: formData.isFeatured,
+        tags: formData.tags || []
       };
+      
+      console.log('Sending payload:', payload);
+      console.log('Auth token:', localStorage.getItem('accessToken'));
       
       let response;
       if (isEdit) {
         response = await axiosInstance.put(`/properties/${propertyData._id}`, payload);
         onPropertyUpdated?.(response.data.property);
       } else {
-        response = await axiosInstance.post('/properties', payload);
+        response = await axiosInstance.post('/add-property', payload);
         onPropertyCreated?.(response.data.property);
       }
       
@@ -266,7 +311,9 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
       
     } catch (error) {
       console.error('Error saving property:', error);
-      setErrors({ submit: 'Failed to save property. Please try again.' });
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      setErrors({ submit: `Failed to save property: ${error.response?.data?.message || error.message || 'Please try again.'}` });
     } finally {
       setIsSubmitting(false);
     }
@@ -294,41 +341,53 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
     switch (currentStep) {
       case 1:
         return (
-          <div className="space-y-6">
+          <div className="space-y-4">
+            <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+              <p className="text-sm text-blue-300">
+                <span className="font-medium">Step 1:</span> Fill in the basic information about your property. All fields marked with * are required.
+              </p>
+            </div>
+            
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">Property Title *</label>
+              <label className="block text-sm font-medium text-white/80 mb-2">
+                Property Title *
+              </label>
               <input
                 type="text"
                 value={formData.title}
                 onChange={(e) => updateFormData('title', e.target.value)}
-                placeholder="e.g., Beautiful 2BR Apartment near Campus"
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-colors"
+                placeholder="e.g., Cozy 2BR Apartment near Campus"
               />
               {errors.title && <p className="text-red-400 text-sm mt-1">{errors.title}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">Description *</label>
+              <label className="block text-sm font-medium text-white/80 mb-2">
+                Property Description *
+              </label>
               <textarea
                 value={formData.content}
                 onChange={(e) => updateFormData('content', e.target.value)}
-                placeholder="Describe your property..."
                 rows={4}
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-colors resize-none"
+                placeholder="Describe your property, amenities, and what makes it special..."
               />
               {errors.content && <p className="text-red-400 text-sm mt-1">{errors.content}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">Monthly Rent *</label>
+              <label className="block text-sm font-medium text-white/80 mb-2">
+                Monthly Rent *
+              </label>
               <div className="relative">
-                <MdAttachMoney className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/50" />
+                <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white/50">$</span>
                 <input
                   type="number"
                   value={formData.price}
                   onChange={(e) => updateFormData('price', e.target.value)}
+                  className="w-full pl-8 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-colors"
                   placeholder="1200"
-                  className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
                 />
               </div>
               {errors.price && <p className="text-red-400 text-sm mt-1">{errors.price}</p>}
@@ -338,31 +397,41 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
 
       case 2:
         return (
-          <div className="space-y-6">
+          <div className="space-y-4">
+            <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+              <p className="text-sm text-blue-300">
+                <span className="font-medium">Step 2:</span> Provide the property details and specifications.
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-white/80 mb-2">Bedrooms *</label>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Bedrooms *
+                </label>
                 <select
                   value={formData.bedrooms}
                   onChange={(e) => updateFormData('bedrooms', parseInt(e.target.value))}
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-colors"
                 >
-                  {[1,2,3,4,5,6].map(num => (
-                    <option key={num} value={num} className="bg-gray-800">{num}</option>
+                  {[1, 2, 3, 4, 5, 6].map(num => (
+                    <option key={num} value={num} className="bg-gray-800">{num} {num === 1 ? 'Bedroom' : 'Bedrooms'}</option>
                   ))}
                 </select>
                 {errors.bedrooms && <p className="text-red-400 text-sm mt-1">{errors.bedrooms}</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-white/80 mb-2">Bathrooms *</label>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Bathrooms *
+                </label>
                 <select
                   value={formData.bathrooms}
-                  onChange={(e) => updateFormData('bathrooms', parseInt(e.target.value))}
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:border-blue-500"
+                  onChange={(e) => updateFormData('bathrooms', parseFloat(e.target.value))}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-colors"
                 >
-                  {[1,1.5,2,2.5,3,3.5,4].map(num => (
-                    <option key={num} value={num} className="bg-gray-800">{num}</option>
+                  {[1, 1.5, 2, 2.5, 3, 3.5, 4].map(num => (
+                    <option key={num} value={num} className="bg-gray-800">{num} {num === 1 ? 'Bathroom' : 'Bathrooms'}</option>
                   ))}
                 </select>
                 {errors.bathrooms && <p className="text-red-400 text-sm mt-1">{errors.bathrooms}</p>}
@@ -370,28 +439,31 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">Distance from University (miles) *</label>
+              <label className="block text-sm font-medium text-white/80 mb-2">
+                Distance from University *
+              </label>
               <input
-                type="number"
-                step="0.1"
+                type="text"
                 value={formData.distanceFromUniversity}
                 onChange={(e) => updateFormData('distanceFromUniversity', e.target.value)}
-                placeholder="2.5"
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-colors"
+                placeholder="e.g., 0.5 miles, 10 minutes walk"
               />
               {errors.distanceFromUniversity && <p className="text-red-400 text-sm mt-1">{errors.distanceFromUniversity}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">Availability</label>
+              <label className="block text-sm font-medium text-white/80 mb-2">
+                Availability Status
+              </label>
               <select
                 value={formData.availabilityStatus}
                 onChange={(e) => updateFormData('availabilityStatus', e.target.value)}
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-colors"
               >
-                <option value="available" className="bg-gray-800">Available</option>
+                <option value="available" className="bg-gray-800">Available Now</option>
+                <option value="coming_soon" className="bg-gray-800">Coming Soon</option>
                 <option value="rented" className="bg-gray-800">Rented</option>
-                <option value="unavailable" className="bg-gray-800">Unavailable</option>
               </select>
             </div>
           </div>
@@ -399,53 +471,67 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
 
       case 3:
         return (
-          <div className="space-y-6">
+          <div className="space-y-4">
+            <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+              <p className="text-sm text-blue-300">
+                <span className="font-medium">Step 3:</span> Provide the property location details.
+              </p>
+            </div>
+
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">Street Address *</label>
+              <label className="block text-sm font-medium text-white/80 mb-2">
+                Street Address *
+              </label>
               <input
                 type="text"
                 value={formData.address.street}
                 onChange={(e) => updateFormData('address.street', e.target.value)}
+                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-colors"
                 placeholder="123 Main Street"
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
               />
               {errors.street && <p className="text-red-400 text-sm mt-1">{errors.street}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-white/80 mb-2">City *</label>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  City *
+                </label>
                 <input
                   type="text"
                   value={formData.address.city}
                   onChange={(e) => updateFormData('address.city', e.target.value)}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-colors"
                   placeholder="Chicago"
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
                 />
                 {errors.city && <p className="text-red-400 text-sm mt-1">{errors.city}</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-white/80 mb-2">State *</label>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  State *
+                </label>
                 <input
                   type="text"
                   value={formData.address.state}
                   onChange={(e) => updateFormData('address.state', e.target.value)}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-colors"
                   placeholder="IL"
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
                 />
                 {errors.state && <p className="text-red-400 text-sm mt-1">{errors.state}</p>}
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">ZIP Code</label>
+              <label className="block text-sm font-medium text-white/80 mb-2">
+                ZIP Code
+              </label>
               <input
                 type="text"
                 value={formData.address.zipCode}
                 onChange={(e) => updateFormData('address.zipCode', e.target.value)}
+                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-colors"
                 placeholder="60601"
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
               />
             </div>
           </div>
@@ -453,64 +539,58 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
 
       case 4:
         return (
-          <div className="space-y-6">
-            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-                <span className="text-sm text-green-300 font-medium">
-                  {userInfo ? 'Auto-filled with your profile' : 'Loading your profile...'}
-                </span>
-              </div>
-              <p className="text-xs text-blue-300">
-                {userInfo 
-                  ? 'Contact information is pre-filled for your convenience' 
-                  : 'We\'re fetching your contact information to save you time'
-                }
+          <div className="space-y-4">
+            <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+              <p className="text-sm text-blue-300">
+                <span className="font-medium">Step 4:</span> Provide your contact information for potential tenants.
               </p>
+              {userInfo && (
+                <div className="mt-2 flex items-center text-green-400 text-sm">
+                  <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
+                  Auto-filled with your profile
+                </div>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">Contact Name *</label>
-              <div className="relative">
-                <MdPerson className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/50" />
-                <input
-                  type="text"
-                  value={formData.contactInfo.name}
-                  onChange={(e) => updateFormData('contactInfo.name', e.target.value)}
-                  placeholder="Your full name"
-                  className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
-                />
-              </div>
+              <label className="block text-sm font-medium text-white/80 mb-2">
+                Contact Name *
+              </label>
+              <input
+                type="text"
+                value={formData.contactInfo.name}
+                onChange={(e) => updateFormData('contactInfo.name', e.target.value)}
+                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-colors"
+                placeholder="Your full name"
+              />
               {errors.contactName && <p className="text-red-400 text-sm mt-1">{errors.contactName}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">Phone Number *</label>
-              <div className="relative">
-                <MdPhone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/50" />
-                <input
-                  type="tel"
-                  value={formData.contactInfo.phone}
-                  onChange={(e) => updateFormData('contactInfo.phone', e.target.value)}
-                  placeholder="(555) 123-4567"
-                  className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
-                />
-              </div>
+              <label className="block text-sm font-medium text-white/80 mb-2">
+                Phone Number *
+              </label>
+              <input
+                type="tel"
+                value={formData.contactInfo.phone}
+                onChange={(e) => updateFormData('contactInfo.phone', e.target.value)}
+                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-colors"
+                placeholder="(555) 123-4567"
+              />
               {errors.contactPhone && <p className="text-red-400 text-sm mt-1">{errors.contactPhone}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">Email Address *</label>
-              <div className="relative">
-                <MdEmail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/50" />
-                <input
-                  type="email"
-                  value={formData.contactInfo.email}
-                  onChange={(e) => updateFormData('contactInfo.email', e.target.value)}
-                  placeholder="your.email@example.com"
-                  className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
-                />
-              </div>
+              <label className="block text-sm font-medium text-white/80 mb-2">
+                Email Address *
+              </label>
+              <input
+                type="email"
+                value={formData.contactInfo.email}
+                onChange={(e) => updateFormData('contactInfo.email', e.target.value)}
+                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-colors"
+                placeholder="your.email@example.com"
+              />
               {errors.contactEmail && <p className="text-red-400 text-sm mt-1">{errors.contactEmail}</p>}
             </div>
           </div>
@@ -518,33 +598,38 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
 
       case 5:
         return (
-          <div className="space-y-6">
+          <div className="space-y-4">
+            <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+              <p className="text-sm text-blue-300">
+                <span className="font-medium">Step 5:</span> Add property images and additional details.
+              </p>
+            </div>
+
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">Property Images</label>
+              <label className="block text-sm font-medium text-white/80 mb-2">
+                Property Images
+              </label>
               <div
                 {...getRootProps()}
-                className="border-2 border-dashed border-white/20 rounded-xl p-8 text-center cursor-pointer hover:border-blue-500/50 transition-colors"
+                className="border-2 border-dashed border-white/20 rounded-xl p-6 text-center cursor-pointer hover:border-orange-500/50 transition-colors"
               >
                 <input {...getInputProps()} />
                 <MdAdd className="mx-auto text-4xl text-white/50 mb-2" />
                 <p className="text-white/70">Drag & drop images here, or click to select</p>
-                <p className="text-white/50 text-sm mt-1">PNG, JPG up to 10MB each</p>
+                <p className="text-white/50 text-sm mt-1">PNG, JPG, GIF up to 10MB each</p>
               </div>
               
               {files.length > 0 && (
-                <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="mt-4 space-y-2">
                   {files.map((file, index) => (
-                    <div key={index} className="relative">
-                      <img
-                        src={URL.createObjectURL(file)}
-                        alt={`Preview ${index + 1}`}
-                        className="w-full h-24 object-cover rounded-lg"
-                      />
+                    <div key={index} className="flex items-center justify-between bg-white/5 rounded-lg p-3">
+                      <span className="text-white/80 text-sm">{file.name}</span>
                       <button
+                        type="button"
                         onClick={() => removeFile(index)}
-                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                        className="text-red-400 hover:text-red-300 transition-colors"
                       >
-                        <MdDelete className="w-3 h-3" />
+                        <MdDelete />
                       </button>
                     </div>
                   ))}
@@ -553,25 +638,27 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">Additional Details</label>
+              <label className="block text-sm font-medium text-white/80 mb-2">
+                Additional Description
+              </label>
               <textarea
                 value={formData.description}
                 onChange={(e) => updateFormData('description', e.target.value)}
-                placeholder="Any additional information about the property..."
-                rows={3}
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
+                rows={4}
+                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-white/50 focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-colors resize-none"
+                placeholder="Any additional details about the property, neighborhood, or special features..."
               />
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center">
               <input
                 type="checkbox"
-                id="isFeatured"
+                id="featured"
                 checked={formData.isFeatured}
                 onChange={(e) => updateFormData('isFeatured', e.target.checked)}
-                className="w-4 h-4 text-blue-600 bg-white/10 border-white/20 rounded focus:ring-blue-500"
+                className="w-4 h-4 text-orange-500 bg-white/5 border-white/20 rounded focus:ring-orange-500/50"
               />
-              <label htmlFor="isFeatured" className="text-white/80 text-sm">
+              <label htmlFor="featured" className="ml-2 text-sm text-white/80">
                 Feature this property (recommended for better visibility)
               </label>
             </div>
@@ -583,88 +670,84 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
     }
   };
 
-  const stepTitles = [
-    'Basic Information',
-    'Property Details',
-    'Location',
-    'Contact Information',
-    'Images & Final Details'
-  ];
-
   return (
     <NewRunDrawer
       isOpen={isOpen}
       onClose={onClose}
       title={isEdit ? 'Edit Property' : 'List Your Property'}
-      subtitle={isEdit ? 'Update your property listing' : 'Share your property with students'}
+      width="w-full sm:w-96"
+      maxWidth="max-w-md"
     >
-      <div className="h-full flex flex-col">
+      <form onSubmit={handleSubmit} className="h-full flex flex-col">
         {/* Progress Steps */}
-        <div className="flex items-center justify-between mb-8">
-          {stepTitles.map((title, index) => (
-            <div key={index} className="flex items-center">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                currentStep > index + 1 
-                  ? 'bg-green-500 text-white' 
-                  : currentStep === index + 1 
-                    ? 'bg-blue-500 text-white' 
+        <div className="px-6 py-4 border-b border-white/10">
+          <div className="flex items-center justify-between">
+            {[1, 2, 3, 4, 5].map((step) => (
+              <div key={step} className="flex items-center">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                  step <= currentStep 
+                    ? 'bg-orange-500 text-white' 
                     : 'bg-white/10 text-white/50'
-              }`}>
-                {currentStep > index + 1 ? '✓' : index + 1}
+                }`}>
+                  {step}
+                </div>
+                {step < 5 && (
+                  <div className={`w-8 h-0.5 mx-2 ${
+                    step < currentStep ? 'bg-orange-500' : 'bg-white/10'
+                  }`} />
+                )}
               </div>
-              <span className={`ml-2 text-sm ${
-                currentStep === index + 1 ? 'text-white' : 'text-white/50'
-              }`}>
-                {title}
-              </span>
-              {index < stepTitles.length - 1 && (
-                <div className={`w-8 h-0.5 mx-2 ${
-                  currentStep > index + 1 ? 'bg-green-500' : 'bg-white/10'
-                }`} />
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
+          <div className="flex justify-between text-xs text-white/60 mt-2">
+            <span>Basic Info</span>
+            <span>Details</span>
+            <span>Location</span>
+            <span>Contact</span>
+            <span>Images</span>
+          </div>
         </div>
 
         {/* Form Content */}
-        <div className="flex-1 overflow-y-auto">
-          <form onSubmit={handleSubmit}>
-            {renderStep()}
-          </form>
+        <div className="flex-1 overflow-y-auto p-6">
+          {renderStep()}
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center justify-between pt-6 border-t border-white/10">
-          <button
-            type="button"
-            onClick={prevStep}
-            disabled={currentStep === 1}
-            className="px-6 py-3 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-colors"
-          >
-            Previous
-          </button>
+        {/* Footer with Navigation */}
+        <div className="p-6 border-t border-white/10 bg-gradient-to-r from-white/5 to-transparent">
+          <div className="flex justify-between">
+            {currentStep > 1 ? (
+              <button
+                type="button"
+                onClick={prevStep}
+                className="px-6 py-3 text-white/70 hover:text-white transition-colors duration-200"
+              >
+                ← Back
+              </button>
+            ) : (
+              <div />
+            )}
 
-          <div className="flex items-center gap-3">
-            <span className="text-white/70 text-sm">
-              Step {currentStep} of {stepTitles.length}
-            </span>
-            
             {currentStep < 5 ? (
               <button
                 type="button"
                 onClick={nextStep}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors"
+                disabled={!isStepValid}
+                className={`px-6 py-3 rounded-xl transition-colors duration-200 font-medium ${
+                  isStepValid
+                    ? 'bg-orange-500 text-white hover:bg-orange-600'
+                    : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                }`}
               >
-                Next
+                Next →
               </button>
             ) : (
               <button
-                type="button"
-                onClick={handleSubmit}
+                type="submit"
                 disabled={isSubmitting}
-                className="px-6 py-3 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors"
+                className="px-6 py-3 bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition-colors duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSubmitting ? 'Saving...' : (isEdit ? 'Update Property' : 'List Property')}
+                {isSubmitting ? 'Creating...' : (isEdit ? 'Update Property' : 'List Property')}
               </button>
             )}
           </div>
@@ -675,7 +758,7 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
             <p className="text-red-400 text-sm">{errors.submit}</p>
           </div>
         )}
-      </div>
+      </form>
     </NewRunDrawer>
   );
 };

@@ -8,7 +8,6 @@ const propertySchema = new Schema({
     tags: {type: [String],default:[]},
     isPinned:{type:Boolean,default:false},
     userId:{type:String,required: true},
-    createdOn: {type:Date,default: new Date().getTime()},
 
     // New fields for student housing
     price: { type: Number, required: true }, // Rental price
@@ -31,6 +30,8 @@ const propertySchema = new Schema({
     description: { type: String }, // Detailed property description
     isFeatured: { type: Boolean, default: false },
     likes: [{ type: Schema.Types.ObjectId, ref: 'User' }]
+}, {
+    timestamps: true // This will automatically add createdAt and updatedAt fields
 });
 
 module.exports = mongoose.model("Property", propertySchema);

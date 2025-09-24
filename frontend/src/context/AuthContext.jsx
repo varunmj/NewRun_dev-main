@@ -30,12 +30,22 @@ export const AuthProvider = ({ children }) => {
           } catch (error) {
             console.error('Error fetching user data:', error);
             // Token might be invalid, clear it
-            logout();
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('token');
+            localStorage.removeItem('userToken');
+            setToken(null);
+            setUser(null);
+            setIsAuthenticated(false);
           }
         }
       } catch (error) {
         console.error('Error checking auth status:', error);
-        logout();
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('token');
+        localStorage.removeItem('userToken');
+        setToken(null);
+        setUser(null);
+        setIsAuthenticated(false);
       } finally {
         setLoading(false);
       }
@@ -50,7 +60,9 @@ export const AuthProvider = ({ children }) => {
       if (e.key === 'accessToken' || e.key === 'token') {
         if (!e.newValue) {
           // Token was removed, logout
-          logout();
+          setToken(null);
+          setUser(null);
+          setIsAuthenticated(false);
         }
       }
     };

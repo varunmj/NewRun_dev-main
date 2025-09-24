@@ -21,12 +21,12 @@ const DELIVERY = [
 ];
 
 const SORT_OPTIONS = [
-  { key: "-createdAt", label: "Newest First" },
-  { key: "createdAt", label: "Oldest First" },
-  { key: "price", label: "Price: Low to High" },
-  { key: "-price", label: "Price: High to Low" },
-  { key: "-favorites", label: "Most Popular" },
-  { key: "-views", label: "Most Viewed" },
+  { key: "createdAt", label: "Newest First", sortBy: "createdAt", sortOrder: "desc" },
+  { key: "createdAt-asc", label: "Oldest First", sortBy: "createdAt", sortOrder: "asc" },
+  { key: "price-asc", label: "Price: Low to High", sortBy: "price", sortOrder: "asc" },
+  { key: "price-desc", label: "Price: High to Low", sortBy: "price", sortOrder: "desc" },
+  { key: "likes-desc", label: "Most Popular", sortBy: "likes", sortOrder: "desc" },
+  { key: "views-desc", label: "Most Viewed", sortBy: "views", sortOrder: "desc" },
 ];
 
 /* ------------------------------ tiny helpers ----------------------------- */
@@ -40,8 +40,10 @@ function Chip({ active, children, onClick }) {
       type="button"
       onClick={onClick}
       className={classNames(
-        "rounded-full px-3.5 py-1.5 text-sm transition-all duration-200",
-        active ? "bg-white/10 text-white border border-white/20" : "bg-white/5 text-white/70 hover:bg-white/10 border border-white/10"
+        "w-full text-left rounded-lg px-3 py-2 text-sm transition-all duration-200",
+        active 
+          ? "bg-blue-500/20 text-blue-300 border border-blue-400/30" 
+          : "text-white/80 hover:bg-white/10 hover:text-white border border-transparent"
       )}
     >
       {children}
@@ -49,30 +51,41 @@ function Chip({ active, children, onClick }) {
   );
 }
 
-/** Simple dropdown built with <details> for great a11y and zero deps */
-function ChipDropdown({ label, activeLabel, children }) {
-  const detailsRef = useRef(null);
+/** Simple dropdown built with controlled state for better z-index handling */
+function ChipDropdown({ label, activeLabel, children, isOpen, onToggle }) {
+  const dropdownRef = useRef(null);
+  
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        onToggle(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [onToggle]);
+
   return (
-    <details ref={detailsRef} className="group relative">
-      <summary
+    <div ref={dropdownRef} className="relative">
+      <button
+        type="button"
+        onClick={() => onToggle(!isOpen)}
         className={classNames(
-          "list-none cursor-pointer select-none rounded-full px-3.5 py-1.5 text-sm transition-all duration-200",
-          "bg-white/5 text-white/70 hover:bg-white/10 border border-white/10 marker:content-none",
-          "group-open:bg-white/10 group-open:text-white group-open:border-white/20"
+          "rounded-full px-3.5 py-1.5 text-sm transition-all duration-200",
+          isOpen ? "bg-white/10 text-white border border-white/20" : "bg-white/5 text-white/70 hover:bg-white/10 border border-white/10"
         )}
       >
         {activeLabel || label}
-      </summary>
-      <div
-        className="absolute left-0 z-20 mt-2 w-[min(92vw,320px)] rounded-2xl border border-white/10 bg-[#0f1115]/90 backdrop-blur-xl p-2 shadow-2xl"
-        onClick={(e) => {
-          // keep it open only for inner buttons; outside click will close automatically
-          e.stopPropagation();
-        }}
-      >
-        {children}
-      </div>
-    </details>
+        <svg className="inline-block ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {isOpen && (
+        <div className="absolute left-0 z-[9999] mt-3 w-[280px] rounded-xl border border-white/20 bg-[#0f1115]/98 backdrop-blur-2xl p-1 shadow-2xl">
+          {children}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -101,7 +114,14 @@ export default function Marketplace() {
   const [campus, setCampus] = useState("");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
-  const [sortBy, setSortBy] = useState("-createdAt");
+  const [sortBy, setSortBy] = useState("createdAt");
+
+  // dropdown states
+  const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const [conditionDropdownOpen, setConditionDropdownOpen] = useState(false);
+  const [deliveryDropdownOpen, setDeliveryDropdownOpen] = useState(false);
+  const [priceDropdownOpen, setPriceDropdownOpen] = useState(false);
 
   // data
   const [items, setItems] = useState([]);
@@ -115,12 +135,20 @@ export default function Marketplace() {
 
   // derived
   const filters = useMemo(() => {
+    const selectedSort = SORT_OPTIONS.find(opt => opt.key === sortBy);
+    const sortField = selectedSort?.sortBy ?? 'createdAt';
+    const sortDir = selectedSort?.sortOrder ?? 'desc';
+
     const p = {
-      q, campus, delivery,
+      query: q, // Map 'q' to 'query' for backend compatibility
+      campus, delivery,
       category, condition,
       min: minPrice, max: maxPrice,   // backend v1
       minPrice, maxPrice,             // backend v2
-      sort: sortBy,
+      
+      // Simplified - just send what backend expects
+      sortBy: sortField,
+      sortOrder: sortDir,
     };
     Object.keys(p).forEach((k) => (p[k] === "" || p[k] == null) && delete p[k]);
     return p;
@@ -133,6 +161,21 @@ export default function Marketplace() {
         params: { ...filters, cursor: append ? cursor : undefined, limit: 24 },
       });
       const next = r?.data?.items || [];
+      
+      // Client-side fallback sort
+      const selected = SORT_OPTIONS.find(o => o.key === sortBy);
+      const field = selected?.sortBy ?? 'createdAt';
+      const dir = selected?.sortOrder ?? 'desc';
+      const getVal = (x) => {
+        if (field === 'createdAt') {
+          // Handle both createdAt and createdOn fields
+          const dateField = x.createdAt || x.createdOn;
+          return new Date(dateField || 0).getTime();
+        }
+        return Number(x[field] ?? 0);
+      };
+      next.sort((a,b) => (dir === 'asc' ? 1 : -1) * (getVal(a) - getVal(b)));
+      
       setItems((prev) => (append ? [...prev, ...next] : next));
       setCursor(r?.data?.nextCursor || null);
     } catch {
@@ -150,6 +193,11 @@ export default function Marketplace() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
+
+  // Reset pagination when sort/filter changes
+  useEffect(() => { 
+    setCursor(null); 
+  }, [sortBy, q, category, condition, delivery, minPrice, maxPrice, campus]);
 
   // Listen for search events from hero
   useEffect(() => {
@@ -211,10 +259,10 @@ export default function Marketplace() {
         </div>
       </section>
 
-      <main className="mx-auto max-w-7xl px-4 pb-16">
+      <main className="mx-auto max-w-7xl px-4 pb-16 overflow-visible">
 
         {/* Enhanced Filter Toolbar */}
-        <section className="sticky top-[68px] z-10 mb-8 rounded-2xl border border-white/10 bg-[#0f1115]/90 backdrop-blur-xl shadow-2xl">
+        <section className="relative z-50 sticky top-[68px] mb-8 rounded-2xl border border-white/10 bg-[#0f1115]/90 backdrop-blur-xl shadow-2xl overflow-visible">
           <div className="p-4">
             {/* Active Filters Row */}
             <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -287,13 +335,18 @@ export default function Marketplace() {
               <ChipDropdown
                 label="Sort"
                 activeLabel={SORT_OPTIONS.find(s => s.key === sortBy)?.label || "Newest First"}
+                isOpen={sortDropdownOpen}
+                onToggle={setSortDropdownOpen}
               >
                 <div className="grid gap-1 p-1">
                   {SORT_OPTIONS.map((option) => (
                     <Chip
                       key={option.key}
                       active={sortBy === option.key}
-                      onClick={() => setSortBy(option.key)}
+                      onClick={() => {
+                        setSortBy(option.key);
+                        setSortDropdownOpen(false);
+                      }}
                     >
                       {option.label}
                     </Chip>
@@ -302,21 +355,43 @@ export default function Marketplace() {
               </ChipDropdown>
 
             {/* Category dropdown chip */}
-              <ChipDropdown label="Category" activeLabel={category || "All Categories"}>
+              <ChipDropdown 
+                label="Category" 
+                activeLabel={category || "All Categories"}
+                isOpen={categoryDropdownOpen}
+                onToggle={setCategoryDropdownOpen}
+              >
               <div className="grid grid-cols-2 gap-2 p-1">
-                <Chip active={!category} onClick={() => setCategory("")}>All</Chip>
+                <Chip active={!category} onClick={() => {
+                  setCategory("");
+                  setCategoryDropdownOpen(false);
+                }}>All</Chip>
                 {CATEGORIES.map((c) => (
-                  <Chip key={c} active={category === c} onClick={() => setCategory(c)}>{c}</Chip>
+                  <Chip key={c} active={category === c} onClick={() => {
+                    setCategory(c);
+                    setCategoryDropdownOpen(false);
+                  }}>{c}</Chip>
                 ))}
               </div>
             </ChipDropdown>
 
             {/* Condition dropdown chip */}
-              <ChipDropdown label="Condition" activeLabel={condition || "Any Condition"}>
+              <ChipDropdown 
+                label="Condition" 
+                activeLabel={condition || "Any Condition"}
+                isOpen={conditionDropdownOpen}
+                onToggle={setConditionDropdownOpen}
+              >
               <div className="grid grid-cols-2 gap-2 p-1">
-                <Chip active={!condition} onClick={() => setCondition("")}>Any</Chip>
+                <Chip active={!condition} onClick={() => {
+                  setCondition("");
+                  setConditionDropdownOpen(false);
+                }}>Any</Chip>
                 {CONDITIONS.map((c) => (
-                  <Chip key={c} active={condition === c} onClick={() => setCondition(c)}>{c}</Chip>
+                  <Chip key={c} active={condition === c} onClick={() => {
+                    setCondition(c);
+                    setConditionDropdownOpen(false);
+                  }}>{c}</Chip>
                 ))}
               </div>
             </ChipDropdown>
@@ -324,14 +399,19 @@ export default function Marketplace() {
             {/* Delivery dropdown chip */}
             <ChipDropdown
               label="Delivery"
-                activeLabel={DELIVERY.find((d) => d.key === delivery)?.label || "Any Delivery"}
+              activeLabel={DELIVERY.find((d) => d.key === delivery)?.label || "Any Delivery"}
+              isOpen={deliveryDropdownOpen}
+              onToggle={setDeliveryDropdownOpen}
             >
               <div className="grid grid-cols-2 gap-2 p-1">
                 {DELIVERY.map((d) => (
                   <Chip
                     key={d.key || "any"}
                     active={delivery === d.key}
-                    onClick={() => setDelivery(d.key)}
+                    onClick={() => {
+                      setDelivery(d.key);
+                      setDeliveryDropdownOpen(false);
+                    }}
                   >
                     {d.label}
                   </Chip>
@@ -341,43 +421,55 @@ export default function Marketplace() {
 
             {/* Price dropdown chip */}
             <ChipDropdown
-                label="Price Range"
+              label="Price Range"
               activeLabel={
-                  minPrice || maxPrice ? `$${minPrice || 0}–$${maxPrice || "∞"}` : "Any Price"
+                minPrice || maxPrice ? `$${minPrice || 0}–$${maxPrice || "∞"}` : "Any Price"
               }
+              isOpen={priceDropdownOpen}
+              onToggle={setPriceDropdownOpen}
             >
-              <div className="grid gap-3 p-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <Field
-                    label="Min price"
-                    type="number"
-                    min="0"
-                    value={minPrice}
-                    onChange={(e) => setMinPrice(e.target.value)}
-                    placeholder="0"
-                  />
-                  <Field
-                    label="Max price"
-                    type="number"
-                    min="0"
-                    value={maxPrice}
-                    onChange={(e) => setMaxPrice(e.target.value)}
-                    placeholder="1000"
-                  />
+              <div className="p-3">
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div>
+                    <label className="text-xs text-white/70 mb-1 block font-medium">Min Price</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={minPrice}
+                      onChange={(e) => setMinPrice(e.target.value)}
+                      placeholder="0"
+                      className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/40 focus:border-blue-400 focus:bg-white/10 transition-all duration-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-white/70 mb-1 block font-medium">Max Price</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={maxPrice}
+                      onChange={(e) => setMaxPrice(e.target.value)}
+                      placeholder="1000"
+                      className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/40 focus:border-blue-400 focus:bg-white/10 transition-all duration-200"
+                    />
+                  </div>
                 </div>
                 <div className="flex items-center justify-between">
                   <button
                     onClick={() => {
                       setMinPrice("");
                       setMaxPrice("");
+                      setPriceDropdownOpen(false);
                     }}
-                    className="text-xs text-white/70 hover:text-white"
+                    className="text-xs text-white/60 hover:text-white/80 transition-colors px-2 py-1 rounded hover:bg-white/5"
                   >
                     Clear
                   </button>
                   <button
-                    onClick={() => load(false)}
-                    className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700"
+                    onClick={() => {
+                      load(false);
+                      setPriceDropdownOpen(false);
+                    }}
+                    className="rounded-lg bg-blue-500 px-4 py-2 text-xs font-medium text-white hover:bg-blue-600 transition-colors"
                   >
                     Apply
                   </button>
@@ -389,7 +481,7 @@ export default function Marketplace() {
         </section>
 
         {/* Results Section */}
-        <div className="mb-6 flex items-center justify-between p-6 rounded-2xl border border-white/10 bg-[#0f1115]/30 backdrop-blur-xl">
+        <div className="relative z-10 mb-6 flex items-center justify-between p-6 rounded-2xl border border-white/10 bg-[#0f1115]/30 backdrop-blur-xl">
           <div className="flex items-center gap-4">
             <h2 className="text-xl font-semibold text-white">
               {loading ? "Loading items..." : `${items.length} items found`}

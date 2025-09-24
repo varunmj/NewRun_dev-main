@@ -71,6 +71,17 @@ const upload = multer({
       cb(null, filename); // File name format
     },
   }),
+  fileFilter: (req, file, cb) => {
+    // Accept only image files
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  },
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  }
 });
 
 app.get('/', (req, res) => {
@@ -402,6 +413,9 @@ app.get("/get-user", authenticateToken, async (req, res) => {
 // Route to handle image uploads
 // Image Upload Route (using AWS SDK v3)
 app.post("/upload-images", upload.array("images", 5), async (req, res) => {
+  console.log('Upload images request received');
+  console.log('Files:', req.files);
+  console.log('Body:', req.body);
   try {
     console.log("Request files:", req.files); // Log incoming files
     const imageUrls = req.files.map((file) => file.location);
@@ -438,7 +452,13 @@ app.post('/add-property', authenticateToken, async (req, res) => {
     isFeatured,
   } = req.body;
 
-  const { user } = req.user;
+  const userId = getAuthUserId(req);
+  if (!userId) {
+    return res.status(401).json({
+      error: true,
+      message: 'User not authenticated'
+    });
+  }
 
   // ✅ NEW: realistic required fields for a listing
   if (!title || !address || typeof price === 'undefined') {
@@ -449,6 +469,9 @@ app.post('/add-property', authenticateToken, async (req, res) => {
   }
 
   try {
+    console.log('Creating property with userId:', userId);
+    console.log('Property data:', { title, price, address, contactInfo });
+    
     const property = new Property({
       title,
       content: content || '',           // optional
@@ -463,7 +486,7 @@ app.post('/add-property', authenticateToken, async (req, res) => {
       contactInfo: contactInfo || {},
       description: description || '',
       isFeatured: Boolean(isFeatured),
-      userId: user._id,
+      userId: userId,
       // optional: copy user.university onto the property for future scoping
       // university: user.university || ''
     });
@@ -735,7 +758,19 @@ app.get("/search-properties", async (req, res) => {
 
     // Build sort object
     const sort = {};
-    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    
+    // Handle createdAt fallback - check for both createdAt and createdOn fields
+    if (sortBy === 'createdAt') {
+      // Try createdAt first, then createdOn, then _id as fallback
+      sort['createdAt'] = sortOrder === 'desc' ? -1 : 1;
+      sort['createdOn'] = sortOrder === 'desc' ? -1 : 1;
+      sort['_id'] = sortOrder === 'desc' ? -1 : 1; // _id contains timestamp info
+    } else {
+      sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    }
+    
+    // Debug logging
+    console.log('Sort parameters:', { sortBy, sortOrder, sort });
 
     // Calculate pagination
     const skip = (Number(page) - 1) * Number(limit);
@@ -748,13 +783,19 @@ app.get("/search-properties", async (req, res) => {
       .limit(Number(limit))
       .lean();
 
+    // Ensure createdAt field exists for all properties (fallback to createdOn or _id timestamp)
+    const propertiesWithTimestamps = properties.map(property => ({
+      ...property,
+      createdAt: property.createdAt || property.createdOn || property._id.getTimestamp()
+    }));
+
     // Get total count for pagination
     const totalCount = await Property.countDocuments(filter);
     const totalPages = Math.ceil(totalCount / Number(limit));
 
     // Add likes count and liked status for each property
     const userId = req.user ? req.user._id : null;
-    const propertiesWithLikes = properties.map((property) => ({
+    const propertiesWithLikes = propertiesWithTimestamps.map((property) => ({
       ...property,
       likesCount: property.likes ? property.likes.length : 0,
       likedByUser: userId ? property.likes?.includes(userId) : false
