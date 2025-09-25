@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -12,14 +12,15 @@ import {
   MdDelete, MdWarning, MdCheckCircle, MdCancel, MdPending,
     MdAttachMoney, MdShowChart, MdTimeline, MdCompare,
   MdDashboard, MdSecurity, MdSpeed, MdLightbulb, MdRocket,
-    MdBed, MdBathtub, MdSend, MdUpload, MdArrowDropDown, MdEvent
+    MdBed, MdBathtub, MdSend, MdUpload, MdArrowDropDown
 } from "react-icons/md";
 
 import Navbar from "../components/Navbar/Navbar";
 import PropertyDrawer from "../components/Property/PropertyDrawer";
 import ListingDrawer from "../components/marketplace/ListingDrawer";
-import { useUnifiedState } from "../context/UnifiedStateContext";
-import IntelligentInsights from "../components/AI/IntelligentInsights";
+import PersonalizedDashboard from "../components/Dashboard/PersonalizedDashboard";
+import IntelligentNotificationSystem from "../components/Notifications/IntelligentNotificationSystem";
+import { useOnboardingData } from "../hooks/useOnboardingData";
 import axiosInstance from "../utils/axiosInstance";
 import "../styles/newrun-hero.css";
 
@@ -89,184 +90,23 @@ const TypewriterWelcome = () => {
 
 export default function UserDashboard() {
   const navigate = useNavigate();
-  
-  // Use unified state management
-  const {
-    userInfo,
-    dashboardData,
-    onboardingData,
-    conversations,
-    synapseProfile,
-    aiInsights,
-    aiActions,
-    aiTimeline,
-    aiMarketAnalysis,
-    aiPredictions,
-    loading,
-    errors,
-    isFullyInitialized,
-    hasAnyErrors,
-    isLoading,
-    refreshAll,
-    refreshUserData,
-    refreshDashboardData,
-    refreshConversations,
-    refreshSynapseProfile,
-    refreshAIData,
-    invalidateCache,
-    calculateProfileCompletion
-  } = useUnifiedState();
+  const [userInfo, setUserInfo] = useState(null);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showPropertyManager, setShowPropertyManager] = useState(false);
+  const [showMarketplaceManager, setShowMarketplaceManager] = useState(false);
+  const [editingProperty, setEditingProperty] = useState(null);
+  const [editingItem, setEditingItem] = useState(null);
+        const [showPropertyDrawer, setShowPropertyDrawer] = useState(false);
+        const [showMarketplaceDrawer, setShowMarketplaceDrawer] = useState(false);
+  const [agentMode, setAgentMode] = useState(false);
+  const [prompt, setPrompt] = useState("");
 
-  // Debug logging
-  console.log('UserDashboard: useUnifiedState result:', {
-    userInfo: !!userInfo,
-    dashboardData: !!dashboardData,
-    onboardingData: !!onboardingData,
-    aiInsights: !!aiInsights,
-    aiActions: !!aiActions,
-    loading,
-    errors,
-    isFullyInitialized,
-    isLoading
-  });
-
-  // Local UI state
-  const [localState, setLocalState] = useState({
-    notifications: [],
-    showNotifications: false,
-    refreshing: false,
-    showPropertyManager: false,
-    showMarketplaceManager: false,
-    editingProperty: null,
-    editingItem: null,
-    showPropertyDrawer: false,
-    showMarketplaceDrawer: false,
-    agentMode: false,
-    prompt: ""
-  });
-
-  // Destructure local state
-  const {
-    notifications, showNotifications, refreshing,
-    showPropertyManager, showMarketplaceManager, editingProperty, editingItem,
-    showPropertyDrawer, showMarketplaceDrawer, agentMode, prompt
-  } = localState;
-
-  // Update local state
-  const updateLocalState = useCallback((updates) => {
-    setLocalState(prev => ({ ...prev, ...updates }));
-  }, []);
-
-  // Get AI actions from unified state
-  const actionsLoading = loading.ai;
-
-  // Get current actions (AI or fallback)
-  const getCurrentActions = useCallback(() => {
-    return (aiActions && aiActions.length > 0) ? aiActions : getStaticActions();
-  }, [aiActions]);
-
-  // Get current insights (AI or fallback)
-  const getCurrentInsights = useCallback(() => {
-    return (aiInsights && aiInsights.length > 0) ? aiInsights : getPersonalizedInsights();
-  }, [aiInsights]);
-
-
-  // Static fallback actions with CORRECT routes
-  const getStaticActions = () => {
-    if (!onboardingData) {
-      return [
-        { label: "List Property", icon: MdHome, path: "/dashboard", color: "from-blue-500 to-cyan-500" }, // Will open property drawer
-        { label: "Browse Properties", icon: MdSearch, path: "/all-properties", color: "from-indigo-500 to-blue-500" },
-        { label: "Find Roommate", icon: MdGroups, path: "/Synapse", color: "from-purple-500 to-pink-500" },
-        { label: "Browse Community", icon: MdChat, path: "/community", color: "from-orange-500 to-red-500" }
-      ];
-    }
-
-    const focus = onboardingData.focus;
-    const actions = [];
-
-    // Base actions for everyone
-    actions.push({ label: "List Property", icon: MdHome, path: "/dashboard", color: "from-blue-500 to-cyan-500" }); // Will open property drawer
-    actions.push({ label: "Browse Properties", icon: MdSearch, path: "/all-properties", color: "from-indigo-500 to-blue-500" });
-
-    // Add focus-specific actions
-    if (focus === 'Housing' || focus === 'Everything') {
-      actions.push({ label: "Browse Properties", icon: MdSearch, path: "/all-properties", color: "from-indigo-500 to-blue-500" });
-      actions.push({ label: "Schedule Tours", icon: MdSchedule, path: "/all-properties", color: "from-teal-500 to-cyan-500" });
-    }
-
-    if (focus === 'Roommate' || focus === 'Everything') {
-      actions.push({ label: "Find Roommate", icon: MdGroups, path: "/Synapse", color: "from-purple-500 to-pink-500" });
-      actions.push({ label: "Complete Profile", icon: MdPerson, path: "/Synapse", color: "from-rose-500 to-pink-500" });
-    }
-
-    if (focus === 'Essentials' || focus === 'Everything') {
-      actions.push({ label: "Browse Essentials", icon: MdShoppingBag, path: "/marketplace", color: "from-green-500 to-emerald-500" });
-      actions.push({ label: "Smart Pack", icon: MdLightbulb, path: "/marketplace", color: "from-yellow-500 to-orange-500" });
-    }
-
-    if (focus === 'Community' || focus === 'Everything') {
-      actions.push({ label: "Browse Community", icon: MdChat, path: "/community", color: "from-orange-500 to-red-500" });
-      actions.push({ label: "Join Events", icon: MdEvent, path: "/community", color: "from-red-500 to-pink-500" });
-    }
-
-    return actions.slice(0, 6); // Limit to 6 actions
-  };
-
-  // AI actions are automatically managed by unified state
-
-  // Get current actions (AI or fallback) - now handled by getCurrentActions
-
-  // Generate personalized insights based on user data
-  const getPersonalizedInsights = () => {
-    if (!onboardingData) return [];
-
-    const insights = [];
-    const focus = onboardingData.focus;
-    const arrivalDate = onboardingData.arrivalDate;
-    const budgetRange = onboardingData.budgetRange;
-
-    // Time-based insights
-    if (arrivalDate) {
-      const daysUntilArrival = Math.ceil((new Date(arrivalDate) - new Date()) / (1000 * 60 * 60 * 24));
-      if (daysUntilArrival > 0 && daysUntilArrival <= 30) {
-        insights.push({
-          type: "urgent",
-          title: "Arrival Approaching!",
-          message: `${daysUntilArrival} days until you arrive in ${onboardingData.city || 'your city'}`,
-          action: "Complete your housing search",
-          icon: MdSchedule
-        });
-      }
-    }
-
-    // Budget-based insights
-    if (budgetRange && budgetRange.max) {
-      const avgPrice = dashboardData?.propertiesStats?.averagePrice || 0;
-      if (avgPrice > budgetRange.max) {
-        insights.push({
-          type: "warning",
-          title: "Budget Alert",
-          message: `Average property price ($${avgPrice}) exceeds your budget ($${budgetRange.max})`,
-          action: "Consider expanding your search",
-          icon: MdWarning
-        });
-      }
-    }
-
-    // Focus-based insights
-    if (focus === 'Housing') {
-      insights.push({
-        type: "success",
-        title: "Housing Focus",
-        message: "We're prioritizing your housing search",
-        action: "View recommended properties",
-        icon: MdHome
-      });
-    }
-
-    return insights;
-  };
+  // Get onboarding data for personalization
+  const { onboardingData, getPersonalizedGreeting, getNextSteps, getPersonalizedRecommendations } = useOnboardingData();
 
   // Fetch user data
   const fetchUser = async () => {
@@ -295,82 +135,97 @@ export default function UserDashboard() {
   };
 
   // Load dashboard data
-  const loadDashboard = useCallback(async () => {
-    console.log('🔄 Loading dashboard data...');
-    
+  const loadDashboard = async () => {
+    setLoading(true);
     try {
       const token = localStorage.getItem("accessToken");
       if (!token) {
-        console.log('❌ No authentication token found, redirecting to login');
         navigate("/login");
         return;
       }
 
-      console.log('✅ Authentication token found');
-
       // Check backend health
       try {
-        const healthCheck = await axiosInstance.get("/");
-        console.log('✅ Backend health check passed:', healthCheck.data);
+        await axiosInstance.get("/");
       } catch (error) {
-        console.error("❌ Backend health check failed:", error);
-        // Don't return here, continue with dashboard loading
+        console.log("Backend health check failed:", error);
       }
 
-      console.log('📊 Fetching dashboard data...');
       const [user, data] = await Promise.all([fetchUser(), fetchDashboardData()]);
-      
-      console.log('👤 User data:', user);
-      console.log('📊 Dashboard data:', data);
+      setUserInfo(user);
 
       if (data && !data.error) {
-        console.log('✅ Dashboard data loaded successfully');
+        setDashboardData(data);
       } else {
-        console.log('⚠️ Dashboard data has errors or is empty');
+        // Set empty state if no data
+        setDashboardData({
+          myProperties: { 
+            items: [], 
+            statistics: { 
+              totalProperties: 0, 
+              totalViews: 0, 
+              averagePrice: 0, 
+              availableProperties: 0, 
+              rentedProperties: 0 
+            } 
+          },
+          myMarketplace: { 
+            items: [], 
+            statistics: { 
+              totalItems: 0, 
+              totalViews: 0, 
+              totalFavorites: 0, 
+              averagePrice: 0, 
+              activeItems: 0, 
+              soldItems: 0 
+            } 
+          },
+          userSummary: { 
+            firstName: user?.firstName || "User", 
+            university: user?.university || "", 
+            digest: "Welcome to your NewRun dashboard!" 
+          }
+        });
       }
 
-    } catch (error) {
-      console.error("❌ loadDashboard failed:", error);
-    }
-  }, [navigate]);
+        setNotifications([
+          { id: 1, type: 'message', title: 'New message from John', time: '2 min ago', read: false },
+          { id: 2, type: 'view', title: 'Your property got 5 new views', time: '1 hour ago', read: false },
+          { id: 3, type: 'like', title: 'Someone liked your marketplace item', time: '3 hours ago', read: true },
+          { id: 4, type: 'system', title: 'Welcome to NewRun!', time: '1 day ago', read: true }
+        ]);
+      } catch (error) {
+      console.error("loadDashboard failed:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
   useEffect(() => {
     loadDashboard();
   }, []);
 
-  // Auto-refresh every 30 seconds with proper cleanup
+  // Auto-refresh every 30 seconds
   useEffect(() => {
-    let intervalId;
-    let isMounted = true;
-
-    const refreshData = async () => {
+    const interval = setInterval(async () => {
       if (document.visibilityState !== "visible") return;
       if (refreshing) return;
       
-      updateLocalState({ refreshing: true });
-      try {
-        const data = await fetchDashboardData();
-        if (data && !data.error && isMounted) {
-          updateLocalState({ dashboardData: data });
+        setRefreshing(true);
+        try {
+          const data = await fetchDashboardData();
+        if (data && !data.error) {
+          setDashboardData(data);
         }
-      } catch (error) {
-        console.error("Auto-refresh failed:", error);
-      } finally {
-        if (isMounted) {
-          updateLocalState({ refreshing: false });
+        } catch (error) {
+          console.error("Auto-refresh failed:", error);
+        } finally {
+          setRefreshing(false);
         }
-      }
-    };
+    }, 30000);
 
-    intervalId = setInterval(refreshData, 30000);
-
-    return () => {
-      isMounted = false;
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [refreshing, updateLocalState]);
+    return () => clearInterval(interval);
+  }, [refreshing]);
 
   // Analytics calculations
   const analytics = useMemo(() => {
@@ -404,47 +259,50 @@ export default function UserDashboard() {
   }, [dashboardData]);
 
   // Property management functions
-  const handleEditProperty = useCallback((property) => {
-    updateLocalState({ editingProperty: property, showPropertyDrawer: true });
-  }, [updateLocalState]);
+  const handleEditProperty = (property) => {
+    setEditingProperty(property);
+    setShowPropertyDrawer(true);
+  };
 
-  const handleDeleteProperty = useCallback(async (propertyId) => {
+  const handleDeleteProperty = async (propertyId) => {
     if (window.confirm('Are you sure you want to delete this property?')) {
       try {
         await axiosInstance.delete(`/delete-property/${propertyId}`);
-        // Refresh dashboard data using unified state
-        await refreshDashboardData();
-        // Invalidate cache
-        invalidateCache('property_deleted');
+        // Refresh dashboard data
+        const data = await fetchDashboardData();
+        if (data) {
+        setDashboardData(data);
+        }
       } catch (error) {
         console.error('Failed to delete property:', error);
         alert('Failed to delete property. Please try again.');
       }
     }
-  }, [refreshDashboardData, invalidateCache]);
+  };
 
   // Marketplace item management functions
-  const handleEditItem = useCallback((item) => {
-    updateLocalState({ editingItem: item, showMarketplaceDrawer: true });
-  }, [updateLocalState]);
+  const handleEditItem = (item) => {
+    setEditingItem(item);
+    setShowMarketplaceDrawer(true);
+  };
 
-  const handleDeleteItem = useCallback(async (itemId) => {
+  const handleDeleteItem = async (itemId) => {
     if (window.confirm('Are you sure you want to delete this marketplace item?')) {
       try {
         await axiosInstance.delete(`/marketplace/item/${itemId}`);
-        // Refresh dashboard data using unified state
-        await refreshDashboardData();
-        // Invalidate cache
-        invalidateCache('marketplace_item_deleted');
+        // Refresh dashboard data
+        const data = await fetchDashboardData();
+        if (data) {
+        setDashboardData(data);
+        }
       } catch (error) {
         console.error('Failed to delete marketplace item:', error);
         alert('Failed to delete marketplace item. Please try again.');
       }
     }
-  }, [refreshDashboardData, invalidateCache]);
+  };
 
-  // Safety check for loading state - moved to end to fix hooks order violation
-  if (isLoading && !isFullyInitialized) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-[#0b0c0f] relative overflow-hidden">
         {/* Animated Background */}
@@ -465,7 +323,7 @@ export default function UserDashboard() {
             <div className="relative">
               <div className="animate-spin rounded-full h-20 w-20 border-4 border-blue-500 border-t-transparent mx-auto mb-8" />
               <div className="absolute inset-0 rounded-full border-4 border-purple-500 border-t-transparent animate-spin" style={{animationDirection: 'reverse', animationDuration: '1.5s'}} />
-            </div>
+          </div>
             <p className="text-white/80 text-xl">Initializing your NewRun experience...</p>
           </motion.div>
         </div>
@@ -484,6 +342,13 @@ export default function UserDashboard() {
       
       <Navbar />
       
+      {/* Intelligent Notification System */}
+      <div className="fixed top-4 right-4 z-50">
+        <IntelligentNotificationSystem 
+          userInfo={userInfo} 
+          dashboardData={dashboardData} 
+        />
+      </div>
       
       <div className="relative z-10">
         {/* Hero Section - Ultra Creative with Floating Elements */}
@@ -520,14 +385,7 @@ export default function UserDashboard() {
                          </div>
             <div>
                            <h3 className="text-base font-semibold text-white">My Conversations</h3>
-                           <p className="text-white/60 text-xs">
-                             {loading.conversations 
-                               ? 'Loading...' 
-                               : conversations && conversations.length > 0 
-                                 ? `${conversations.length} conversation${conversations.length !== 1 ? 's' : ''}`
-                                 : 'No conversations yet'
-                             }
-                           </p>
+                           <p className="text-white/60 text-xs">Recent activity</p>
             </div>
                        </div>
               <button
@@ -538,70 +396,34 @@ export default function UserDashboard() {
               </button>
             </div>
               <div className="space-y-2">
-                {loading.conversations ? (
-                  <div className="flex items-center justify-center py-4">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                    <span className="text-white/60 text-xs ml-2">Loading conversations...</span>
+                       {notifications.slice(0, 3).map((n, index) => (
+                         <motion.div 
+                           key={n.id}
+                           initial={{ opacity: 0, y: 20 }}
+                           animate={{ opacity: 1, y: 0 }}
+                           transition={{ duration: 0.4, delay: index * 0.1 }}
+                           whileHover={{ scale: 1.01 }}
+                           className="flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all duration-200 group/item"
+                         >
+                           <div className="relative">
+                             <div className="w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 font-semibold text-xs">
+                               {n.title.charAt(0)}
+                      </div>
+                             {!n.read && (
+                               <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-blue-500 rounded-full flex items-center justify-center">
+                                 <div className="w-1 h-1 bg-white rounded-full"></div>
+                               </div>
+                      )}
+                    </div>
+                           <div className="flex-1 min-w-0">
+                             <div className="text-white/90 text-sm font-medium truncate">{n.title}</div>
+                             <div className="text-white/60 text-xs">{n.time}</div>
                   </div>
-                ) : conversations && conversations.length > 0 ? (
-                  conversations.slice(0, 4).map((conversation, index) => {
-                    // Get other participants (excluding current user)
-                    const otherParticipants = conversation.participants?.filter(p => p._id !== userInfo?._id) || [];
-                    const participantName = otherParticipants.length > 0 
-                      ? `${otherParticipants[0].firstName} ${otherParticipants[0].lastName}`
-                      : 'Unknown User';
-                    
-                    // Get last message info
-                    const lastMessage = conversation.lastMessage;
-                    const messagePreview = lastMessage?.content || 'No messages yet';
-                    const messageTime = lastMessage?.timestamp 
-                      ? new Date(lastMessage.timestamp).toLocaleDateString()
-                      : new Date(conversation.lastUpdated).toLocaleDateString();
-                    
-                    return (
-                      <motion.div 
-                        key={conversation._id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4, delay: index * 0.1 }}
-                        whileHover={{ scale: 1.01 }}
-                        onClick={() => navigate(`/messaging?conversation=${conversation._id}`)}
-                        className="flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all duration-200 group/item cursor-pointer"
-                      >
-                        <div className="relative">
-                          <div className="w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 font-semibold text-xs">
-                            {participantName.charAt(0)}
-                          </div>
-                          {lastMessage && !lastMessage.isRead && (
-                            <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-blue-500 rounded-full flex items-center justify-center">
-                              <div className="w-1 h-1 bg-white rounded-full"></div>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-white/90 text-sm font-medium truncate">{participantName}</div>
-                          <div className="text-white/60 text-xs truncate">{messagePreview}</div>
-                          <div className="text-white/50 text-xs">{messageTime}</div>
-                        </div>
-                        <div className="opacity-0 group-hover/item:opacity-100 transition-opacity">
-                          <MdArrowForward className="text-blue-400 text-xs" />
-                        </div>
-                      </motion.div>
-                    );
-                  })
-                ) : (
-                  <div className="text-center py-4">
-                    <MdChat className="text-2xl text-white/30 mx-auto mb-2" />
-                    <p className="text-white/60 text-xs">No conversations yet</p>
-                    <p className="text-white/40 text-xs mt-1">Start a conversation with someone!</p>
-                    <button
-                      onClick={() => navigate("/messaging")}
-                      className="mt-2 px-3 py-1.5 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition-all duration-200 text-xs font-medium"
-                    >
-                      Start Chatting
-                    </button>
-                  </div>
-                )}
+                           <div className="opacity-0 group-hover/item:opacity-100 transition-opacity">
+                             <MdArrowForward className="text-blue-400 text-xs" />
+                           </div>
+                         </motion.div>
+                ))}
               </div>
             </div>
                 </motion.div>
@@ -619,7 +441,7 @@ export default function UserDashboard() {
                   <div className="inline-flex items-center gap-2">
                     <TypewriterWelcome />
                     <span className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight text-white">
-                      {userInfo?.firstName}!
+                      {getPersonalizedGreeting(userInfo?.firstName)}
                     </span>
         </div>
                 </motion.div>
@@ -662,7 +484,7 @@ export default function UserDashboard() {
                     <div className="relative rounded-xl border border-white/15 bg-black/40 backdrop-blur-sm">
                       <textarea
                         value={prompt}
-                        onChange={e => updateLocalState({ prompt: e.target.value })}
+                        onChange={e => setPrompt(e.target.value)}
                         placeholder="Ask AI anything..."
                         rows={2}
                         className="w-full resize-none bg-transparent text-white/80 placeholder-white/60 text-sm leading-relaxed outline-none p-5 pr-40"
@@ -670,7 +492,7 @@ export default function UserDashboard() {
                       
                       {/* Agent Mode in top-right of inner box */}
                       <button
-                        onClick={() => updateLocalState({ agentMode: !agentMode })}
+                        onClick={() => setAgentMode(v => !v)}
                         className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-black/50 px-2.5 py-1 text-[9px] font-medium uppercase tracking-wider text-white/70 hover:bg-black/60"
                       >
                         <span className="text-[7px]">⚙</span>
@@ -713,7 +535,7 @@ export default function UserDashboard() {
                       <div className="flex items-center gap-2">
                         <span className="text-[9px] text-white/60">Knowledge Base</span>
                         <button
-                          onClick={() => updateLocalState({ agentMode: !agentMode })}
+                          onClick={() => setAgentMode(v => !v)}
                           className={`relative h-4 w-7 rounded-full transition-colors duration-200 ${agentMode ? 'bg-blue-500' : 'bg-white/20'}`}
                         >
                           <span
@@ -722,7 +544,7 @@ export default function UserDashboard() {
                         </button>
             </div>
           </div>
-        </div>
+                  </div>
 
                 </motion.div>
 
@@ -794,88 +616,30 @@ export default function UserDashboard() {
                       </div>
                     </div>
                     <div className="text-center py-4">
-                      {loading.synapse ? (
-                        <div className="flex items-center justify-center py-8">
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-                          <span className="text-white/60 text-sm ml-2">Loading profile...</span>
-                        </div>
-                      ) : (
-                        <>
-                          <motion.div 
-                            whileHover={{ scale: 1.05 }}
-                            className="relative w-16 h-16 rounded-full bg-blue-500/10 border border-blue-500/20 mx-auto mb-4 flex items-center justify-center text-blue-400 font-bold text-xl"
-                          >
-                            {userInfo?.firstName?.charAt(0) || 'U'}
-                          </motion.div>
-                          <h4 className="font-semibold text-white text-lg mb-3">{userInfo?.firstName || 'User'}</h4>
-                          
-                          {(() => {
-                            const completionPercentage = calculateProfileCompletion(synapseProfile);
-                            return (
-                              <>
-                                <div className="w-full bg-white/10 rounded-full h-2 mb-3">
-                                  <motion.div 
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${completionPercentage}%` }}
-                                    transition={{ duration: 2, delay: 1 }}
-                                    className="bg-blue-500 h-2 rounded-full"
-                                  />
-                                </div>
-                                <p className="text-white/70 text-sm mb-2">
-                                  Profile {completionPercentage}% complete
-                                </p>
-                                
-                                {completionPercentage < 100 && (
-                                  <div className="text-xs text-white/50 mb-4">
-                                    {completionPercentage === 0 && "Start by adding your preferences"}
-                                    {completionPercentage > 0 && completionPercentage < 50 && "Add more details to find better matches"}
-                                    {completionPercentage >= 50 && completionPercentage < 100 && "Almost there! Complete a few more sections"}
-                                  </div>
-                                )}
-                                
-                                {completionPercentage < 100 ? (
-                                  <motion.button
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    onClick={() => navigate("/Synapse")}
-                                    className="group relative inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-2 text-sm font-bold text-black shadow-[0_12px_32px_rgba(255,153,0,.4)] hover:shadow-[0_16px_40px_rgba(255,153,0,.5)] hover:scale-105 transition-all duration-300 hover:from-orange-400 hover:to-orange-500 w-full justify-center"
-                                  >
-                                    <span>{completionPercentage === 0 ? 'Start Profile' : 'Complete Profile'}</span>
-                                    <div className="w-3 h-3 rounded-full bg-black/20 flex items-center justify-center group-hover:translate-x-1 transition-transform duration-200">
-                                      <div className="w-1.5 h-1.5 bg-black rounded-full" />
-                                    </div>
-                                    <div className="absolute inset-0 rounded-full bg-gradient-to-r from-orange-500 to-orange-600 opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-300" />
-                                  </motion.button>
-                                ) : (
-                                  <div className="space-y-2">
-                                    <motion.button
-                                      whileHover={{ scale: 1.02 }}
-                                      whileTap={{ scale: 0.98 }}
-                                      onClick={() => navigate("/Synapse")}
-                                      className="group relative inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-2 text-sm font-bold text-black shadow-[0_12px_32px_rgba(255,153,0,.4)] hover:shadow-[0_16px_40px_rgba(255,153,0,.5)] hover:scale-105 transition-all duration-300 hover:from-orange-400 hover:to-orange-500 w-full justify-center"
-                                    >
-                                      <span>View Profile</span>
-                                      <div className="w-3 h-3 rounded-full bg-black/20 flex items-center justify-center group-hover:translate-x-1 transition-transform duration-200">
-                                        <div className="w-1.5 h-1.5 bg-black rounded-full" />
-                                      </div>
-                                      <div className="absolute inset-0 rounded-full bg-gradient-to-r from-orange-500 to-orange-600 opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-300" />
-                                    </motion.button>
-                                    <motion.button
-                                      whileHover={{ scale: 1.02 }}
-                                      whileTap={{ scale: 0.98 }}
-                                      onClick={() => navigate("/roommate-matches")}
-                                      className="group inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm text-white/85 hover:bg-white/10 hover:border-white/30 transition-all duration-200 w-full justify-center"
-                                    >
-                                      <span className="text-base">+</span>
-                                      Find Matches
-                                    </motion.button>
-                                  </div>
-                                )}
-                              </>
-                            );
-                          })()}
-                        </>
-                      )}
+                      <motion.div 
+                        whileHover={{ scale: 1.05 }}
+                        className="relative w-16 h-16 rounded-full bg-blue-500/10 border border-blue-500/20 mx-auto mb-4 flex items-center justify-center text-blue-400 font-bold text-xl"
+                      >
+                        {userInfo?.firstName?.charAt(0) || 'U'}
+                      </motion.div>
+                      <h4 className="font-semibold text-white text-lg mb-3">{userInfo?.firstName || 'User'}</h4>
+                      <div className="w-full bg-white/10 rounded-full h-2 mb-3">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: '75%' }}
+                          transition={{ duration: 2, delay: 1 }}
+                          className="bg-blue-500 h-2 rounded-full"
+            />
+          </div>
+                      <p className="text-white/70 text-sm mb-4">Profile 75% complete</p>
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => navigate("/Synapse")}
+                        className="w-full px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200 rounded-xl font-semibold"
+                      >
+                        Complete Profile
+                      </motion.button>
                     </div>
                   </div>
                 </motion.div>
@@ -884,16 +648,13 @@ export default function UserDashboard() {
           </div>
         </section>
 
-        {/* AI-Powered Dashboard Section */}
-        {onboardingData && (
-          <section className="mx-auto max-w-7xl px-4 py-8">
-            <IntelligentInsights 
-              userInfo={userInfo} 
-              dashboardData={dashboardData} 
-              onboardingData={onboardingData}
-            />
-          </section>
-        )}
+        {/* Personalized Dashboard Section */}
+        <section className="mx-auto max-w-7xl px-4 py-8">
+          <PersonalizedDashboard 
+            userInfo={userInfo} 
+            dashboardData={dashboardData} 
+          />
+        </section>
 
         {/* Dashboard Content - Hero with Side Data Boxes */}
         <div className="mx-auto max-w-7xl px-4 py-8">
@@ -912,19 +673,19 @@ export default function UserDashboard() {
                     <div className="flex items-center gap-3">
                       <div className="p-2 rounded-lg bg-green-500/20">
                         <MdHome className="text-xl text-green-400" />
-              </div>
+                      </div>
                       <h2 className="text-xl font-bold text-white">Your Properties</h2>
                       <span className="px-2 py-1 rounded-full bg-green-500/20 text-green-400 text-xs font-semibold">
                         {dashboardData.myProperties.items.length}
                       </span>
                     </div>
-                <button
-                      onClick={() => updateLocalState({ showPropertyManager: !showPropertyManager })}
+                    <button
+                      onClick={() => setShowPropertyManager(s => !s)}
                       className="px-3 py-1.5 bg-green-500/20 text-green-400 rounded-lg font-medium hover:bg-green-500/30 transition-colors text-sm"
-                >
+                    >
                       {showPropertyManager ? 'Hide' : 'Manage'}
-                </button>
-              </div>
+                    </button>
+                  </div>
 
                   {showPropertyManager && (
               <div className="space-y-4">
@@ -984,7 +745,7 @@ export default function UserDashboard() {
             )}
                 </motion.div>
               )}
-        </div>
+            </div>
 
             {/* Center - Quick Stats & Actions */}
             <div className="xl:col-span-1 space-y-6">
@@ -993,7 +754,7 @@ export default function UserDashboard() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-bold text-white">Notifications</h3>
                   <button
-                    onClick={() => updateLocalState({ showNotifications: !showNotifications })}
+                    onClick={() => setShowNotifications(s => !s)}
                     className="relative p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all duration-300"
                   >
                     <MdNotifications className="text-xl text-white/80" />
@@ -1003,16 +764,16 @@ export default function UserDashboard() {
                       </span>
                     )}
                   </button>
-          </div>
+                </div>
                 <div className="space-y-3">
                   {notifications.slice(0, 3).map(n => (
                     <div key={n.id} className="rounded-lg border border-white/10 bg-white/[0.06] p-3">
                       <div className="text-white/90 text-sm">{n.title}</div>
                       <div className="text-white/50 text-xs">{n.time}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                    </div>
+                ))}
+              </div>
+              </div>
 
               {/* Quick Stats */}
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
@@ -1024,11 +785,11 @@ export default function UserDashboard() {
                         <MdHome className="text-lg text-green-400" />
                       </div>
                       <span className="text-white/70 text-sm">Properties</span>
-                  </div>
+                    </div>
                     <span className="text-2xl font-bold text-white">
                       {dashboardData?.myProperties?.statistics?.totalProperties || 0}
                     </span>
-                </div>
+                  </div>
                   
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -1056,58 +817,59 @@ export default function UserDashboard() {
                 </div>
               </div>
 
-              {/* AI-Powered Quick Actions */}
+              {/* Quick Actions */}
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-white">Quick Actions</h3>
-                  <div className="flex items-center gap-2">
-                    {actionsLoading && (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                    )}
-                    {onboardingData && (
-                      <span className="text-xs text-white/60 bg-white/10 px-2 py-1 rounded-full">
-                        {aiActions.length > 0 ? 'AI-Powered' : `Personalized for ${onboardingData.focus}`}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                <h3 className="text-lg font-bold text-white mb-4">Quick Actions</h3>
                 <div className="space-y-3">
-                  {actionsLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <div className="flex items-center gap-3">
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
-                        <span className="text-white/70 text-sm">AI is generating personalized actions...</span>
-                      </div>
-                    </div>
-                  ) : (
-                    getCurrentActions().map((action, index) => (
-                      <motion.button
-                        key={index}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => {
-                          if (action.label === "List Property" || action.path === "/dashboard") {
-                            updateLocalState({ showPropertyDrawer: true });
-                          } else if (action.label === "List Item" || action.path === "/add-item") {
-                            updateLocalState({ showMarketplaceDrawer: true });
-                          } else {
-                            navigate(action.path);
-                          }
-                        }}
-                        className={`w-full flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-gradient-to-r ${action.color} hover:bg-white/10 transition-all duration-300`}
-                      >
-                        <action.icon className="text-white" />
-                        <div className="flex-1 text-left">
-                          <span className="text-white text-sm font-medium">{action.label}</span>
-                          {action.description && (
-                            <p className="text-white/70 text-xs">{action.description}</p>
-                          )}
-                        </div>
-                      </motion.button>
-                    ))
-                  )}
-                </div>
+                <button
+                    onClick={() => setShowPropertyDrawer(true)}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-all duration-300"
+                  >
+                    <MdHome className="text-blue-400" />
+                    <span className="text-white text-sm">List Property</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => setShowMarketplaceDrawer(true)}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-all duration-300"
+                  >
+                    <MdShoppingBag className="text-purple-400" />
+                    <span className="text-white text-sm">Sell Item</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => navigate("/Synapse")}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-all duration-300"
+                  >
+                    <MdGroups className="text-green-400" />
+                    <span className="text-white text-sm">Find Roommate</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => navigate("/solve-threads")}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-all duration-300"
+                  >
+                    <MdSearch className="text-orange-400" />
+                    <span className="text-white text-sm">Solve Threads</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => navigate("/blogs")}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-all duration-300"
+                  >
+                    <MdComment className="text-cyan-400" />
+                    <span className="text-white text-sm">Write Blog</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => navigate("/community")}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-all duration-300"
+                  >
+                    <MdGroups className="text-pink-400" />
+                    <span className="text-white text-sm">Create Thread</span>
+                </button>
               </div>
+        </div>
           </div>
 
             {/* Right Side - Marketplace */}
@@ -1130,7 +892,7 @@ export default function UserDashboard() {
                       </span>
                   </div>
                     <button
-                      onClick={() => updateLocalState({ showMarketplaceManager: !showMarketplaceManager })}
+                      onClick={() => setShowMarketplaceManager(s => !s)}
                       className="px-3 py-1.5 bg-purple-500/20 text-purple-400 rounded-lg font-medium hover:bg-purple-500/30 transition-colors text-sm"
                     >
                       {showMarketplaceManager ? 'Hide' : 'Manage'}
@@ -1204,15 +966,17 @@ export default function UserDashboard() {
         <PropertyDrawer
           isOpen={showPropertyDrawer}
           onClose={() => {
-            updateLocalState({ showPropertyDrawer: false, editingProperty: null });
+            setShowPropertyDrawer(false);
+            setEditingProperty(null);
           }}
           propertyData={editingProperty}
           onPropertyCreated={() => {
-            updateLocalState({ showPropertyDrawer: false });
+            setShowPropertyDrawer(false);
             loadDashboard();
           }}
           onPropertyUpdated={() => {
-            updateLocalState({ showPropertyDrawer: false, editingProperty: null });
+            setShowPropertyDrawer(false);
+            setEditingProperty(null);
             loadDashboard();
           }}
         />
@@ -1220,20 +984,21 @@ export default function UserDashboard() {
         <ListingDrawer
           isOpen={showMarketplaceDrawer}
           onClose={() => {
-            updateLocalState({ showMarketplaceDrawer: false, editingItem: null });
+            setShowMarketplaceDrawer(false);
+            setEditingItem(null);
           }}
           itemData={editingItem}
           onItemCreated={() => {
-            updateLocalState({ showMarketplaceDrawer: false });
+            setShowMarketplaceDrawer(false);
             loadDashboard();
           }}
           onItemUpdated={() => {
-            updateLocalState({ showMarketplaceDrawer: false, editingItem: null });
+            setShowMarketplaceDrawer(false);
+            setEditingItem(null);
             loadDashboard();
           }}
         />
       </div>
-
     </div>
   );
 }

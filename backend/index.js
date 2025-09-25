@@ -838,7 +838,15 @@ app.post('/save-onboarding', authenticateToken, async (req, res) => {
     const { user } = req.user;
     const { onboardingData } = req.body;
 
+    console.log('🔧 SAVE ONBOARDING API CALLED');
+    console.log('👤 User ID:', user._id);
+    console.log('👤 User email:', user.email);
+    console.log('📊 Request body:', JSON.stringify(req.body, null, 2));
+    console.log('📊 Onboarding data:', JSON.stringify(onboardingData, null, 2));
+    console.log('📊 Current user.onboardingData before update:', JSON.stringify(user.onboardingData, null, 2));
+
     if (!onboardingData) {
+      console.log('❌ No onboarding data provided');
       return res.status(400).json({
         error: true,
         message: 'Onboarding data is required'
@@ -846,35 +854,73 @@ app.post('/save-onboarding', authenticateToken, async (req, res) => {
     }
 
     // Update user with onboarding data
-    user.onboardingData = {
+    // Prepare onboarding data for saving
+    const onboardingDataToSave = {
       ...onboardingData,
       completed: true,
       completedAt: new Date()
     };
 
-    // Also update basic profile fields
+    console.log('💾 Before save - onboardingDataToSave:', JSON.stringify(onboardingDataToSave, null, 2));
+    console.log('💾 User document before save:', JSON.stringify(user, null, 2));
+    
+    // Fetch the user document from database to get the Mongoose document with save() method
+    const userDoc = await User.findById(user._id);
+    
+    if (!userDoc) {
+      console.error('❌ User document not found in database');
+      return res.status(404).json({
+        error: true,
+        message: 'User not found'
+      });
+    }
+    
+    // Update the user document with onboarding data
+    userDoc.onboardingData = onboardingDataToSave;
     if (onboardingData.city) {
-      user.currentLocation = onboardingData.city;
+      userDoc.currentLocation = onboardingData.city;
     }
     if (onboardingData.university) {
-      user.university = onboardingData.university;
+      userDoc.university = onboardingData.university;
     }
+    
+    const savedUser = await userDoc.save();
+    console.log('✅ User saved successfully');
+    console.log('💾 After save - userDoc.onboardingData:', JSON.stringify(userDoc.onboardingData, null, 2));
+    console.log('💾 Saved user document:', JSON.stringify(savedUser, null, 2));
 
-    await user.save();
+    // Verify the data was actually saved by fetching from database
+    const verifyUser = await User.findById(user._id);
+    console.log('🔍 Verification - User from database:', JSON.stringify(verifyUser, null, 2));
 
     res.json({
       error: false,
       message: 'Onboarding data saved successfully',
       user: {
         id: user._id,
-        onboardingData: user.onboardingData
+        onboardingData: userDoc.onboardingData
       }
     });
   } catch (error) {
-    console.error('Error saving onboarding data:', error);
+    console.error('❌ Error saving onboarding data:', error);
+    console.error('❌ Error details:', error.message);
+    console.error('❌ Error stack:', error.stack);
+    
+    // Check if it's a validation error
+    if (error.name === 'ValidationError') {
+      console.error('❌ Validation errors:', error.errors);
+      return res.status(400).json({
+        error: true,
+        message: 'Validation Error',
+        details: error.message,
+        validationErrors: error.errors
+      });
+    }
+    
     res.status(500).json({
       error: true,
-      message: 'Internal Server Error'
+      message: 'Internal Server Error',
+      details: error.message
     });
   }
 });
@@ -882,7 +928,27 @@ app.post('/save-onboarding', authenticateToken, async (req, res) => {
 // Get user onboarding data
 app.get('/onboarding-data', authenticateToken, async (req, res) => {
   try {
-    const { user } = req.user;
+    // Get user ID from JWT token
+    const userId = req.user.user?._id || req.user._id;
+    console.log('Onboarding data request for user ID:', userId);
+    
+    if (!userId) {
+      return res.status(401).json({
+        error: true,
+        message: 'User ID not found in token'
+      });
+    }
+
+    // Fetch full user data from database
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        error: true,
+        message: 'User not found'
+      });
+    }
+
+    console.log('User onboarding data from DB:', user.onboardingData);
 
     res.json({
       error: false,
@@ -890,6 +956,106 @@ app.get('/onboarding-data', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Error getting onboarding data:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Internal Server Error'
+    });
+  }
+});
+
+// Test endpoint to verify user data structure
+app.get('/test-user-data', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.user?._id || req.user._id;
+    console.log('Test user data request - JWT token:', JSON.stringify(req.user, null, 2));
+    
+    // Fetch full user from database
+    const user = await User.findById(userId);
+    console.log('Test user data request - Full user from DB:', JSON.stringify(user, null, 2));
+    
+    res.json({
+      error: false,
+      jwtUser: req.user,
+      dbUser: user,
+      hasOnboardingData: !!user?.onboardingData,
+      onboardingData: user?.onboardingData || {}
+    });
+  } catch (error) {
+    console.error('Error in test-user-data:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Internal Server Error'
+    });
+  }
+});
+
+// Simple test endpoint to check database connection
+app.get('/test-db', async (req, res) => {
+  try {
+    const userCount = await User.countDocuments();
+    const sampleUser = await User.findOne();
+    
+    res.json({
+      error: false,
+      message: 'Database connection successful',
+      userCount: userCount,
+      sampleUser: sampleUser ? {
+        _id: sampleUser._id,
+        firstName: sampleUser.firstName,
+        hasOnboardingData: !!sampleUser.onboardingData,
+        onboardingData: sampleUser.onboardingData || {}
+      } : null
+    });
+  } catch (error) {
+    console.error('Database test error:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Database connection failed',
+      details: error.message
+    });
+  }
+});
+
+// Manual test endpoint to save onboarding data
+app.post('/test-save-onboarding', authenticateToken, async (req, res) => {
+  try {
+    const { user } = req.user;
+    
+    console.log('🧪 TEST SAVE ONBOARDING - Manual test');
+    console.log('👤 User ID:', user._id);
+    console.log('📊 Current onboarding data:', JSON.stringify(user.onboardingData, null, 2));
+
+    // Set test onboarding data
+    user.onboardingData = {
+      focus: 'Housing',
+      arrivalDate: new Date(),
+      city: 'Test City',
+      university: 'Test University',
+      budgetRange: {
+        min: 1000,
+        max: 2000
+      },
+      housingNeed: 'Off-campus',
+      roommateInterest: true,
+      essentials: ['SIM', 'Bank'],
+      completed: true,
+      completedAt: new Date()
+    };
+
+    console.log('💾 Setting test data:', JSON.stringify(user.onboardingData, null, 2));
+    await user.save();
+    console.log('✅ Test data saved');
+
+    res.json({
+      error: false,
+      message: 'Test onboarding data saved successfully',
+      user: {
+        id: user._id,
+        onboardingData: user.onboardingData
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error in test save:', error);
     res.status(500).json({
       error: true,
       message: 'Internal Server Error'
@@ -2082,7 +2248,7 @@ app.post('/marketplace/favorites/:id', (req, res) => {
   
     try {
       const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-        model: "gpt-3.5-turbo",
+        model: "gpt-4o",
         messages: [{ role: "user", content: prompt }],
       }, {
         headers: {
@@ -2095,6 +2261,345 @@ app.post('/marketplace/favorites/:id', (req, res) => {
     } catch (error) {
       console.error("Error in OpenAI request:", error);
       res.status(500).json({ error: "Failed to fetch data from OpenAI" });
+    }
+  });
+
+  // AI Service endpoints - temporarily disabled
+  // const aiService = require('./services/aiService');
+
+  // Generate personalized insights
+  app.post('/api/ai/insights', authenticateToken, async (req, res) => {
+    const userId = getAuthUserId(req);
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    try {
+
+      const { dashboardData } = req.body;
+
+      // Prepare rich context for AI
+      const userContext = {
+        profile: {
+          name: user.firstName + ' ' + user.lastName,
+          email: user.email,
+          university: user.university,
+          major: user.major,
+          graduationDate: user.graduationDate,
+          currentLocation: user.currentLocation,
+          hometown: user.hometown,
+          birthday: user.birthday,
+          campusLabel: user.campusLabel,
+          campusDisplayName: user.campusDisplayName,
+          schoolDepartment: user.schoolDepartment,
+          cohortTerm: user.cohortTerm,
+          emailVerified: user.emailVerified
+        },
+        onboarding: user.onboardingData,
+        synapse: user.synapse || {},
+        dashboard: dashboardData,
+        timestamp: new Date().toISOString()
+      };
+
+      // Create AI prompt for personalized insights
+      const systemPrompt = `You are an expert student advisor AI. Analyze the student's profile and provide 3-5 personalized, actionable insights that will genuinely help them succeed in their university transition.
+
+Focus on:
+- Housing needs and timeline
+- Academic success factors  
+- Social integration opportunities
+- Financial planning
+- Campus life optimization
+
+Be specific, actionable, and empathetic. Consider their university, major, timeline, and current situation.
+
+Format each insight as:
+1. **Title** (action-oriented, 3-5 words)
+2. **Priority** (HIGH/MEDIUM/LOW based on urgency)
+3. **Specific action steps** (2-3 concrete next steps)
+4. **Why this matters** (brief explanation of impact)`;
+
+      const userPrompt = `Student Profile:
+- Name: ${userContext.profile.name}
+- Email: ${userContext.profile.email}
+- University: ${userContext.profile.university}
+- Major: ${userContext.profile.major}
+- Graduation Date: ${userContext.profile.graduationDate}
+- Current Location: ${userContext.profile.currentLocation}
+- Hometown: ${userContext.profile.hometown}
+- Birthday: ${userContext.profile.birthday}
+- Campus: ${userContext.profile.campusLabel} (${userContext.profile.campusDisplayName})
+- School Department: ${userContext.profile.schoolDepartment}
+- Cohort Term: ${userContext.profile.cohortTerm}
+- Email Verified: ${userContext.profile.emailVerified}
+
+Onboarding Preferences:
+- Focus Area: ${userContext.onboarding?.focus || 'Not specified'}
+- Arrival Date: ${userContext.onboarding?.arrivalDate || 'Not set'}
+- Budget Range: $${userContext.onboarding?.budgetRange?.min || 'Unknown'} - $${userContext.onboarding?.budgetRange?.max || 'Unknown'}
+- Housing Need: ${userContext.onboarding?.housingNeed || 'Not specified'}
+- Roommate Interest: ${userContext.onboarding?.roommateInterest ? 'Yes' : 'No'}
+- Essentials Needed: ${userContext.onboarding?.essentials?.join(', ') || 'None specified'}
+
+Synapse Profile (Compatibility Data):
+- Culture: ${JSON.stringify(userContext.synapse?.culture || {})}
+- Lifestyle: ${JSON.stringify(userContext.synapse?.lifestyle || {})}
+- Habits: ${JSON.stringify(userContext.synapse?.habits || {})}
+- Dealbreakers: ${JSON.stringify(userContext.synapse?.dealbreakers || [])}
+
+Current Activity:
+- Properties Listed: ${userContext.dashboard?.propertiesCount || 0}
+- Marketplace Items: ${userContext.dashboard?.marketplaceCount || 0}
+- Total Views: ${userContext.dashboard?.propertiesStats?.totalViews || 0}
+- Average Property Price: $${userContext.dashboard?.propertiesStats?.averagePrice || 0}
+
+Progress Status:
+- Has housing secured: ${userContext.dashboard?.propertiesCount > 0 ? 'Yes' : 'No'}
+- Has roommate connections: ${userContext.onboarding?.roommateInterest ? 'Interested' : 'Not specified'}
+- Has essentials planned: ${userContext.onboarding?.essentials?.length > 0 ? 'Yes' : 'No'}
+- Email verified: ${userContext.profile.emailVerified ? 'Yes' : 'No'}
+
+Provide 3-5 specific, actionable insights that will help this student succeed. Focus on their biggest gaps and most urgent needs. Consider their academic timeline, personal preferences, and current progress.`;
+
+      // Call GPT-5 for insights
+      const aiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
+        model: "gpt-4o",
+        temperature: 0.7,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ]
+      }, {
+        headers: {
+          Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const aiContent = aiResponse?.data?.choices?.[0]?.message?.content || '';
+      
+      // Parse AI response into structured insights
+      const insights = parseAIInsights(aiContent, userContext);
+      
+      res.json({ success: true, insights, aiGenerated: true });
+    } catch (error) {
+      console.error('AI Insights Error:', error);
+      
+      // Fallback insights based on user data
+      const fallbackInsights = generateFallbackInsights(user, dashboardData);
+      res.json({ success: true, insights: fallbackInsights, fallback: true });
+    }
+  });
+
+  // Generate personalized actions
+  app.post('/api/ai/actions', authenticateToken, async (req, res) => {
+    const userId = getAuthUserId(req);
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    try {
+
+      // Prepare rich context for AI
+      const userContext = {
+        profile: {
+          name: user.firstName + ' ' + user.lastName,
+          email: user.email,
+          university: user.university,
+          major: user.major,
+          graduationDate: user.graduationDate,
+          currentLocation: user.currentLocation,
+          hometown: user.hometown,
+          birthday: user.birthday,
+          campusLabel: user.campusLabel,
+          campusDisplayName: user.campusDisplayName,
+          schoolDepartment: user.schoolDepartment,
+          cohortTerm: user.cohortTerm,
+          emailVerified: user.emailVerified
+        },
+        onboarding: user.onboardingData,
+        synapse: user.synapse || {},
+        dashboard: req.body.dashboardData,
+        timestamp: new Date().toISOString()
+      };
+
+      // Create AI prompt for personalized actions
+      const systemPrompt = `You are an expert student advisor AI. Based on the student's profile and current situation, provide 4-6 personalized, actionable next steps that will help them succeed.
+
+Focus on:
+- Immediate priorities based on their timeline
+- Their focus area (Housing, Roommate, Essentials, Community)
+- Current activity and engagement level
+- University-specific opportunities
+
+Be specific, actionable, and prioritize based on urgency and importance.`;
+
+      const userPrompt = `Student Profile:
+- Name: ${userContext.profile.name}
+- Email: ${userContext.profile.email}
+- University: ${userContext.profile.university}
+- Major: ${userContext.profile.major}
+- Graduation Date: ${userContext.profile.graduationDate}
+- Current Location: ${userContext.profile.currentLocation}
+- Hometown: ${userContext.profile.hometown}
+- Campus: ${userContext.profile.campusLabel} (${userContext.profile.campusDisplayName})
+- School Department: ${userContext.profile.schoolDepartment}
+- Email Verified: ${userContext.profile.emailVerified}
+
+Onboarding Preferences:
+- Focus Area: ${userContext.onboarding?.focus || 'Not specified'}
+- Arrival Date: ${userContext.onboarding?.arrivalDate || 'Not set'}
+- Budget Range: $${userContext.onboarding?.budgetRange?.min || 'Unknown'} - $${userContext.onboarding?.budgetRange?.max || 'Unknown'}
+- Housing Need: ${userContext.onboarding?.housingNeed || 'Not specified'}
+- Roommate Interest: ${userContext.onboarding?.roommateInterest ? 'Yes' : 'No'}
+- Essentials Needed: ${userContext.onboarding?.essentials?.join(', ') || 'None specified'}
+
+Synapse Profile (Compatibility Data):
+- Culture: ${JSON.stringify(userContext.synapse?.culture || {})}
+- Lifestyle: ${JSON.stringify(userContext.synapse?.lifestyle || {})}
+- Habits: ${JSON.stringify(userContext.synapse?.habits || {})}
+- Dealbreakers: ${JSON.stringify(userContext.synapse?.dealbreakers || [])}
+
+Current Activity:
+- Properties Listed: ${userContext.dashboard?.propertiesCount || 0}
+- Marketplace Items: ${userContext.dashboard?.marketplaceCount || 0}
+- Total Views: ${userContext.dashboard?.propertiesStats?.totalViews || 0}
+- Average Property Price: $${userContext.dashboard?.propertiesStats?.averagePrice || 0}
+
+Progress Status:
+- Has housing secured: ${userContext.dashboard?.propertiesCount > 0 ? 'Yes' : 'No'}
+- Has roommate connections: ${userContext.onboarding?.roommateInterest ? 'Interested' : 'Not specified'}
+- Has essentials planned: ${userContext.onboarding?.essentials?.length > 0 ? 'Yes' : 'No'}
+- Email verified: ${userContext.profile.emailVerified ? 'Yes' : 'No'}
+
+Provide 4-6 specific, actionable next steps prioritized by importance and urgency. Consider their academic timeline, personal preferences, and current progress.`;
+
+      // Call GPT-5 for actions
+      const aiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
+        model: "gpt-4o",
+        temperature: 0.7,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ]
+      }, {
+        headers: {
+          Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const aiContent = aiResponse?.data?.choices?.[0]?.message?.content || '';
+      
+      // Parse AI response into structured actions
+      const actions = parseAIActions(aiContent, userContext);
+      
+      res.json({ success: true, actions, aiGenerated: true });
+    } catch (error) {
+      console.error('AI Actions Error:', error);
+      
+      // Fallback actions based on user data
+      const fallbackActions = generateFallbackActions(user);
+      res.json({ success: true, actions: fallbackActions, fallback: true });
+    }
+  });
+
+  // Extract housing criteria
+  app.post('/api/ai/extract-criteria', authenticateToken, async (req, res) => {
+    try {
+      const { prompt, campus } = req.body;
+      
+      // Use the existing LLM service for criteria extraction
+      const { extractHousingCriteria } = require('./services/newrun-llm/newrunLLM');
+      const result = await extractHousingCriteria({ prompt, campus });
+      
+      if (result.ok) {
+        res.json({ success: true, criteria: result.data, aiGenerated: true });
+      } else {
+        // Fallback to basic extraction
+        const fallbackCriteria = {
+          maxPrice: null,
+          bedrooms: null,
+          bathrooms: null,
+          distanceMiles: null,
+          moveIn: null,
+          keywords: prompt.split(' ').slice(0, 5)
+        };
+        res.json({ success: true, criteria: fallbackCriteria, fallback: true });
+      }
+    } catch (error) {
+      console.error('AI Extract Criteria Error:', error);
+      res.status(500).json({ 
+        error: 'Failed to extract criteria',
+        fallback: true 
+      });
+    }
+  });
+
+  // Generate conversational response
+  app.post('/api/ai/chat', authenticateToken, async (req, res) => {
+    try {
+      const userId = getAuthUserId(req);
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const { message, context } = req.body;
+
+      // Prepare context for AI
+      const userContext = {
+        profile: {
+          name: user.firstName + ' ' + user.lastName,
+          university: user.university,
+          major: user.major,
+          currentLocation: user.currentLocation
+        },
+        onboarding: user.onboardingData,
+        context: context || {}
+      };
+
+      // Create AI prompt for conversational response
+      const systemPrompt = `You are NewRun, an AI assistant for students transitioning to university life. You help with housing, roommates, essentials, and campus community.
+
+Be helpful, empathetic, and specific to their situation. Focus on practical advice for university students.`;
+
+      const userPrompt = `Student: ${userContext.profile.name}
+University: ${userContext.profile.university}
+Major: ${userContext.profile.major}
+Current Location: ${userContext.profile.currentLocation}
+Focus Area: ${userContext.onboarding?.focus || 'Not specified'}
+
+Student Message: ${message}
+
+Provide a helpful, personalized response.`;
+
+      // Call GPT-5 for conversational response
+      const aiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
+        model: "gpt-4o",
+        temperature: 0.7,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ]
+      }, {
+        headers: {
+          Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const response = aiResponse?.data?.choices?.[0]?.message?.content || 'I apologize, but I\'m having trouble processing your request right now.';
+      
+      res.json({ success: true, response, aiGenerated: true });
+    } catch (error) {
+      console.error('AI Chat Error:', error);
+      res.status(500).json({ 
+        error: 'Failed to generate response',
+        fallback: true 
+      });
     }
   });
 
@@ -2410,6 +2915,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
       const mongoose = require('mongoose');
       const userObjectId = new mongoose.Types.ObjectId(userId);
       console.log('Using ObjectId:', userObjectId);
+
 
       // Get comprehensive dashboard data
       const [
@@ -2805,7 +3311,7 @@ Return only JSON with keys:
     const aiResp = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
-        model: "gpt-3.5-turbo",
+        model: "gpt-4o",
         temperature: 0.2,
         messages: [
           { role: "system", content: sys },
@@ -3243,8 +3749,223 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
     }
   });
 
+  // Helper functions for AI parsing
+  function parseAIInsights(aiContent, userContext) {
+    try {
+      // Try to extract structured insights from AI response
+      const insights = [];
+      
+      // Split by common patterns and extract insights
+      const lines = aiContent.split('\n').filter(line => line.trim());
+      
+      lines.forEach((line, index) => {
+        if (line.match(/^\d+\.|^[-*]|^•/)) {
+          const cleanLine = line.replace(/^\d+\.|^[-*]|^•/, '').trim();
+          if (cleanLine.length > 10) {
+            insights.push({
+              id: `ai-insight-${index}`,
+              type: 'info',
+              title: cleanLine.substring(0, 50) + (cleanLine.length > 50 ? '...' : ''),
+              message: cleanLine,
+              priority: index < 2 ? 'high' : 'medium',
+              icon: 'lightbulb',
+              aiGenerated: true
+            });
+          }
+        }
+      });
+
+      // If no structured insights found, create from full content
+      if (insights.length === 0) {
+        insights.push({
+          id: 'ai-insight-1',
+          type: 'info',
+          title: 'AI-Generated Insight',
+          message: aiContent.substring(0, 200) + (aiContent.length > 200 ? '...' : ''),
+          priority: 'high',
+          icon: 'lightbulb',
+          aiGenerated: true
+        });
+      }
+
+      return insights.slice(0, 5); // Limit to 5 insights
+    } catch (error) {
+      console.error('Error parsing AI insights:', error);
+      return generateFallbackInsights(userContext.profile, userContext.dashboard);
+    }
+  }
+
+  function parseAIActions(aiContent, userContext) {
+    try {
+      const actions = [];
+      const lines = aiContent.split('\n').filter(line => line.trim());
+      
+      lines.forEach((line, index) => {
+        if (line.match(/^\d+\.|^[-*]|^•/)) {
+          const cleanLine = line.replace(/^\d+\.|^[-*]|^•/, '').trim();
+          if (cleanLine.length > 10) {
+            actions.push({
+              label: cleanLine.substring(0, 30) + (cleanLine.length > 30 ? '...' : ''),
+              description: cleanLine,
+              path: getActionPath(cleanLine, userContext),
+              icon: getActionIcon(cleanLine),
+              color: getActionColor(index),
+              priority: index < 2 ? 'high' : 'medium',
+              aiGenerated: true
+            });
+          }
+        }
+      });
+
+      if (actions.length === 0) {
+        actions.push({
+          label: 'AI Recommendation',
+          description: aiContent.substring(0, 100) + (aiContent.length > 100 ? '...' : ''),
+          path: '/dashboard',
+          icon: 'lightbulb',
+          color: 'blue',
+          priority: 'high',
+          aiGenerated: true
+        });
+      }
+
+      return actions.slice(0, 6); // Limit to 6 actions
+    } catch (error) {
+      console.error('Error parsing AI actions:', error);
+      return generateFallbackActions(userContext.profile);
+    }
+  }
+
+  function generateFallbackInsights(user, dashboardData) {
+    const insights = [];
+    
+    if (user.onboardingData?.arrivalDate) {
+      const daysUntilArrival = Math.ceil((new Date(user.onboardingData.arrivalDate) - new Date()) / (1000 * 60 * 60 * 24));
+      if (daysUntilArrival <= 30) {
+        insights.push({
+          id: 'fallback-arrival',
+          type: 'urgent',
+          title: 'Arrival Approaching!',
+          message: `${daysUntilArrival} days until you arrive in ${user.onboardingData.city || 'your city'}`,
+          priority: 'high',
+          icon: 'schedule',
+          fallback: true
+        });
+      }
+    }
+    
+    if (user.onboardingData?.budgetRange?.max && dashboardData?.propertiesStats?.averagePrice) {
+      const avgPrice = dashboardData.propertiesStats.averagePrice;
+      const budget = user.onboardingData.budgetRange.max;
+      if (avgPrice > budget) {
+        insights.push({
+          id: 'fallback-budget',
+          type: 'warning',
+          title: 'Budget Alert',
+          message: `Average property price ($${avgPrice}) exceeds your budget ($${budget})`,
+          priority: 'high',
+          icon: 'money',
+          fallback: true
+        });
+      }
+    }
+    
+    if (insights.length === 0) {
+      insights.push({
+        id: 'fallback-welcome',
+        type: 'info',
+        title: 'Welcome to NewRun!',
+        message: 'Complete your profile to get personalized insights and recommendations.',
+        priority: 'low',
+        icon: 'info',
+        fallback: true
+      });
+    }
+    
+    return insights;
+  }
+
+  function generateFallbackActions(user) {
+    const actions = [];
+    
+    actions.push({
+      label: 'List Property',
+      description: 'Add a new property listing',
+      path: '/dashboard',
+      icon: 'home',
+      color: 'blue',
+      priority: 'high',
+      fallback: true
+    });
+    
+    actions.push({
+      label: 'Browse Properties',
+      description: 'Find your perfect place',
+      path: '/all-properties',
+      icon: 'search',
+      color: 'green',
+      priority: 'high',
+      fallback: true
+    });
+    
+    if (user.onboardingData?.focus === 'Roommate' || user.onboardingData?.focus === 'Everything') {
+      actions.push({
+        label: 'Find Roommate',
+        description: 'Connect with potential roommates',
+        path: '/Synapse',
+        icon: 'people',
+        color: 'purple',
+        priority: 'medium',
+        fallback: true
+      });
+    }
+    
+    return actions;
+  }
+
+  function getActionPath(actionText, userContext) {
+    const text = actionText.toLowerCase();
+    
+    // Smart routing based on content
+    if (text.includes('housing') || text.includes('property') || text.includes('secure housing')) {
+      return '/all-properties';
+    }
+    if (text.includes('roommate') || text.includes('connect') || text.includes('match')) {
+      return '/Synapse';
+    }
+    if (text.includes('essentials') || text.includes('purchase') || text.includes('marketplace')) {
+      return '/marketplace';
+    }
+    if (text.includes('community') || text.includes('social') || text.includes('network')) {
+      return '/community';
+    }
+    if (text.includes('academic') || text.includes('study') || text.includes('course')) {
+      return '/dashboard'; // Academic resources
+    }
+    if (text.includes('budget') || text.includes('financial') || text.includes('money')) {
+      return '/dashboard'; // Financial planning
+    }
+    
+    return '/dashboard';
+  }
+
+  function getActionIcon(actionText) {
+    const text = actionText.toLowerCase();
+    if (text.includes('property') || text.includes('housing')) return 'home';
+    if (text.includes('search') || text.includes('browse')) return 'search';
+    if (text.includes('roommate') || text.includes('people')) return 'people';
+    if (text.includes('marketplace') || text.includes('shop')) return 'shopping';
+    if (text.includes('community') || text.includes('chat')) return 'chat';
+    return 'lightbulb';
+  }
+
+  function getActionColor(index) {
+    const colors = ['blue', 'green', 'purple', 'orange', 'red', 'teal'];
+    return colors[index % colors.length];
+  }
+
   server.listen(8000, () => {
     console.log('Server is running on port 8000');
-});
+  });
 
   module.exports = app;

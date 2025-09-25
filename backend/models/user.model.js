@@ -43,7 +43,7 @@ const userSchema = new Schema({
     essentials: [{ type: String, enum: ['SIM', 'Bedding', 'Bank', 'Cookware', 'Transit'] }],
     completed: { type: Boolean, default: false },
     completedAt: { type: Date, default: null }
-  }
+  },
 
   // Email verification and security
   emailVerified:      { type: Boolean, default: false },

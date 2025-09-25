@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { HeroUIProvider } from '@heroui/react'; // ⬅️ moved from @heroui/react
 import { AuthProvider } from './context/AuthContext.jsx';
+import { UnifiedStateProvider } from './context/UnifiedStateContext.jsx';
 import { EmailServiceProvider } from './components/EmailService.jsx';
 
 // pages
@@ -41,10 +42,11 @@ import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
 const App = () => {
   return (
     <AuthProvider>
-      <EmailServiceProvider>
-        <HeroUIProvider>
-          <Router>
-            <RouteGuard>
+      <UnifiedStateProvider>
+        <EmailServiceProvider>
+          <HeroUIProvider>
+            <Router>
+              <RouteGuard>
             <Routes>
           {/* Public Routes */}
           <Route path="/" element={<LandingPage />} />
@@ -169,11 +171,12 @@ const App = () => {
 
           {/* 404 Page - Catch-all route must be LAST */}
           <Route path="*" element={<NotFound />} />
-            </Routes>
-            </RouteGuard>
-          </Router>
-        </HeroUIProvider>
-      </EmailServiceProvider>
+              </Routes>
+              </RouteGuard>
+            </Router>
+          </HeroUIProvider>
+        </EmailServiceProvider>
+      </UnifiedStateProvider>
     </AuthProvider>
   );
 };

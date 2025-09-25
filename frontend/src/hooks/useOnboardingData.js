@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axiosInstance from '../utils/axiosInstance';
+import personalizationEngine from '../lib/personalizationEngine';
 
 export const useOnboardingData = () => {
   const [onboardingData, setOnboardingData] = useState(null);
@@ -13,14 +14,19 @@ export const useOnboardingData = () => {
   const fetchOnboardingData = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Fetching onboarding data...');
       const response = await axiosInstance.get('/onboarding-data');
+      
+      console.log('📊 Onboarding data response:', response.data);
       
       if (response.data.error) {
         setError(response.data.message);
       } else {
         setOnboardingData(response.data.onboardingData);
+        console.log('✅ Onboarding data set:', response.data.onboardingData);
       }
     } catch (err) {
+      console.error('❌ Onboarding data fetch error:', err);
       setError(err?.response?.data?.message || 'Failed to fetch onboarding data');
     } finally {
       setLoading(false);
@@ -30,63 +36,39 @@ export const useOnboardingData = () => {
   const getPersonalizedRecommendations = () => {
     if (!onboardingData) return null;
 
-    const recommendations = {
-      properties: [],
-      roommates: [],
-      essentials: [],
-      community: []
-    };
-
-    // Property recommendations based on budget and location
-    if (onboardingData.budgetRange && onboardingData.city) {
-      recommendations.properties = [
-        {
-          type: 'budget_match',
-          message: `Properties in ${onboardingData.city} within your budget ($${onboardingData.budgetRange.min}-$${onboardingData.budgetRange.max})`,
-          count: 12
-        }
-      ];
-    }
-
-    // Roommate recommendations
-    if (onboardingData.roommateInterest) {
-      recommendations.roommates = [
-        {
-          type: 'compatible_roommates',
-          message: 'Compatible roommates in your area',
-          count: 8
-        }
-      ];
-    }
-
-    // Essentials recommendations
-    if (onboardingData.essentials && onboardingData.essentials.length > 0) {
-      recommendations.essentials = onboardingData.essentials.map(essential => ({
-        type: 'essential',
-        name: essential,
-        message: `Get your ${essential} setup`
-      }));
-    }
-
-    // Community recommendations
-    if (onboardingData.university) {
-      recommendations.community = [
-        {
-          type: 'university_community',
-          message: `Connect with ${onboardingData.university} students`,
-          count: 156
-        }
-      ];
-    }
-
-    return recommendations;
+    // Use the enhanced personalization engine
+    return personalizationEngine.getContextualRecommendations({
+      onboardingData,
+      university: onboardingData.university,
+      currentLocation: onboardingData.city
+    });
   };
 
-  const getPersonalizedGreeting = () => {
-    if (!onboardingData) return 'Welcome to NewRun!';
+  const getArrivalTimeline = () => {
+    if (!onboardingData) return null;
+    return personalizationEngine.getArrivalTimeline(onboardingData);
+  };
+
+  const getStudentSuccessInsights = () => {
+    if (!onboardingData) return null;
+    return personalizationEngine.predictStudentNeeds({
+      onboardingData,
+      major: onboardingData.university,
+      budgetRange: onboardingData.budgetRange,
+      roommateInterest: onboardingData.roommateInterest
+    });
+  };
+
+  const getPersonalizedDashboard = () => {
+    if (!onboardingData) return null;
+    return personalizationEngine.getPersonalizedDashboard(onboardingData);
+  };
+
+  const getPersonalizedGreeting = (userName = 'there') => {
+    if (!onboardingData) return `, ${userName}!`;
 
     const focus = onboardingData.focus;
-    const name = onboardingData.firstName || 'there';
+    const name = userName || 'there';
 
     switch (focus) {
       case 'Housing':
@@ -100,7 +82,7 @@ export const useOnboardingData = () => {
       case 'Everything':
         return `Hi ${name}! We're here to help with everything you need!`;
       default:
-        return `Welcome to NewRun, ${name}!`;
+        return ` ${name}!`;
     }
   };
 
@@ -155,6 +137,9 @@ export const useOnboardingData = () => {
     fetchOnboardingData,
     getPersonalizedRecommendations,
     getPersonalizedGreeting,
-    getNextSteps
+    getNextSteps,
+    getArrivalTimeline,
+    getStudentSuccessInsights,
+    getPersonalizedDashboard
   };
 };

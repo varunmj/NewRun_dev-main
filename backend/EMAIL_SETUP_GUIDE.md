@@ -162,3 +162,4 @@ If you encounter issues:
 2. Verify your SES configuration in AWS Console
 3. Test with a simple email first before complex templates
 4. Ensure your domain is properly verified in SES
+

@@ -75,7 +75,7 @@ Return ONLY JSON with keys:
 
   try {
     const resp = await axios.post(OPENAI_URL, {
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-5',
       temperature: 0.2,
       messages: [
         { role: 'system', content: system },

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import confetti from 'canvas-confetti';
+import { getToken } from '../../utils/axiosInstance';
 import AutocompleteInput from './AutocompleteInput';
 import { searchCities, searchUniversities } from '../../data/autocompleteData';
 import { 
@@ -152,8 +154,43 @@ export default function UnifiedOnboarding() {
     }
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingCompletion, setIsCheckingCompletion] = useState(true);
   const [citySuggestions, setCitySuggestions] = useState([]);
   const [universitySuggestions, setUniversitySuggestions] = useState([]);
+
+  // Professional confetti animation
+  const triggerConfetti = useCallback(() => {
+    const end = Date.now() + 3 * 1000; // 3 seconds
+    const colors = ["#a786ff", "#fd8bbc", "#eca184", "#f8deb1", "#4ecdc4", "#45b7d1", "#96ceb4", "#feca57"];
+    
+    const frame = () => {
+      if (Date.now() > end) return;
+      
+      // Left cannon
+      confetti({
+        particleCount: 2,
+        angle: 60,
+        spread: 55,
+        startVelocity: 60,
+        origin: { x: 0, y: 0.5 },
+        colors: colors,
+      });
+      
+      // Right cannon
+      confetti({
+        particleCount: 2,
+        angle: 120,
+        spread: 55,
+        startVelocity: 60,
+        origin: { x: 1, y: 0.5 },
+        colors: colors,
+      });
+      
+      requestAnimationFrame(frame);
+    };
+    
+    frame();
+  }, []);
 
   // Save profile to localStorage whenever it changes
   useEffect(() => {
@@ -171,6 +208,55 @@ export default function UnifiedOnboarding() {
       setCurrentStep(profile.currentStep);
     }
   }, [profile.currentStep, profile.completed]);
+
+  // Check backend for onboarding completion status
+  useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      try {
+        setIsCheckingCompletion(true);
+        const token = getToken();
+        if (!token) {
+          console.log('❌ No authentication token found for completion check');
+          setIsCheckingCompletion(false);
+          return;
+        }
+
+
+        const response = await fetch('http://localhost:8000/onboarding-data', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.onboardingData && data.onboardingData.completed) {
+            // User has already completed onboarding, redirect to dashboard
+            const from = new URLSearchParams(window.location.search).get('from') || '/dashboard';
+            navigate(from, { replace: true });
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Error checking onboarding status:', error);
+      } finally {
+        setIsCheckingCompletion(false);
+      }
+    };
+
+    checkOnboardingStatus();
+  }, [navigate]);
+
+  // Trigger confetti when reaching completion step
+  useEffect(() => {
+    if (currentStep === ONBOARDING_STEPS.length - 1) {
+      // Trigger confetti immediately when completion step renders
+      setTimeout(() => {
+        triggerConfetti();
+      }, 300);
+    }
+  }, [currentStep, triggerConfetti]);
 
   // Get current step configuration
   const stepConfig = ONBOARDING_STEPS[currentStep];
@@ -238,31 +324,57 @@ export default function UnifiedOnboarding() {
       
       // Save onboarding data to backend
       try {
-        const response = await fetch('/api/save-onboarding', {
+        const onboardingPayload = {
+          focus: profile.focus || 'Everything', // Default to 'Everything' if null
+          arrivalDate: profile.arrival_date ? new Date(profile.arrival_date) : null,
+          city: profile.city || '',
+          university: profile.university || '',
+          budgetRange: {
+            min: profile.budget_range?.min ? parseInt(profile.budget_range.min) : null,
+            max: profile.budget_range?.max ? parseInt(profile.budget_range.max) : null
+          },
+          housingNeed: profile.housing_need || 'Undecided', // Default to 'Undecided' if null
+          roommateInterest: profile.roommate_interest || false,
+          essentials: profile.essentials || [],
+          completed: true,
+          completedAt: new Date()
+        };
+
+        // Get token using the same method as axiosInstance
+        const token = getToken();
+        console.log('🚀 ONBOARDING COMPLETION - Sending data to backend');
+        console.log('🔑 Token present:', !!token);
+        console.log('📊 Onboarding payload:', JSON.stringify(onboardingPayload, null, 2));
+
+        if (!token) {
+          console.error('❌ No authentication token found! Cannot save onboarding data.');
+          return;
+        }
+
+        const response = await fetch('http://localhost:8000/save-onboarding', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
-            onboardingData: {
-              focus: profile.focus,
-              arrivalDate: profile.arrival_date,
-              city: profile.city,
-              university: profile.university,
-              budgetRange: profile.budget_range,
-              housingNeed: profile.housing_need,
-              roommateInterest: profile.roommate_interest,
-              essentials: profile.essentials
-            }
+            onboardingData: onboardingPayload
           })
         });
 
+        console.log('📡 Response status:', response.status);
+        console.log('📡 Response ok:', response.ok);
+
         if (!response.ok) {
-          console.error('Failed to save onboarding data to backend');
+          const errorText = await response.text();
+          console.error('❌ Failed to save onboarding data to backend:', errorText);
+        } else {
+          const responseData = await response.json();
+          console.log('✅ Onboarding data saved successfully:', responseData);
         }
       } catch (error) {
-        console.error('Error saving onboarding data:', error);
+        console.error('❌ Error saving onboarding data:', error);
+        // Continue with redirect even if API fails
       }
       
       // Clear old onboarding data
@@ -270,7 +382,7 @@ export default function UnifiedOnboarding() {
       localStorage.removeItem('nr_onboarding_focus');
       localStorage.removeItem('profileCompleted');
       
-      // Show loading for 2 seconds then navigate
+      // Show loading for 3 seconds then navigate
       const redirectTimeout = setTimeout(() => {
         try {
           switch (profile.focus) {
@@ -294,7 +406,7 @@ export default function UnifiedOnboarding() {
           // Fallback to dashboard
           navigate('/dashboard', { state: { from: 'onboarding' } });
         }
-      }, 2000);
+      }, 3000);
 
       // Fallback: if still loading after 10 seconds, force redirect
       const fallbackTimeout = setTimeout(() => {
@@ -325,7 +437,7 @@ export default function UnifiedOnboarding() {
     } else {
       setCurrentStep(prev => prev + 1);
     }
-  }, [isLastStep, handleCompletion, profile]);
+  }, [isLastStep, handleCompletion, profile, currentStep]);
 
   // Add keyboard navigation
   useEffect(() => {
@@ -352,10 +464,24 @@ export default function UnifiedOnboarding() {
 
   // Handle different input types
   const handleInputChange = (field, value) => {
-    setProfile(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setProfile(prev => {
+      const newProfile = {
+        ...prev,
+        [field]: value
+      };
+      
+      // Special handling for focus field - if "Everything" is selected, 
+      // we need to set additional fields to indicate all options are selected
+      if (field === 'focus' && value === 'Everything') {
+        // Set all the individual focus areas to true
+        newProfile.housingSelected = true;
+        newProfile.roommateSelected = true;
+        newProfile.essentialsSelected = true;
+        newProfile.communitySelected = true;
+      }
+      
+      return newProfile;
+    });
   };
 
   const handleMultiSelect = (field, value) => {
@@ -423,31 +549,57 @@ export default function UnifiedOnboarding() {
 
       case 'selection':
         return (
-          <div className="grid gap-4 md:grid-cols-2">
-            {stepConfig.options.map((option) => (
+          <div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {stepConfig.options.map((option) => (
               <motion.button
                 key={option.label}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => {
                   handleInputChange(stepConfig.field, option.label);
-                  setTimeout(nextStep, 300);
+                  // If "Everything" is selected, automatically select all other options
+                  if (option.label === 'Everything') {
+                    // Set all other options as selected
+                    setProfile(prev => ({
+                      ...prev,
+                      focus: 'Everything',
+                      housingSelected: true,
+                      roommateSelected: true,
+                      essentialsSelected: true,
+                      communitySelected: true
+                    }));
+                    // Show brief visual feedback then continue
+                    setTimeout(() => {
+                      nextStep();
+                    }, 1000);
+                  } else {
+                    setTimeout(nextStep, 300);
+                  }
                 }}
                 className={`p-6 rounded-2xl border-2 transition-all duration-200 text-left ${
-                  profile[stepConfig.field] === option.label
+                  profile[stepConfig.field] === option.label || 
+                  (stepConfig.id === 'focus' && profile.focus === 'Everything' && option.label !== 'Everything')
                     ? 'border-blue-500 bg-blue-500/10 text-white'
                     : 'border-white/20 hover:border-white/40 hover:bg-white/5 text-white/90'
                 }`}
               >
                 <div className="flex items-center gap-4">
                   {option.icon && <option.icon size={24} className="text-blue-400" />}
-                  <div>
+                  <div className="flex-1">
                     <h3 className="font-semibold text-lg text-white">{option.label}</h3>
                     <p className="text-white/70 text-sm">{option.description}</p>
                   </div>
+                  {/* Show checkmark for selected options */}
+                  {(profile[stepConfig.field] === option.label || 
+                    (stepConfig.id === 'focus' && profile.focus === 'Everything' && option.label !== 'Everything')) && (
+                    <CheckCircle size={20} className="text-green-400" />
+                  )}
                 </div>
               </motion.button>
-            ))}
+              ))}
+            </div>
+            
           </div>
         );
 
@@ -596,13 +748,21 @@ export default function UnifiedOnboarding() {
       case 'completion':
         return (
           <div className="text-center">
+            {/* Clean Celebration Icon */}
             <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="text-6xl mb-6"
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ duration: 0.8, delay: 0.2, type: "spring", bounce: 0.6 }}
+              className="relative mb-8"
             >
-              🎉
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ duration: 0.6, delay: 0.8 }}
+                className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-2xl mx-auto"
+              >
+                <CheckCircle size={48} className="text-white" />
+              </motion.div>
             </motion.div>
             <h2 className="text-3xl font-bold mb-4 text-white">Welcome to NewRun!</h2>
             <p className="text-white/80 text-lg mb-8">
@@ -615,15 +775,10 @@ export default function UnifiedOnboarding() {
               <p className="text-white/70 text-sm mb-4">
                 {getNextStepsMessage(profile.focus)}
               </p>
-              {isLoading ? (
+              {isLoading && (
                 <div className="flex items-center justify-center gap-2 text-blue-400 text-sm">
                   <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
                   <span>Setting up your experience...</span>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center gap-2 text-blue-400 text-sm mb-4">
-                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-                  <span>Redirecting you in a moment...</span>
                 </div>
               )}
             </div>
@@ -652,6 +807,8 @@ export default function UnifiedOnboarding() {
                 </>
               )}
             </motion.button>
+            
+            
           </div>
         );
 
@@ -659,6 +816,18 @@ export default function UnifiedOnboarding() {
         return null;
     }
   };
+
+  // Show loading screen while checking completion status
+  if (isCheckingCompletion) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center p-6">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-white/70 text-sm">Checking onboarding status...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 flex items-center justify-center p-6">
