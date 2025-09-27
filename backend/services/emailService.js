@@ -19,6 +19,13 @@ class EmailService {
       console.log('🔑 SMTP Password:', process.env.SES_SMTP_PASSWORD ? 'Set' : 'Not Set');
       console.log('📨 From Email:', process.env.FROM_EMAIL);
 
+      // Check if required environment variables are set
+      if (!process.env.SES_SMTP_USERNAME || !process.env.SES_SMTP_PASSWORD) {
+        console.warn('⚠️ Email service not configured - SMTP credentials missing');
+        this.transporter = null;
+        return;
+      }
+
       this.transporter = nodemailer.createTransport({
         host: process.env.SES_SMTP_HOST || 'email-smtp.us-east-2.amazonaws.com',
         port: process.env.SES_SMTP_PORT || 587,

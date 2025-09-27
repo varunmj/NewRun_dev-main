@@ -146,6 +146,48 @@ class NewRunAI {
   }
 
   /**
+   * Explain a specific insight with AI-powered conversational response
+   */
+  async explainInsight(insight, dashboardData) {
+    try {
+      console.log('🤖 NewRunAI: Explaining insight', { insight, dashboardData });
+      
+      const response = await this.axiosInstance.post('/api/ai/explain-insight', {
+        insight,
+        dashboardData
+      });
+
+      console.log('🤖 NewRunAI: Explain insight response received', response.data);
+
+      if (response.data.success && response.data.explanation) {
+        return {
+          explanation: response.data.explanation,
+          insight: response.data.insight,
+          aiGenerated: response.data.aiGenerated,
+          fallback: response.data.fallback
+        };
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('🤖 NewRunAI Explain Insight Error:', error);
+      console.error('🤖 Explain Error details:', { 
+        message: error.message, 
+        status: error.response?.status, 
+        data: error.response?.data 
+      });
+      
+      // Return fallback explanation
+      return {
+        explanation: `This recommendation is important for your success. ${insight.title} is a ${insight.priority} priority that will help you stay on track with your goals.`,
+        insight: insight,
+        aiGenerated: false,
+        fallback: true
+      };
+    }
+  }
+
+  /**
    * Generate AI-powered success predictions
    */
   async generateSuccessPredictions(userData, dashboardData) {

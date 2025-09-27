@@ -36,6 +36,10 @@ import RoommateMatches from "./pages/RoommateMatches";
 import SolveThreads from "./pages/SolveThreads";
 import NotFound from "./pages/NotFound";
 import RouteGuard from "./components/Auth/RouteGuard";
+// New Platform Entities
+import StudentFinance from "./pages/StudentFinance";
+import AcademicHub from "./pages/AcademicHub";
+import Transportation from "./pages/Transportation";
 // guards
 import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
 
@@ -168,6 +172,32 @@ const App = () => {
           {/* Additional Routes */}
           <Route path="/requests" element={<ContactRequestsPage />} />
           <Route path="/Synapsematches" element={<RoommateMatches />} />
+
+          {/* New Platform Entities */}
+          <Route
+            path="/finance"
+            element={
+              <ProtectedRoute>
+                <StudentFinance />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/academic"
+            element={
+              <ProtectedRoute>
+                <AcademicHub />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/transport"
+            element={
+              <ProtectedRoute>
+                <Transportation />
+              </ProtectedRoute>
+            }
+          />
 
           {/* 404 Page - Catch-all route must be LAST */}
           <Route path="*" element={<NotFound />} />

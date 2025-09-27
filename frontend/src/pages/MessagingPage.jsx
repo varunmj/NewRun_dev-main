@@ -8,7 +8,7 @@ import Navbar from '../components/Navbar/Navbar';
 import { format } from 'date-fns';
 import './messaging.css';
 
-const socket = io('http://localhost:8000'); // Update with your backend URL if needed
+const socket = io(import.meta.env.VITE_API_BASE?.replace(/\/$/, '') || 'http://localhost:8000');
 
 const MessagingPage = () => {
     const [searchParams] = useSearchParams();

@@ -1,6 +1,7 @@
 const KEY_PREFIX = "nr-ai-";
 const MAX_CACHE_SIZE = 50; // Maximum number of cache entries
 const CACHE_CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_TTL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 // Enhanced cache with size management, cleanup, and invalidation triggers
 class AICache {
@@ -8,6 +9,43 @@ class AICache {
     this.cleanupInterval = setInterval(this.cleanup.bind(this), CACHE_CLEANUP_INTERVAL);
     this.invalidationTriggers = new Set();
     this.cacheVersion = Date.now();
+  }
+
+  /**
+   * Generate user data hash for smart cache invalidation
+   */
+  generateUserDataHash(userData) {
+    if (!userData) return 'no-data';
+    
+    // Create a hash of relevant user data to detect changes
+    const dataString = JSON.stringify({
+      university: userData?.university,
+      major: userData?.major,
+      onboardingData: userData?.onboardingData,
+      dashboardData: userData?.dashboardData,
+      userInfo: {
+        id: userData?.userInfo?.id,
+        university: userData?.userInfo?.university,
+        major: userData?.userInfo?.major
+      }
+    });
+    
+    // Simple hash function
+    let hash = 0;
+    for (let i = 0; i < dataString.length; i++) {
+      const char = dataString.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(36);
+  }
+
+  /**
+   * Generate smart cache key with user data hash
+   */
+  generateSmartCacheKey(baseKey, userId, userData) {
+    const userDataHash = this.generateUserDataHash(userData);
+    return `${baseKey}-${userId}-${userDataHash}`;
   }
 
   read(key, { maxAgeMs = 24*60*60*1000, obVer, cacheVersion } = {}) {
@@ -137,6 +175,105 @@ class AICache {
     return this.cacheVersion;
   }
 
+  /**
+   * Smart cache for AI insights with user data validation
+   */
+  getCachedInsights(userId, userData) {
+    try {
+      const cacheKey = this.generateSmartCacheKey('insights', userId, userData);
+      const cached = this.read(cacheKey, { maxAgeMs: DEFAULT_TTL });
+      
+      if (cached) {
+        console.log('🎯 Cache HIT: Using cached AI insights');
+        return cached;
+      }
+      
+      console.log('❌ Cache MISS: No valid insights cache found');
+      return null;
+    } catch (error) {
+      console.error('Insights cache get error:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Set cached AI insights with smart invalidation
+   */
+  setCachedInsights(userId, userData, insights) {
+    try {
+      const cacheKey = this.generateSmartCacheKey('insights', userId, userData);
+      this.write(cacheKey, insights, { 
+        ver: "insights-v2",
+        cacheVersion: this.cacheVersion 
+      });
+      console.log('💾 Cache SET: Stored AI insights');
+      return true;
+    } catch (error) {
+      console.error('Insights cache set error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Smart cache for AI actions with user data validation
+   */
+  getCachedActions(userId, userData) {
+    try {
+      const cacheKey = this.generateSmartCacheKey('actions', userId, userData);
+      const cached = this.read(cacheKey, { maxAgeMs: DEFAULT_TTL });
+      
+      if (cached) {
+        console.log('🎯 Cache HIT: Using cached AI actions');
+        return cached;
+      }
+      
+      console.log('❌ Cache MISS: No valid actions cache found');
+      return null;
+    } catch (error) {
+      console.error('Actions cache get error:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Set cached AI actions with smart invalidation
+   */
+  setCachedActions(userId, userData, actions) {
+    try {
+      const cacheKey = this.generateSmartCacheKey('actions', userId, userData);
+      this.write(cacheKey, actions, { 
+        ver: "actions-v2",
+        cacheVersion: this.cacheVersion 
+      });
+      console.log('💾 Cache SET: Stored AI actions');
+      return true;
+    } catch (error) {
+      console.error('Actions cache set error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Invalidate cache for specific user when data changes
+   */
+  invalidateUserCache(userId) {
+    try {
+      const keys = Object.keys(localStorage).filter(k => 
+        k.startsWith(KEY_PREFIX) && k.includes(`-${userId}-`)
+      );
+      
+      keys.forEach(key => {
+        localStorage.removeItem(key);
+      });
+      
+      console.log(`🗑️ Cache INVALIDATED: Removed ${keys.length} entries for user ${userId}`);
+      return keys.length;
+    } catch (error) {
+      console.error('User cache invalidation error:', error);
+      return 0;
+    }
+  }
+
   getStats() {
     try {
       const keys = Object.keys(localStorage).filter(k => k.startsWith(KEY_PREFIX));
@@ -170,3 +307,10 @@ export const invalidateCache = (reason) => cache.invalidate(reason);
 export const onCacheInvalidation = (callback) => cache.onInvalidation(callback);
 export const getCacheVersion = () => cache.getVersion();
 export const getCacheStats = () => cache.getStats();
+
+// Export smart caching methods
+export const getCachedInsights = (userId, userData) => cache.getCachedInsights(userId, userData);
+export const setCachedInsights = (userId, userData, insights) => cache.setCachedInsights(userId, userData, insights);
+export const getCachedActions = (userId, userData) => cache.getCachedActions(userId, userData);
+export const setCachedActions = (userId, userData, actions) => cache.setCachedActions(userId, userData, actions);
+export const invalidateUserCache = (userId) => cache.invalidateUserCache(userId);

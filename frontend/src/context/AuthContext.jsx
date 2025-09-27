@@ -26,6 +26,9 @@ export const AuthProvider = ({ children }) => {
             const response = await axiosInstance.get('/get-user');
             if (response.data && response.data.user) {
               setUser(response.data.user);
+            } else {
+              // Invalid response, clear auth
+              throw new Error('Invalid user data');
             }
           } catch (error) {
             console.error('Error fetching user data:', error);
@@ -37,6 +40,11 @@ export const AuthProvider = ({ children }) => {
             setUser(null);
             setIsAuthenticated(false);
           }
+        } else {
+          // No token found, ensure clean state
+          setToken(null);
+          setUser(null);
+          setIsAuthenticated(false);
         }
       } catch (error) {
         console.error('Error checking auth status:', error);

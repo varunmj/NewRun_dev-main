@@ -4,7 +4,7 @@ const Schema = mongoose.Schema;
 
 const propertySchema = new Schema({
     title: {type:String, required: true},
-    content: {type: String, required: true},
+    content: {type: String, default: ''},
     tags: {type: [String],default:[]},
     isPinned:{type:Boolean,default:false},
     userId:{type:String,required: true},

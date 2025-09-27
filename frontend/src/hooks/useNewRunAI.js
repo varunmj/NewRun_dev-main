@@ -105,6 +105,27 @@ export const useNewRunAI = () => {
     }
   }, []);
 
+  // Explain a specific insight with AI
+  const explainInsight = useCallback(async (insight, dashboardData) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const explanation = await NewRunAI.explainInsight(insight, dashboardData);
+      return explanation;
+    } catch (err) {
+      setError(err.message);
+      return {
+        explanation: `This recommendation is important for your success. ${insight.title} is a ${insight.priority} priority that will help you stay on track with your goals.`,
+        insight: insight,
+        aiGenerated: false,
+        fallback: true
+      };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   return {
     loading,
     error,
@@ -113,7 +134,8 @@ export const useNewRunAI = () => {
     generateTimeline,
     generateMarketAnalysis,
     generateResponse,
-    generatePredictions
+    generatePredictions,
+    explainInsight
   };
 };
 

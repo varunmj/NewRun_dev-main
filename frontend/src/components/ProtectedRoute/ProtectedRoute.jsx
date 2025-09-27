@@ -1,35 +1,104 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
+import axiosInstance from '../../utils/axiosInstance';
 
 const ProtectedRoute = ({ children }) => {
   const location = useLocation();
-  const { isAuthenticated, loading, token } = useAuth();
-  
-  // Additional check: verify token exists in localStorage
-  const hasValidToken = () => {
-    const storedToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
-    return !!storedToken;
+  const { isAuthenticated, loading, setUser, setIsAuthenticated } = useAuth();
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationComplete, setValidationComplete] = useState(false);
+  const validationTimeoutRef = useRef(null);
+  const lastValidationRef = useRef(0);
+
+  // Debounced authentication validation
+  const validateAuthentication = async () => {
+    const now = Date.now();
+    const timeSinceLastValidation = now - lastValidationRef.current;
+    
+    // Don't validate if we validated recently (within 5 seconds)
+    if (timeSinceLastValidation < 5000) {
+      return isAuthenticated;
+    }
+
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('token') || localStorage.getItem('userToken');
+    
+    if (!token) {
+      console.log('ProtectedRoute: No token found');
+      return false;
+    }
+
+    try {
+      setIsValidating(true);
+      lastValidationRef.current = now;
+      
+      const response = await axiosInstance.get('/get-user');
+      
+      if (response.data && response.data.user) {
+        console.log('ProtectedRoute: Token is valid');
+        setUser(response.data.user);
+        setIsAuthenticated(true);
+        return true;
+      } else {
+        console.log('ProtectedRoute: Invalid response');
+        return false;
+      }
+    } catch (error) {
+      console.log('ProtectedRoute: Token validation failed:', error.response?.status);
+      // Clear invalid tokens
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('token');
+      localStorage.removeItem('userToken');
+      setUser(null);
+      setIsAuthenticated(false);
+      return false;
+    } finally {
+      setIsValidating(false);
+      setValidationComplete(true);
+    }
   };
-  
+
+  // Validate authentication on mount with debouncing
+  useEffect(() => {
+    if (!loading && !validationComplete) {
+      // Clear any existing timeout
+      if (validationTimeoutRef.current) {
+        clearTimeout(validationTimeoutRef.current);
+      }
+      
+      // Debounce the validation
+      validationTimeoutRef.current = setTimeout(async () => {
+        await validateAuthentication();
+      }, 100);
+    } else if (isAuthenticated) {
+      setValidationComplete(true);
+    }
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (validationTimeoutRef.current) {
+        clearTimeout(validationTimeoutRef.current);
+      }
+    };
+  }, [loading, validationComplete, isAuthenticated]);
+
   // Show loading spinner while checking authentication
-  if (loading) {
+  if (loading || isValidating || !validationComplete) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0b0c0f]">
         <div className="flex flex-col items-center gap-4">
           <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-white/70 text-sm">Checking authentication...</p>
+          <p className="text-white/70 text-sm">
+            {isValidating ? 'Validating authentication...' : 'Checking authentication...'}
+          </p>
         </div>
       </div>
     );
   }
   
-  // Double-check authentication status
-  const isReallyAuthenticated = isAuthenticated && hasValidToken();
-  
-  // If not authenticated, redirect to login and save the current location
-  if (!isReallyAuthenticated) {
-    // NUCLEAR CLEANUP: Clear everything
+  // If not authenticated after validation, redirect to login
+  if (!isAuthenticated) {
+    // Clear everything
     localStorage.clear();
     sessionStorage.clear();
     

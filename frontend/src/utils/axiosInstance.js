@@ -51,6 +51,8 @@ axiosInstance.interceptors.request.use((config) => {
 
 // ---- handle 401 globally (optional but handy) ----
 let isHandling401 = false;
+let redirectTimeout = null;
+
 axiosInstance.interceptors.response.use(
   (res) => res,
   (err) => {
@@ -67,12 +69,20 @@ axiosInstance.interceptors.response.use(
       localStorage.removeItem("token");
       localStorage.removeItem("userToken");
       
-      // redirect
-      try {
-        navigate("/login?error=session_expired");
-      } finally {
-        isHandling401 = false;
+      // Clear any existing redirect timeout
+      if (redirectTimeout) {
+        clearTimeout(redirectTimeout);
       }
+      
+      // redirect with a small delay to prevent multiple redirects
+      redirectTimeout = setTimeout(() => {
+        try {
+          navigate("/login?error=session_expired");
+        } finally {
+          isHandling401 = false;
+          redirectTimeout = null;
+        }
+      }, 100);
     }
     
     // Handle 403 Forbidden

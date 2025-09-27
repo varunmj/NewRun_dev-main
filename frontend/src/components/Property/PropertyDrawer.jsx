@@ -161,7 +161,7 @@ const PropertyDrawer = ({ isOpen, onClose, propertyData, onPropertyCreated, onPr
 
     try {
       // Use a separate axios instance for file uploads to avoid header conflicts
-      const response = await axios.post('http://localhost:8000/upload-images', formData, {
+      const response = await axios.post((import.meta.env.VITE_API_BASE?.replace(/\/$/, '') || 'http://localhost:8000') + '/upload-images', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

@@ -88,7 +88,7 @@ export default function LandingPage() {
             animate="show"
             className="mt-10 flex flex-col items-center gap-4 sm:flex-row"
           >
-            <button onClick={() => navigate("/chatbot")} className="btn-metal">
+            <button onClick={() => navigate("/onboarding")} className="btn-metal">
               Get Started
             </button>
             <button
@@ -204,7 +204,7 @@ export default function LandingPage() {
                 <button onClick={f.cta} className="btn-metal">
                   {f.ctaText}
                 </button>
-                <button onClick={() => navigate("/chatbot")} className="btn-ghost">
+                <button onClick={() => navigate("/onboarding")} className="btn-ghost">
                   Chat with Us
                 </button>
               </div>
@@ -273,7 +273,7 @@ export default function LandingPage() {
             Join a verified, university-only community designed to make your first months in the U.S. effortless.
           </p>
           <div className="mt-8">
-            <button onClick={() => navigate("/chatbot")} className="btn-metal">
+            <button onClick={() => navigate("/onboarding")} className="btn-metal">
               Get Started
             </button>
           </div>

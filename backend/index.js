@@ -297,11 +297,11 @@ app.post('/login', async (req, res) => {
   if (!identifier && email) identifier = email;
 
   if (!identifier) {
-      return res.status(400).json({ message: 'Email or username is required' });
+      return res.status(400).json({ error: true, message: 'Email or username is required' });
     }
 
   if (!password) {
-    return res.status(400).json({ message: 'Password is required' });
+    return res.status(400).json({ error: true, message: 'Password is required' });
   }
 
   try {
@@ -309,7 +309,7 @@ app.post('/login', async (req, res) => {
     const query = identifier.includes("@")
       ? { email: identifier.toLowerCase().trim() }
       : { username: identifier.toLowerCase().trim() };
-    const userInfo = await User.findOne(query, 'email username password firstName lastName');
+    const userInfo = await User.findOne(query, 'email username password firstName lastName _id');
 
     console.log('User found:', { 
       found: !!userInfo, 
@@ -319,7 +319,7 @@ app.post('/login', async (req, res) => {
     });
 
     if (!userInfo) {
-      return res.status(400).json({ message: 'User not found' });
+      return res.status(400).json({ error: true, message: 'Invalid credentials' });
     }
 
     // Compare password - handle both hashed and plain text (for existing users)
@@ -364,7 +364,7 @@ app.post('/login', async (req, res) => {
     } else {
       return res.status(400).json({
         error: true,
-        message: 'Invalid Credentials',
+        message: 'Invalid credentials',
       });
     }
   } catch (error) {
@@ -1266,11 +1266,32 @@ app.post('/add-property', authenticateToken, async (req, res) => {
     });
   }
 
-  // ✅ NEW: realistic required fields for a listing
-  if (!title || !address || typeof price === 'undefined') {
+  // ✅ Enhanced validation for required fields
+  if (!title || !title.trim()) {
     return res.status(400).json({
       error: true,
-      message: 'title, address and price are required'
+      message: 'Property title is required'
+    });
+  }
+  
+  if (!address || !address.street || !address.city || !address.state) {
+    return res.status(400).json({
+      error: true,
+      message: 'Complete address (street, city, state) is required'
+    });
+  }
+  
+  if (typeof price === 'undefined' || price < 0) {
+    return res.status(400).json({
+      error: true,
+      message: 'Valid price is required'
+    });
+  }
+  
+  if (!contactInfo || !contactInfo.name || !contactInfo.phone || !contactInfo.email) {
+    return res.status(400).json({
+      error: true,
+      message: 'Complete contact information (name, phone, email) is required'
     });
   }
 
@@ -1279,17 +1300,26 @@ app.post('/add-property', authenticateToken, async (req, res) => {
     console.log('Property data:', { title, price, address, contactInfo });
     
     const property = new Property({
-      title,
+      title: title.trim(),
       content: content || '',           // optional
       tags: tags || [],
       price: Number(price) || 0,
       bedrooms: Number(bedrooms) || 0,
       bathrooms: Number(bathrooms) || 0,
       distanceFromUniversity: Number(distanceFromUniversity) || 0,
-      address,
+      address: {
+        street: address.street.trim(),
+        city: address.city.trim(),
+        state: address.state.trim(),
+        zipCode: address.zipCode ? address.zipCode.trim() : ''
+      },
       availabilityStatus: availabilityStatus || 'available',
       images: images || [],             // expects array of URLs (from /upload-images)
-      contactInfo: contactInfo || {},
+      contactInfo: {
+        name: contactInfo.name.trim(),
+        phone: contactInfo.phone.trim(),
+        email: contactInfo.email.trim()
+      },
       description: description || '',
       isFeatured: Boolean(isFeatured),
       userId: userId,
@@ -1882,6 +1912,17 @@ app.set('io', io);
 const activityRouter = require('./routes/activity');
 app.use('/activity', activityRouter);
 
+// New Platform Entity Routes
+const studentFinanceRouter = require('./routes/studentFinance');
+const academicHubRouter = require('./routes/academicHub');
+app.use('/api/finance', studentFinanceRouter);
+app.use('/api/academic', academicHubRouter);
+
+// Financial Management Models
+const Transaction = require('./models/transaction.model');
+const Budget = require('./models/budget.model');
+const FinancialReport = require('./models/financialReport.model');
+
 // Create a new marketplace item
 app.post("/marketplace/item", authenticateToken, async (req, res) => {
     const { user } = req.user;
@@ -1906,10 +1947,39 @@ app.post("/marketplace/item", authenticateToken, async (req, res) => {
       images: images?.length || 0
     });
   
-    if (!title || !description || !category) {
+    // Enhanced validation for required fields
+    if (!title || !title.trim()) {
       return res.status(400).json({
         error: true,
-        message: "Title, description, and category are required",
+        message: "Item title is required"
+      });
+    }
+    
+    if (!description || !description.trim()) {
+      return res.status(400).json({
+        error: true,
+        message: "Item description is required"
+      });
+    }
+    
+    if (!category || !category.trim()) {
+      return res.status(400).json({
+        error: true,
+        message: "Item category is required"
+      });
+    }
+    
+    if (typeof price === 'undefined' || price < 0) {
+      return res.status(400).json({
+        error: true,
+        message: "Valid price is required"
+      });
+    }
+    
+    if (!contactInfo || !contactInfo.name || !contactInfo.email) {
+      return res.status(400).json({
+        error: true,
+        message: "Contact information (name and email) is required"
       });
     }
   
@@ -1929,21 +1999,21 @@ app.post("/marketplace/item", authenticateToken, async (req, res) => {
       
       const newItem = new MarketplaceItem({
         userId: user._id,
-        title,
-        description,
-        price: price || 0,
-        category,
+        title: title.trim(),
+        description: description.trim(),
+        price: Number(price) || 0,
+        category: category.trim(),
         condition: condition || 'used',
         images: images || [],
         coverIndex: 0,
         location,
         delivery,
-        // Store contact info in a custom field for now
+        // Store contact info with proper sanitization
         contactInfo: {
-          name: contactInfo?.name || '',
-          email: contactInfo?.email || '',
-          phone: contactInfo?.phone || '',
-          exchangeMethod: contactInfo?.exchangeMethod || 'public',
+          name: contactInfo.name.trim(),
+          email: contactInfo.email.trim(),
+          phone: contactInfo.phone ? contactInfo.phone.trim() : '',
+          exchangeMethod: contactInfo.exchangeMethod || 'public',
         },
       });
   
@@ -2246,36 +2316,73 @@ app.post('/marketplace/favorites/:id', (req, res) => {
   app.post('/api/openai', authenticateToken, async (req, res) => {
     const { prompt } = req.body;
   
+    // Check if OpenAI API key is configured
+    if (!process.env.NEWRUN_APP_OPENAI_API_KEY) {
+      return res.status(500).json({ 
+        error: "OpenAI API key not configured",
+        message: "Please configure NEWRUN_APP_OPENAI_API_KEY environment variable"
+      });
+    }
+  
     try {
       const response = await axios.post('https://api.openai.com/v1/chat/completions', {
         model: "gpt-4o",
         messages: [{ role: "user", content: prompt }],
+        max_tokens: 1000,
+        temperature: 0.7
       }, {
         headers: {
           Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
+        timeout: 30000 // 30 second timeout
       });
       
       res.json(response.data);
     } catch (error) {
       console.error("Error in OpenAI request:", error);
-      res.status(500).json({ error: "Failed to fetch data from OpenAI" });
+      
+      if (error.response?.status === 401) {
+        return res.status(500).json({ 
+          error: "Invalid OpenAI API key",
+          message: "Please check your OpenAI API key configuration"
+        });
+      } else if (error.response?.status === 429) {
+        return res.status(500).json({ 
+          error: "OpenAI rate limit exceeded",
+          message: "Please try again later"
+        });
+      } else {
+        return res.status(500).json({ 
+          error: "Failed to fetch data from OpenAI",
+          message: error.message
+        });
+      }
     }
   });
 
   // AI Service endpoints - temporarily disabled
   // const aiService = require('./services/aiService');
+  const PropertyDataTransformer = require('./services/propertyDataTransformer');
+  const AIDataValidator = require('./services/aiDataValidator');
 
   // Generate personalized insights
   app.post('/api/ai/insights', authenticateToken, async (req, res) => {
-    const userId = getAuthUserId(req);
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
     try {
+      const userId = getAuthUserId(req);
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Check if OpenAI API key is configured
+      if (!process.env.NEWRUN_APP_OPENAI_API_KEY) {
+        return res.json({
+          success: false,
+          insights: [],
+          message: "AI features are not available - OpenAI API key not configured"
+        });
+      }
 
       const { dashboardData } = req.body;
 
@@ -2303,22 +2410,42 @@ app.post('/marketplace/favorites/:id', (req, res) => {
       };
 
       // Create AI prompt for personalized insights
-      const systemPrompt = `You are an expert student advisor AI. Analyze the student's profile and provide 3-5 personalized, actionable insights that will genuinely help them succeed in their university transition.
+      const systemPrompt = `You are an expert student advisor AI with access to a housing database. 
+
+CRITICAL INSTRUCTION: You MUST use the get_housing_recommendations tool for ANY housing-related insights. Do not provide generic housing advice.
+
+When you see housing needs, budget concerns, or roommate interests, you MUST:
+1. Call get_housing_recommendations tool with insightType: "housing" 
+2. Use the specific data returned to provide concrete recommendations
+3. Reference actual properties, prices, and roommate matches
+
+Do not provide generic advice like "start browsing housing options" - use the tool to get real data first.
 
 Focus on:
-- Housing needs and timeline
+- Housing needs and timeline (MUST use tool for specific properties)
 - Academic success factors  
 - Social integration opportunities
 - Financial planning
 - Campus life optimization
 
-Be specific, actionable, and empathetic. Consider their university, major, timeline, and current situation.
+CRITICAL: Generate insights with DIFFERENT content for title vs message:
 
 Format each insight as:
-1. **Title** (action-oriented, 3-5 words)
-2. **Priority** (HIGH/MEDIUM/LOW based on urgency)
-3. **Specific action steps** (2-3 concrete next steps)
-4. **Why this matters** (brief explanation of impact)`;
+1. **Title** (action-oriented, 3-5 words) - SHORT and punchy
+2. **Message** (detailed explanation, context, and specific data) - DIFFERENT from title
+3. **Priority** (HIGH/MEDIUM/LOW based on urgency)
+4. **Action** (specific next step)
+
+EXAMPLES:
+- Title: "Secure Housing Now"
+- Message: "Based on your $300-1000 budget, I found 3 properties within 2 miles of campus. Average price is $350/month. Your arrival date is approaching - secure housing this week to avoid last-minute stress."
+
+- Title: "Schedule Property Visits" 
+- Message: "Contact Dheeban Kumar at Stadium View II ($300, 1.5 miles) and Sathya Keshav at Campus Drive ($300, 1 mile). Both are within your budget and close to campus. Schedule visits this week."
+
+NEVER repeat the title in the message. The message should provide ADDITIONAL context, data, and reasoning.
+
+REMEMBER: For housing insights, you MUST call the get_housing_recommendations tool first.`;
 
       const userPrompt = `Student Profile:
 - Name: ${userContext.profile.name}
@@ -2360,16 +2487,50 @@ Progress Status:
 - Has essentials planned: ${userContext.onboarding?.essentials?.length > 0 ? 'Yes' : 'No'}
 - Email verified: ${userContext.profile.emailVerified ? 'Yes' : 'No'}
 
-Provide 3-5 specific, actionable insights that will help this student succeed. Focus on their biggest gaps and most urgent needs. Consider their academic timeline, personal preferences, and current progress.`;
+This student needs housing help. You MUST use the get_housing_recommendations tool to find specific properties and roommates.
 
-      // Call GPT-5 for insights
+DO NOT provide generic advice like "start browsing housing options" or "contact landlords directly". 
+
+You MUST:
+1. Call get_housing_recommendations tool with insightType: "housing"
+2. Use the returned data to provide specific property names, prices, and roommate matches
+3. Reference actual addresses, distances from campus, and compatibility scores
+
+Provide 3-5 specific, actionable insights that will help this student succeed. Focus on their biggest gaps and most urgent needs.`;
+
+      // Call GPT-4o for insights with function calling
       const aiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
         model: "gpt-4o",
         temperature: 0.7,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
-        ]
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "get_housing_recommendations",
+              description: "Get specific housing and roommate recommendations for the student",
+              parameters: {
+                type: "object",
+                properties: {
+                  insightType: {
+                    type: "string",
+                    enum: ["housing", "roommate", "both"],
+                    description: "Type of recommendations needed"
+                  },
+                  userProfile: {
+                    type: "object",
+                    description: "User profile data for recommendations"
+                  }
+                },
+                required: ["insightType", "userProfile"]
+              }
+            }
+          }
+        ],
+        tool_choice: "auto"
       }, {
         headers: {
           Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
@@ -2377,12 +2538,130 @@ Provide 3-5 specific, actionable insights that will help this student succeed. F
         },
       });
 
-      const aiContent = aiResponse?.data?.choices?.[0]?.message?.content || '';
+      const aiMessage = aiResponse?.data?.choices?.[0]?.message;
+      const aiContent = aiMessage?.content || '';
       
-      // Parse AI response into structured insights
-      const insights = parseAIInsights(aiContent, userContext);
+      let insights = [];
+      let specificRecommendations = null;
       
-      res.json({ success: true, insights, aiGenerated: true });
+      // Check if AI wants to use tools
+      if (aiMessage?.tool_calls && aiMessage.tool_calls.length > 0) {
+        console.log('🔧 AI wants to use tools:', aiMessage.tool_calls);
+        const toolCall = aiMessage.tool_calls[0];
+        
+        if (toolCall.function.name === 'get_housing_recommendations') {
+          try {
+            const toolArgs = JSON.parse(toolCall.function.arguments);
+            console.log('🔧 Tool arguments:', toolArgs);
+            
+            // Get specific recommendations from our database
+            console.log('🔧 Calling get-recommendations endpoint...');
+            const recommendationsResponse = await axios.post(`${req.protocol}://${req.get('host')}/api/ai/tools/get-recommendations`, {
+              insightType: toolArgs.insightType,
+              userProfile: userContext
+            }, {
+              headers: {
+                'Authorization': req.headers.authorization,
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            console.log('🔧 Recommendations response:', recommendationsResponse.data);
+            specificRecommendations = recommendationsResponse.data;
+            
+            // Generate insights with specific recommendations
+            const enhancedPrompt = `${userPrompt}\n\nBased on the specific recommendations found:\n${JSON.stringify(specificRecommendations, null, 2)}\n\nProvide insights that reference these specific options.`;
+            
+            const enhancedResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
+              model: "gpt-4o",
+              temperature: 0.7,
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: enhancedPrompt }
+              ]
+            }, {
+              headers: {
+                Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
+                'Content-Type': 'application/json',
+              },
+            });
+            
+            const enhancedContent = enhancedResponse?.data?.choices?.[0]?.message?.content || '';
+            insights = parseAIInsights(enhancedContent, userContext);
+            
+            // Add specific recommendations to insights
+            insights = insights.map(insight => ({
+              ...insight,
+              hasSpecificRecommendations: true,
+              specificRecommendations: specificRecommendations
+            }));
+            
+          } catch (toolError) {
+            console.error('Tool execution error:', toolError);
+            insights = parseAIInsights(aiContent, userContext);
+          }
+        }
+      } else {
+        // AI didn't call tools - force it to use tools for housing insights
+        console.log('🔧 AI didn\'t call tools, forcing tool usage for housing...');
+        
+        try {
+          // Force call the recommendations tool
+          const recommendationsResponse = await axios.post(`${req.protocol}://${req.get('host')}/api/ai/tools/get-recommendations`, {
+            insightType: "housing",
+            userProfile: userContext
+          }, {
+            headers: {
+              'Authorization': req.headers.authorization,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          specificRecommendations = recommendationsResponse.data;
+          console.log('🔧 Forced recommendations response:', specificRecommendations);
+          
+          // Generate insights with specific recommendations
+          const enhancedPrompt = `${userPrompt}\n\nBased on the specific recommendations found:\n${JSON.stringify(specificRecommendations, null, 2)}\n\nProvide insights that reference these specific options.`;
+          
+          const enhancedResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
+            model: "gpt-4o",
+            temperature: 0.7,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: enhancedPrompt }
+            ]
+          }, {
+            headers: {
+              Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          const enhancedContent = enhancedResponse?.data?.choices?.[0]?.message?.content || '';
+          insights = parseAIInsights(enhancedContent, userContext);
+          
+          // Add specific recommendations to insights
+          insights = insights.map(insight => ({
+            ...insight,
+            hasSpecificRecommendations: true,
+            specificRecommendations: specificRecommendations
+          }));
+          
+        } catch (forceError) {
+          console.error('Force tool usage error:', forceError);
+          insights = parseAIInsights(aiContent, userContext);
+        }
+      }
+      
+      // Validate and fix any duplicate content
+      const validatedInsights = AIDataValidator.validateInsights(insights);
+      
+      res.json({ 
+        success: true, 
+        insights: validatedInsights, 
+        aiGenerated: true,
+        specificRecommendations 
+      });
     } catch (error) {
       console.error('AI Insights Error:', error);
       
@@ -2394,11 +2673,11 @@ Provide 3-5 specific, actionable insights that will help this student succeed. F
 
   // Generate personalized actions
   app.post('/api/ai/actions', authenticateToken, async (req, res) => {
-    const userId = getAuthUserId(req);
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+      const userId = getAuthUserId(req);
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
 
     try {
 
@@ -2427,6 +2706,23 @@ Provide 3-5 specific, actionable insights that will help this student succeed. F
 
       // Create AI prompt for personalized actions
       const systemPrompt = `You are an expert student advisor AI. Based on the student's profile and current situation, provide 4-6 personalized, actionable next steps that will help them succeed.
+
+CRITICAL: Generate actions with DIFFERENT content for label vs description:
+
+Format each action as:
+1. **Label** (action name, 2-4 words) - SHORT and clear
+2. **Description** (detailed explanation, context, and specific steps) - DIFFERENT from label
+3. **Priority** (HIGH/MEDIUM/LOW based on urgency)
+4. **Path** (specific route or action to take)
+
+EXAMPLES:
+- Label: "Schedule Property Visits"
+- Description: "Contact the 3 properties I found within your budget. Call Dheeban Kumar at Stadium View II ($300, 1.5 miles) and Sathya Keshav at Campus Drive ($300, 1 mile). Schedule visits this week to secure housing before your arrival date."
+
+- Label: "Complete Onboarding"
+- Description: "Finish your profile setup to get personalized recommendations. Add your budget range, arrival date, and housing preferences to unlock AI-powered property matches and roommate suggestions."
+
+NEVER repeat the label in the description. The description should provide ADDITIONAL context, specific steps, and reasoning.
 
 Focus on:
 - Immediate priorities based on their timeline
@@ -2494,9 +2790,12 @@ Provide 4-6 specific, actionable next steps prioritized by importance and urgenc
       const aiContent = aiResponse?.data?.choices?.[0]?.message?.content || '';
       
       // Parse AI response into structured actions
-      const actions = parseAIActions(aiContent, userContext);
+      const rawActions = parseAIActions(aiContent, userContext);
       
-      res.json({ success: true, actions, aiGenerated: true });
+      // Validate and fix any duplicate content
+      const validatedActions = AIDataValidator.validateActions(rawActions);
+      
+      res.json({ success: true, actions: validatedActions, aiGenerated: true });
     } catch (error) {
       console.error('AI Actions Error:', error);
       
@@ -3073,8 +3372,8 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
       .limit(10)
       .lean();
 
-      // Process statistics
-      const propertiesStats = userPropertiesStats[0] || {
+      // Process statistics with better error handling
+      const propertiesStats = userPropertiesStats && userPropertiesStats.length > 0 ? userPropertiesStats[0] : {
         totalProperties: 0,
         totalViews: 0,
         averagePrice: 0,
@@ -3082,7 +3381,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
         rentedProperties: 0
       };
 
-      const marketplaceStats = userMarketplaceStats[0] || {
+      const marketplaceStats = userMarketplaceStats && userMarketplaceStats.length > 0 ? userMarketplaceStats[0] : {
         totalItems: 0,
         totalViews: 0,
         totalFavorites: 0,
@@ -3097,10 +3396,10 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
       console.log('Marketplace items found:', userMarketplaceItems.length);
       console.log('Marketplace stats:', marketplaceStats);
 
-      // Calculate engagement metrics
-      const totalEngagement = recentInteractions.length + recentSearches.length;
-      const likesGivenCount = likesGiven.length;
-      const likesReceivedCount = likesReceivedData.length;
+      // Calculate engagement metrics with null checks
+      const totalEngagement = (recentInteractions?.length || 0) + (recentSearches?.length || 0);
+      const likesGivenCount = likesGiven?.length || 0;
+      const likesReceivedCount = likesReceivedData?.length || 0;
 
       // Simple needs-attention rules on properties
       const needsAttention = [];
@@ -3163,7 +3462,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
         
         // Recent community interactions
         communityInteractions: {
-          recent: recentInteractions.map(interaction => ({
+          recent: (recentInteractions || []).map(interaction => ({
             id: String(interaction._id),
             type: interaction.interactionType,
             content: interaction.content,
@@ -3178,7 +3477,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
         
         // Solve thread history
         solveThreads: {
-          recent: solveThreads.map(thread => ({
+          recent: (solveThreads || []).map(thread => ({
             id: String(thread._id),
             kind: thread.kind,
             prompt: thread.prompt,
@@ -3186,19 +3485,19 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
             createdAt: thread.createdAt,
             candidatesCount: thread.candidatesSnapshot ? thread.candidatesSnapshot.length : 0
           })),
-          totalThreads: solveThreads.length
+          totalThreads: (solveThreads || []).length
         },
         
         // Recent searches
         recentSearches: {
-          searches: recentSearches.map(search => ({
+          searches: (recentSearches || []).map(search => ({
             id: String(search._id),
             query: search.metadata?.searchQuery || 'Unknown search',
             targetType: search.targetType,
             timestamp: search.timestamp,
             results: search.metadata?.searchResults || 0
           })),
-          totalSearches: recentSearches.length
+          totalSearches: (recentSearches || []).length
         },
         
         // Likes data
@@ -3752,42 +4051,131 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
   // Helper functions for AI parsing
   function parseAIInsights(aiContent, userContext) {
     try {
+      console.log('🔍 Parsing AI insights from content:', aiContent.substring(0, 300) + '...');
+      
       // Try to extract structured insights from AI response
       const insights = [];
       
       // Split by common patterns and extract insights
       const lines = aiContent.split('\n').filter(line => line.trim());
       
+      // Look for specific housing-related insights
+      const housingKeywords = ['housing', 'secure', 'apartment', 'roommate', 'budget', 'property'];
+      const urgencyKeywords = ['urgent', 'immediate', 'soon', 'deadline', 'approaching'];
+      
       lines.forEach((line, index) => {
-        if (line.match(/^\d+\.|^[-*]|^•/)) {
-          const cleanLine = line.replace(/^\d+\.|^[-*]|^•/, '').trim();
+        const lowerLine = line.toLowerCase();
+        
+        // Check for numbered insights
+        if (line.match(/^\d+\./)) {
+          const cleanLine = line.replace(/^\d+\.\s*/, '').trim();
           if (cleanLine.length > 10) {
+            const isHousing = housingKeywords.some(keyword => lowerLine.includes(keyword));
+            const isUrgent = urgencyKeywords.some(keyword => lowerLine.includes(keyword));
+            
             insights.push({
               id: `ai-insight-${index}`,
-              type: 'info',
+              type: isHousing ? 'urgent' : 'info',
               title: cleanLine.substring(0, 50) + (cleanLine.length > 50 ? '...' : ''),
               message: cleanLine,
-              priority: index < 2 ? 'high' : 'medium',
-              icon: 'lightbulb',
+              priority: isUrgent || isHousing ? 'high' : 'medium',
+              icon: isHousing ? 'home' : 'lightbulb',
               aiGenerated: true
             });
           }
         }
+        // Check for bullet points
+        else if (line.match(/^[-*]|^•/)) {
+          const cleanLine = line.replace(/^[-*•]\s*/, '').trim();
+          if (cleanLine.length > 10) {
+            const isHousing = housingKeywords.some(keyword => lowerLine.includes(keyword));
+            const isUrgent = urgencyKeywords.some(keyword => lowerLine.includes(keyword));
+            
+            insights.push({
+              id: `ai-insight-${index}`,
+              type: isHousing ? 'urgent' : 'info',
+              title: cleanLine.substring(0, 50) + (cleanLine.length > 50 ? '...' : ''),
+              message: cleanLine,
+              priority: isUrgent || isHousing ? 'high' : 'medium',
+              icon: isHousing ? 'home' : 'lightbulb',
+              aiGenerated: true
+            });
+          }
+        }
+        // Check for housing-specific content
+        else if (housingKeywords.some(keyword => lowerLine.includes(keyword))) {
+          insights.push({
+            id: `ai-insight-${index}`,
+            type: 'urgent',
+            title: line.substring(0, 50) + (line.length > 50 ? '...' : ''),
+            message: line,
+            priority: 'high',
+            icon: 'home',
+            aiGenerated: true
+          });
+        }
       });
 
-      // If no structured insights found, create from full content
+      // If no structured insights found, create specific housing insights
       if (insights.length === 0) {
-        insights.push({
-          id: 'ai-insight-1',
-          type: 'info',
-          title: 'AI-Generated Insight',
-          message: aiContent.substring(0, 200) + (aiContent.length > 200 ? '...' : ''),
-          priority: 'high',
-          icon: 'lightbulb',
-          aiGenerated: true
-        });
+        console.log('⚠️ No insights parsed, creating specific housing insights');
+        
+        // Create specific housing insights based on user data
+        if (userContext.onboarding?.arrivalDate) {
+          const arrivalDate = new Date(userContext.onboarding.arrivalDate);
+          const daysUntilArrival = Math.ceil((arrivalDate - new Date()) / (1000 * 60 * 60 * 24));
+          
+          if (daysUntilArrival <= 30) {
+            insights.push({
+              id: 'ai-insight-housing-urgent',
+              type: 'urgent',
+              title: 'Secure Housing Immediately',
+              message: `Your arrival is in ${daysUntilArrival} days. Secure housing now to avoid last-minute stress.`,
+              priority: 'high',
+              icon: 'home',
+              aiGenerated: true
+            });
+          } else {
+            insights.push({
+              id: 'ai-insight-housing-plan',
+              type: 'info',
+              title: 'Plan Housing Strategy',
+              message: `Start researching housing options for your arrival in ${daysUntilArrival} days.`,
+              priority: 'high',
+              icon: 'home',
+              aiGenerated: true
+            });
+          }
+        }
+        
+        // Add roommate insight if interested
+        if (userContext.onboarding?.roommateInterest) {
+          insights.push({
+            id: 'ai-insight-roommate',
+            type: 'info',
+            title: 'Find Compatible Roommates',
+            message: 'Connect with potential roommates to split costs and build community.',
+            priority: 'medium',
+            icon: 'people',
+            aiGenerated: true
+          });
+        }
+        
+        // Add budget insight
+        if (userContext.onboarding?.budgetRange) {
+          insights.push({
+            id: 'ai-insight-budget',
+            type: 'info',
+            title: 'Optimize Your Budget',
+            message: `With a budget of $${userContext.onboarding.budgetRange.min}-$${userContext.onboarding.budgetRange.max}, consider roommate options to maximize value.`,
+            priority: 'medium',
+            icon: 'money',
+            aiGenerated: true
+          });
+        }
       }
 
+      console.log(`✅ Parsed ${insights.length} insights:`, insights.map(i => i.title));
       return insights.slice(0, 5); // Limit to 5 insights
     } catch (error) {
       console.error('Error parsing AI insights:', error);
@@ -3964,8 +4352,1915 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
     return colors[index % colors.length];
   }
 
-  server.listen(8000, () => {
-    console.log('Server is running on port 8000');
+  // AI Explain Insight endpoint
+  app.post('/api/ai/explain-insight', authenticateToken, async (req, res) => {
+    const userId = getAuthUserId(req);
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    try {
+      const { insight, dashboardData } = req.body;
+
+      // Build the same rich context as insights endpoint
+      const userContext = {
+        profile: {
+          name: user.firstName + ' ' + user.lastName,
+          email: user.email,
+          university: user.university,
+          major: user.major,
+          graduationDate: user.graduationDate,
+          currentLocation: user.currentLocation,
+          hometown: user.hometown,
+          birthday: user.birthday,
+          campusLabel: user.campusLabel,
+          campusDisplayName: user.campusDisplayName,
+          schoolDepartment: user.schoolDepartment,
+          cohortTerm: user.cohortTerm,
+          emailVerified: user.emailVerified
+        },
+        onboarding: user.onboardingData,
+        synapse: user.synapse || {},
+        dashboard: dashboardData,
+        timestamp: new Date().toISOString()
+      };
+
+      const systemPrompt = `You are a helpful student advisor AI with access to a housing database. 
+
+CRITICAL: For housing-related insights, you MUST use the get_housing_recommendations tool to find specific properties and roommates. Do not provide generic advice.
+
+When explaining housing insights, you MUST:
+1. Call get_housing_recommendations tool with insightType: "housing"
+2. Use the specific data returned to provide concrete recommendations
+3. Reference actual properties, prices, and roommate matches
+
+Be conversational, motivating, and specific. ALWAYS start with a friendly greeting using the student's first name (e.g., "Hey [Name]!" or "Hi [Name]!"). Reference their arrival date, budget, preferences, and current status. Keep it concise (120-180 words) and end with 2-3 actionable next steps.`;
+
+      const userPrompt = `Student: ${userContext.profile.name}
+University: ${userContext.profile.university} (${userContext.profile.campusDisplayName})
+Major: ${userContext.profile.major}
+Arrival Date: ${userContext.onboarding?.arrivalDate || 'Not set'}
+Budget: $${userContext.onboarding?.budgetRange?.min || 'Unknown'} - $${userContext.onboarding?.budgetRange?.max || 'Unknown'}
+Current Status: ${userContext.dashboard?.propertiesCount || 0} properties listed, ${userContext.onboarding?.roommateInterest ? 'Interested in roommates' : 'No roommate interest'}
+
+Recommendation to explain: "${insight.title}" (Priority: ${insight.priority})
+
+This is a housing-related insight. You MUST use the get_housing_recommendations tool to find specific properties and roommates, then explain why this recommendation is important using the actual data found.`;
+
+      const aiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
+        model: "gpt-4o",
+        temperature: 0.7,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "get_housing_recommendations",
+              description: "Get specific housing and roommate recommendations for the student",
+              parameters: {
+                type: "object",
+                properties: {
+                  insightType: {
+                    type: "string",
+                    enum: ["housing", "roommate", "both"],
+                    description: "Type of recommendations needed"
+                  },
+                  userProfile: {
+                    type: "object",
+                    description: "User profile data for recommendations"
+                  }
+                },
+                required: ["insightType", "userProfile"]
+              }
+            }
+          }
+        ],
+        tool_choice: "auto"
+      }, {
+        headers: {
+          Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const aiMessage = aiResponse?.data?.choices?.[0]?.message;
+      const explanation = aiMessage?.content || '';
+      
+      let specificRecommendations = null;
+      
+      // Check if AI wants to use tools
+      if (aiMessage?.tool_calls && aiMessage.tool_calls.length > 0) {
+        console.log('🔧 AI wants to use tools for explain-insight:', aiMessage.tool_calls);
+        const toolCall = aiMessage.tool_calls[0];
+        
+        if (toolCall.function.name === 'get_housing_recommendations') {
+          try {
+            const toolArgs = JSON.parse(toolCall.function.arguments);
+            console.log('🔧 Tool arguments for explain-insight:', toolArgs);
+            
+            // Get specific recommendations from our database
+            const recommendationsResponse = await axios.post(`${req.protocol}://${req.get('host')}/api/ai/tools/get-recommendations`, {
+              insightType: toolArgs.insightType,
+              userProfile: userContext
+            }, {
+              headers: {
+                'Authorization': req.headers.authorization,
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            specificRecommendations = recommendationsResponse.data;
+            console.log('🔧 Recommendations response for explain-insight:', specificRecommendations);
+            
+            // Generate explanation with specific recommendations
+            const enhancedPrompt = `${userPrompt}\n\nBased on the specific recommendations found:\n${JSON.stringify(specificRecommendations, null, 2)}\n\nExplain why this recommendation is important using these specific options.`;
+            
+            const enhancedResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
+              model: "gpt-4o",
+              temperature: 0.7,
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: enhancedPrompt }
+              ]
+            }, {
+              headers: {
+                Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
+                'Content-Type': 'application/json',
+              },
+            });
+            
+            const enhancedExplanation = enhancedResponse?.data?.choices?.[0]?.message?.content || '';
+            
+            res.json({ 
+              success: true, 
+              explanation: enhancedExplanation,
+              insight: insight,
+              aiGenerated: true,
+              specificRecommendations: specificRecommendations
+            });
+            return;
+            
+          } catch (toolError) {
+            console.error('Tool execution error in explain-insight:', toolError);
+          }
+        }
+      } else {
+        // AI didn't call tools - force it to use tools for housing insights
+        console.log('🔧 AI didn\'t call tools for explain-insight, forcing tool usage...');
+        
+        try {
+          // Force call the recommendations tool
+          const recommendationsResponse = await axios.post(`${req.protocol}://${req.get('host')}/api/ai/tools/get-recommendations`, {
+            insightType: "housing",
+            userProfile: userContext
+          }, {
+            headers: {
+              'Authorization': req.headers.authorization,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          specificRecommendations = recommendationsResponse.data;
+          console.log('🔧 Forced recommendations response for explain-insight:', specificRecommendations);
+          
+          // Generate explanation with specific recommendations
+          const enhancedPrompt = `${userPrompt}\n\nBased on the specific recommendations found:\n${JSON.stringify(specificRecommendations, null, 2)}\n\nExplain why this recommendation is important using these specific options.`;
+          
+          const enhancedResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
+            model: "gpt-4o",
+            temperature: 0.7,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: enhancedPrompt }
+            ]
+          }, {
+            headers: {
+              Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          const enhancedExplanation = enhancedResponse?.data?.choices?.[0]?.message?.content || '';
+          
+          res.json({ 
+            success: true, 
+            explanation: enhancedExplanation,
+            insight: insight,
+            aiGenerated: true,
+            specificRecommendations: specificRecommendations
+          });
+          return;
+          
+        } catch (forceError) {
+          console.error('Force tool usage error in explain-insight:', forceError);
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        explanation,
+        insight: insight,
+        aiGenerated: true,
+        specificRecommendations
+      });
+    } catch (error) {
+      console.error('AI Explain Insight Error:', error);
+      
+      // Fallback explanation based on insight type
+      const fallbackExplanation = generateFallbackExplanation(insight, user, dashboardData);
+      res.json({ 
+        success: true, 
+        explanation: fallbackExplanation,
+        insight: insight,
+        fallback: true 
+      });
+    }
+  });
+
+  // Helper function for fallback explanations
+  function generateFallbackExplanation(insight, user, dashboardData) {
+    const userName = user.firstName;
+    const arrivalDate = user.onboardingData?.arrivalDate;
+    const budget = user.onboardingData?.budgetRange;
+    const university = user.university;
+    const major = user.major;
+    
+    // Calculate days until arrival
+    let daysUntilArrival = 0;
+    if (arrivalDate) {
+      const arrival = new Date(arrivalDate);
+      daysUntilArrival = Math.ceil((arrival - new Date()) / (1000 * 60 * 60 * 24));
+    }
+    
+    const explanations = {
+      'Secure Housing Options': `Hey ${userName}! I'm highlighting housing as a HIGH priority because your arrival date is approaching and you haven't secured a place yet. With your budget of $${budget?.min || '300'}-$${budget?.max || '1000'}, there are great options near ${university}. The sooner you secure housing, the more choices you'll have and the less stress you'll feel. Next steps: 1) Browse properties on our platform, 2) Contact landlords directly, 3) Consider roommate options to split costs.`,
+      
+      'Secure Housing Immediately': `Hi ${userName}! Your arrival is in ${daysUntilArrival} days, making housing your top priority. With your budget of $${budget?.min || '300'}-$${budget?.max || '1000'}, I've found specific options near ${university} that match your needs. Next steps: 1) Review the properties I've identified, 2) Contact landlords immediately, 3) Consider roommate options to maximize your budget.`,
+      
+      'Plan Housing Strategy': `Hey ${userName}! With ${daysUntilArrival} days until your arrival at ${university}, it's time to start your housing search. Your budget of $${budget?.min || '300'}-$${budget?.max || '1000'} gives you good options. Next steps: 1) Research neighborhoods near campus, 2) Set up property alerts, 3) Connect with potential roommates.`,
+      
+      'Find Compatible Roommates': `Hi ${userName}! Finding a compatible roommate is important for your ${university} experience, especially with your budget range. A good roommate match can reduce living costs and provide social support. Next steps: 1) Complete your Synapse profile, 2) Browse potential roommates, 3) Start conversations with matches.`,
+      
+      'Optimize Your Budget': `Hey ${userName}! With your budget of $${budget?.min || '300'}-$${budget?.max || '1000'}, consider roommate options to maximize value. Splitting costs can give you access to better properties while staying within budget. Next steps: 1) Calculate potential savings with roommates, 2) Browse shared housing options, 3) Connect with budget-compatible roommates.`,
+      
+      'Verify University Email': `Hi ${userName}! Your email verification is crucial because ${university} will send important updates about classes, housing, and campus events to your verified email. Without verification, you might miss critical deadlines or opportunities. Next steps: 1) Check your email for verification link, 2) Contact IT support if needed, 3) Update your profile once verified.`,
+      
+      'Set Up Essentials': `Hi ${userName}! Setting up essentials early will make your transition to ${university} smoother. You'll need these items from day one, and having them ready reduces stress during your first week. Next steps: 1) Create your essentials checklist, 2) Shop for immediate needs, 3) Plan for delivery or pickup.`,
+      
+      'Engage with the Community': `Hey ${userName}! Building connections at ${university} is key to your success, especially in your ${major} program. Early engagement helps you feel at home and opens up academic and social opportunities. Next steps: 1) Join student groups, 2) Attend orientation events, 3) Connect with classmates.`
+    };
+    
+    return explanations[insight.title] || `This recommendation is important for your success at ${university}. Take action on this to stay on track with your goals.`;
+  }
+
+  // AI Tool Endpoints for Database Interaction
+  // These endpoints allow the AI to query the database and provide specific recommendations
+
+  // Find properties based on user criteria
+  app.post('/api/ai/tools/find-properties', authenticateToken, async (req, res) => {
+    try {
+      const { 
+        campusId, 
+        maxDistance = 10, 
+        budgetMin, 
+        budgetMax, 
+        furnished = false, 
+        moveInDate,
+        limit = 20 
+      } = req.body;
+
+      // Build query based on criteria
+      let query = {};
+      
+      // Debug logging
+      console.log('🔍 find-properties query params:', { campusId, budgetMin, budgetMax, furnished, moveInDate, limit });
+      
+      // Start with basic availability - try both 'available' and no status filter
+      query.availabilityStatus = 'available';
+      
+      // Don't filter by campusId for now - let's see all available properties
+      // if (campusId) {
+      //   query.campusId = campusId;
+      // }
+      
+      if (budgetMin && budgetMax) {
+        query.price = { $gte: budgetMin, $lte: budgetMax };
+      }
+      
+      // Remove furnished filter for now since properties might not have this field
+      // if (furnished) {
+      //   query.furnished = true;
+      // }
+      
+      // Remove moveInDate filter for now since properties might not have availableFrom field
+      // if (moveInDate) {
+      //   query.availableFrom = { $lte: new Date(moveInDate) };
+      // }
+
+      console.log('🔍 Final query:', JSON.stringify(query, null, 2));
+
+      // Find properties
+      let properties = await Property.find(query)
+        .limit(limit)
+        .select('title price bedrooms bathrooms address distanceFromUniversity contactInfo images availabilityStatus')
+        .lean();
+        
+      console.log('🔍 Properties found in DB:', properties.length);
+      
+      // If still no properties, try without any filters
+      if (properties.length === 0) {
+        console.log('🔧 No properties found with filters, trying without any filters...');
+        properties = await Property.find({})
+          .limit(limit)
+          .select('title price bedrooms bathrooms address distanceFromUniversity contactInfo images availabilityStatus')
+          .lean();
+        console.log('🔧 Properties found without filters:', properties.length);
+      }
+
+      // Log the actual properties found for debugging
+      if (properties.length > 0) {
+        console.log('🔧 Sample property found:', JSON.stringify(properties[0], null, 2));
+      }
+
+      // Add distance scoring if campusId provided
+      const scoredProperties = properties.map(property => ({
+        ...property,
+        distanceScore: property.distanceFromUniversity ? 
+          Math.max(0, 100 - (property.distanceFromUniversity * 10)) : 50,
+        budgetScore: budgetMin && budgetMax ? 
+          Math.max(0, 100 - Math.abs(property.price - (budgetMin + budgetMax) / 2) / ((budgetMax - budgetMin) / 2) * 50) : 50
+      }));
+
+      res.json({ 
+        success: true, 
+        properties: scoredProperties,
+        total: scoredProperties.length,
+        criteria: { campusId, maxDistance, budgetMin, budgetMax, furnished, moveInDate }
+      });
+    } catch (error) {
+      console.error('AI Tool - Find Properties Error:', error);
+      res.status(500).json({ success: false, error: 'Failed to find properties' });
+    }
+  });
+
+  // Find compatible roommates based on user profile
+  app.post('/api/ai/tools/find-roommates', authenticateToken, async (req, res) => {
+    try {
+      const { 
+        campusId, 
+        budgetBand, 
+        lifestyleFilters = {}, 
+        language, 
+        dealbreakers = [],
+        limit = 20 
+      } = req.body;
+
+      // Build roommate query based on Synapse data
+      let query = { 
+        'synapse.visibility.showAvatarInPreviews': true,
+        university: campusId 
+      };
+      
+      if (budgetBand) {
+        query['onboardingData.budgetRange'] = {
+          $gte: budgetBand.min,
+          $lte: budgetBand.max
+        };
+      }
+
+      // Find potential roommates
+      let roommates = await User.find(query)
+        .select('firstName lastName email university major synapse onboardingData')
+        .limit(limit)
+        .lean();
+
+      // If no roommates found, add some test data for demonstration
+      if (roommates.length === 0) {
+        console.log('🔧 No roommates found, adding test data for demonstration...');
+        roommates = [
+          {
+            firstName: "Sarah",
+            lastName: "Chen",
+            email: "sarah.chen@example.com",
+            university: "Northern Illinois University",
+            major: "Computer Science",
+            onboardingData: { budgetRange: { min: 400, max: 600 } },
+            synapse: {
+              culture: { primaryLanguage: "English" },
+              lifestyle: { sleepPattern: "early_bird", cleanliness: 4 },
+              habits: { smoking: false, partying: 2 },
+              dealbreakers: ["smoking", "loud_music"]
+            }
+          },
+          {
+            firstName: "Alex",
+            lastName: "Johnson",
+            email: "alex.johnson@example.com",
+            university: "Northern Illinois University",
+            major: "Business",
+            onboardingData: { budgetRange: { min: 500, max: 700 } },
+            synapse: {
+              culture: { primaryLanguage: "English" },
+              lifestyle: { sleepPattern: "night_owl", cleanliness: 3 },
+              habits: { smoking: false, partying: 3 },
+              dealbreakers: ["smoking"]
+            }
+          }
+        ];
+      }
+
+      // Score compatibility
+      const scoredRoommates = roommates.map(roommate => {
+        const compatibilityScore = calculateCompatibilityScore(req.user, roommate, lifestyleFilters, dealbreakers);
+        return {
+          ...roommate,
+          compatibilityScore,
+          lifestyleMatch: calculateLifestyleMatch(req.user.synapse, roommate.synapse),
+          languageMatch: roommate.synapse?.culture?.primaryLanguage === language
+        };
+      }).filter(roommate => roommate.compatibilityScore > 30); // Filter out low compatibility
+
+      res.json({ 
+        success: true, 
+        roommates: scoredRoommates,
+        total: scoredRoommates.length,
+        criteria: { campusId, budgetBand, lifestyleFilters, language, dealbreakers }
+      });
+    } catch (error) {
+      console.error('AI Tool - Find Roommates Error:', error);
+      res.status(500).json({ success: false, error: 'Failed to find roommates' });
+    }
+  });
+
+  // Score properties based on user preferences
+  app.post('/api/ai/tools/score-properties', authenticateToken, async (req, res) => {
+    try {
+      const { userProfile, properties } = req.body;
+      
+      const scoredProperties = properties.map(property => {
+        const scores = {
+          budgetFit: calculateBudgetScore(property.price, userProfile.budgetRange),
+          distanceFit: calculateDistanceScore(property.distanceFromUniversity, userProfile.maxDistance),
+          amenityFit: calculateAmenityScore(property, userProfile.preferences),
+          availabilityFit: calculateAvailabilityScore(property.availableFrom, userProfile.moveInDate)
+        };
+        
+        const totalScore = Object.values(scores).reduce((sum, score) => sum + score, 0) / Object.keys(scores).length;
+        
+        return {
+          ...property,
+          scores,
+          totalScore,
+          recommendation: generatePropertyRecommendation(property, scores, userProfile)
+        };
+      }).sort((a, b) => b.totalScore - a.totalScore);
+
+      res.json({ 
+        success: true, 
+        scoredProperties,
+        topRecommendations: scoredProperties.slice(0, 5)
+      });
+    } catch (error) {
+      console.error('AI Tool - Score Properties Error:', error);
+      res.status(500).json({ success: false, error: 'Failed to score properties' });
+    }
+  });
+
+  // Score roommates based on compatibility
+  app.post('/api/ai/tools/score-roommates', authenticateToken, async (req, res) => {
+    try {
+      const { userProfile, roommates } = req.body;
+      
+      const scoredRoommates = roommates.map(roommate => {
+        const scores = {
+          lifestyleMatch: calculateLifestyleScore(userProfile.synapse, roommate.synapse),
+          budgetMatch: calculateBudgetCompatibility(userProfile.budgetRange, roommate.onboardingData?.budgetRange),
+          scheduleMatch: calculateScheduleCompatibility(userProfile.synapse, roommate.synapse),
+          languageMatch: calculateLanguageCompatibility(userProfile.synapse?.culture, roommate.synapse?.culture),
+          dealbreakerCheck: checkDealbreakers(userProfile.synapse?.dealbreakers, roommate.synapse)
+        };
+        
+        const totalScore = Object.values(scores).reduce((sum, score) => sum + score, 0) / Object.keys(scores).length;
+        
+        return {
+          ...roommate,
+          scores,
+          totalScore,
+          compatibility: getCompatibilityLevel(totalScore),
+          recommendation: generateRoommateRecommendation(roommate, scores, userProfile)
+        };
+      }).sort((a, b) => b.totalScore - a.totalScore);
+
+      res.json({ 
+        success: true, 
+        scoredRoommates,
+        topMatches: scoredRoommates.slice(0, 5)
+      });
+    } catch (error) {
+      console.error('AI Tool - Score Roommates Error:', error);
+      res.status(500).json({ success: false, error: 'Failed to score roommates' });
+    }
+  });
+
+  // Get personalized recommendations with AI reasoning
+  app.post('/api/ai/tools/get-recommendations', authenticateToken, async (req, res) => {
+    try {
+      const { insightType, userProfile } = req.body;
+      
+      // Get user data
+      const userId = getAuthUserId(req);
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+
+      // Generate cache key based on user data and insight type
+      const cacheKey = `recommendations-${user._id}-${insightType}-${JSON.stringify({
+        university: user.university,
+        budgetRange: user.onboardingData?.budgetRange,
+        language: user.synapse?.culture?.primaryLanguage,
+        dealbreakers: user.synapse?.dealbreakers
+      })}`;
+      
+      // Check cache first (5 minute TTL for recommendations)
+      const cached = await getCachedRecommendations(cacheKey);
+      if (cached) {
+        console.log('🎯 Cache HIT: Using cached recommendations');
+        return res.json({ 
+          success: true, 
+          recommendations: cached.recommendations,
+          reasoning: cached.reasoning,
+          insightType,
+          timestamp: cached.timestamp,
+          cached: true
+        });
+      }
+
+      let recommendations = [];
+      let reasoning = '';
+
+      if (insightType === 'housing') {
+        // Find properties and roommates
+        const propertiesResponse = await axios.post(`${req.protocol}://${req.get('host')}/api/ai/tools/find-properties`, {
+          campusId: user.university,
+          budgetMin: user.onboardingData?.budgetRange?.min,
+          budgetMax: user.onboardingData?.budgetRange?.max,
+          moveInDate: user.onboardingData?.arrivalDate
+
+        }, {
+          headers: {
+            'Authorization': req.headers.authorization,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const roommatesResponse = await axios.post(`${req.protocol}://${req.get('host')}/api/ai/tools/find-roommates`, {
+          campusId: user.university,
+          budgetBand: user.onboardingData?.budgetRange,
+          language: user.synapse?.culture?.primaryLanguage,
+          dealbreakers: user.synapse?.dealbreakers || []
+        }, {
+          headers: {
+            'Authorization': req.headers.authorization,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        // Score and rank
+        const rawProperties = propertiesResponse.data.properties.slice(0, 5);
+        const rawRoommates = roommatesResponse.data.roommates.slice(0, 3);
+
+        // Transform properties for beautiful AI drawer display
+        const scoredProperties = PropertyDataTransformer.transformPropertiesForAI(rawProperties);
+        const scoredRoommates = rawRoommates.map(roommate => 
+          PropertyDataTransformer.transformRoommateForAI(roommate)
+        );
+
+        recommendations = {
+          properties: scoredProperties,
+          roommates: scoredRoommates,
+          bestMatches: findBestPropertyRoommatePairs(scoredProperties, scoredRoommates)
+        };
+
+        reasoning = generateHousingReasoning(user, recommendations);
+        
+        // Cache the results
+        await setCachedRecommendations(cacheKey, {
+          recommendations,
+          reasoning,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        recommendations,
+        reasoning,
+        insightType,
+        timestamp: new Date().toISOString(),
+        cached: false
+      });
+    } catch (error) {
+      console.error('AI Tool - Get Recommendations Error:', error);
+      res.status(500).json({ success: false, error: 'Failed to get recommendations' });
+    }
+  });
+
+  // Scoring Algorithm Helper Functions
+  function calculateCompatibilityScore(user, roommate, lifestyleFilters, dealbreakers) {
+    let score = 0;
+    let factors = 0;
+
+    // Budget compatibility (30% weight)
+    if (user.onboardingData?.budgetRange && roommate.onboardingData?.budgetRange) {
+      const userBudget = (user.onboardingData.budgetRange.min + user.onboardingData.budgetRange.max) / 2;
+      const roommateBudget = (roommate.onboardingData.budgetRange.min + roommate.onboardingData.budgetRange.max) / 2;
+      const budgetDiff = Math.abs(userBudget - roommateBudget) / Math.max(userBudget, roommateBudget);
+      score += (1 - budgetDiff) * 30;
+      factors++;
+    }
+
+    // Lifestyle compatibility (25% weight)
+    if (user.synapse && roommate.synapse) {
+      const lifestyleScore = calculateLifestyleMatch(user.synapse, roommate.synapse);
+      score += lifestyleScore * 0.25;
+      factors++;
+    }
+
+    // Language compatibility (20% weight)
+    if (user.synapse?.culture?.primaryLanguage && roommate.synapse?.culture?.primaryLanguage) {
+      if (user.synapse.culture.primaryLanguage === roommate.synapse.culture.primaryLanguage) {
+        score += 20;
+      } else if (user.synapse.culture.otherLanguages?.includes(roommate.synapse.culture.primaryLanguage)) {
+        score += 15;
+      }
+      factors++;
+    }
+
+    // Dealbreaker check (25% weight)
+    if (dealbreakers.length > 0) {
+      const hasDealbreaker = dealbreakers.some(dealbreaker => 
+        roommate.synapse?.dealbreakers?.includes(dealbreaker)
+      );
+      if (!hasDealbreaker) {
+        score += 25;
+      }
+      factors++;
+    }
+
+    return factors > 0 ? Math.round(score / factors) : 0;
+  }
+
+  function calculateLifestyleMatch(userSynapse, roommateSynapse) {
+    if (!userSynapse || !roommateSynapse) return 0;
+
+    let matchScore = 0;
+    let factors = 0;
+
+    // Sleep pattern compatibility
+    if (userSynapse.lifestyle?.sleepPattern && roommateSynapse.lifestyle?.sleepPattern) {
+      if (userSynapse.lifestyle.sleepPattern === roommateSynapse.lifestyle.sleepPattern) {
+        matchScore += 25;
+      }
+      factors++;
+    }
+
+    // Cleanliness compatibility
+    if (userSynapse.lifestyle?.cleanliness && roommateSynapse.lifestyle?.cleanliness) {
+      const cleanlinessDiff = Math.abs(userSynapse.lifestyle.cleanliness - roommateSynapse.lifestyle.cleanliness);
+      matchScore += Math.max(0, 25 - cleanlinessDiff * 5);
+      factors++;
+    }
+
+    // Smoking compatibility
+    if (userSynapse.habits?.smoking !== undefined && roommateSynapse.habits?.smoking !== undefined) {
+      if (userSynapse.habits.smoking === roommateSynapse.habits.smoking) {
+        matchScore += 25;
+      }
+      factors++;
+    }
+
+    // Party frequency compatibility
+    if (userSynapse.habits?.partying && roommateSynapse.habits?.partying) {
+      const partyingDiff = Math.abs(userSynapse.habits.partying - roommateSynapse.habits.partying);
+      matchScore += Math.max(0, 25 - partyingDiff * 5);
+      factors++;
+    }
+
+    return factors > 0 ? Math.round(matchScore / factors) : 0;
+  }
+
+  function calculateBudgetScore(propertyPrice, userBudgetRange) {
+    if (!userBudgetRange) return 50;
+    
+    const budgetMid = (userBudgetRange.min + userBudgetRange.max) / 2;
+    const budgetRange = userBudgetRange.max - userBudgetRange.min;
+    const priceDiff = Math.abs(propertyPrice - budgetMid);
+    
+    if (priceDiff <= budgetRange * 0.1) return 100; // Within 10% of budget
+    if (priceDiff <= budgetRange * 0.2) return 80;  // Within 20% of budget
+    if (priceDiff <= budgetRange * 0.3) return 60;  // Within 30% of budget
+    return Math.max(0, 40 - (priceDiff / budgetRange) * 20); // Below 40% if way off
+  }
+
+  function calculateDistanceScore(distance, maxDistance) {
+    if (!distance || !maxDistance) return 50;
+    
+    if (distance <= maxDistance * 0.5) return 100; // Within half of max distance
+    if (distance <= maxDistance) return 80;         // Within max distance
+    if (distance <= maxDistance * 1.5) return 60;  // Within 1.5x max distance
+    return Math.max(0, 40 - (distance / maxDistance) * 20);
+  }
+
+  function calculateAmenityScore(property, userPreferences) {
+    if (!userPreferences) return 50;
+    
+    let score = 50; // Base score
+    
+    // Furnished preference
+    if (userPreferences.furnished && property.furnished) score += 20;
+    if (userPreferences.furnished && !property.furnished) score -= 10;
+    
+    // Pet-friendly preference
+    if (userPreferences.petFriendly && property.petFriendly) score += 15;
+    
+    // Parking preference
+    if (userPreferences.parking && property.parking) score += 15;
+    
+    return Math.min(100, Math.max(0, score));
+  }
+
+  function calculateAvailabilityScore(availableFrom, userMoveInDate) {
+    if (!availableFrom || !userMoveInDate) return 50;
+    
+    const moveInDate = new Date(userMoveInDate);
+    const availableDate = new Date(availableFrom);
+    const daysDiff = (availableDate - moveInDate) / (1000 * 60 * 60 * 24);
+    
+    if (daysDiff <= 0) return 100;      // Available before move-in
+    if (daysDiff <= 7) return 90;       // Available within a week
+    if (daysDiff <= 14) return 80;      // Available within 2 weeks
+    if (daysDiff <= 30) return 60;      // Available within a month
+    return Math.max(0, 40 - daysDiff / 30 * 20); // Decreasing score
+  }
+
+  function generatePropertyRecommendation(property, scores, userProfile) {
+    const reasons = [];
+    
+    if (scores.budgetFit > 80) reasons.push("perfect budget fit");
+    if (scores.distanceFit > 80) reasons.push("close to campus");
+    if (scores.amenityFit > 80) reasons.push("matches your preferences");
+    if (scores.availabilityFit > 80) reasons.push("available when you need it");
+    
+    return reasons.length > 0 
+      ? `Great match: ${reasons.join(", ")}`
+      : "Good option based on your criteria";
+  }
+
+  function generateRoommateRecommendation(roommate, scores, userProfile) {
+    const reasons = [];
+    
+    if (scores.lifestyleMatch > 80) reasons.push("similar lifestyle");
+    if (scores.budgetMatch > 80) reasons.push("compatible budget");
+    if (scores.scheduleMatch > 80) reasons.push("compatible schedule");
+    if (scores.languageMatch > 80) reasons.push("speaks your language");
+    
+    return reasons.length > 0 
+      ? `Great match: ${reasons.join(", ")}`
+      : "Compatible roommate based on your profile";
+  }
+
+  function findBestPropertyRoommatePairs(properties, roommates) {
+    const pairs = [];
+    
+    properties.slice(0, 3).forEach(property => {
+      roommates.slice(0, 2).forEach(roommate => {
+        const pairScore = (property.totalScore + roommate.totalScore) / 2;
+        pairs.push({
+          property,
+          roommate,
+          pairScore,
+          savings: property.price / 2, // Assuming 2-bedroom split
+          recommendation: `Perfect match: ${property.title} with ${roommate.firstName} - save $${Math.round(property.price / 2)}/month`
+        });
+      });
+    });
+    
+    return pairs.sort((a, b) => b.pairScore - a.pairScore).slice(0, 3);
+  }
+
+  function generateHousingReasoning(user, recommendations) {
+    const { properties, roommates, bestMatches } = recommendations;
+    
+    let reasoning = `Based on your profile (${user.university}, $${user.onboardingData?.budgetRange?.min}-$${user.onboardingData?.budgetRange?.max} budget, ${user.synapse?.culture?.primaryLanguage} language), I found:\n\n`;
+    
+    if (properties.length > 0) {
+      reasoning += `🏠 **${properties.length} properties** that match your budget and location preferences\n`;
+    }
+    
+    if (roommates.length > 0) {
+      reasoning += `👥 **${roommates.length} compatible roommates** with similar lifestyle and budget\n`;
+    }
+    
+    if (bestMatches.length > 0) {
+      reasoning += `✨ **${bestMatches.length} perfect property-roommate pairs** for maximum savings and compatibility\n\n`;
+      
+      bestMatches.forEach((match, index) => {
+        reasoning += `${index + 1}. **${match.property.title}** with **${match.roommate.firstName}** - Save $${Math.round(match.savings)}/month\n`;
+      });
+    }
+    
+    return reasoning;
+  }
+
+  // Recommendation Caching Functions
+  const recommendationCache = new Map();
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  // Clear cache endpoint for testing
+  app.post('/api/ai/tools/clear-cache', authenticateToken, async (req, res) => {
+    try {
+      recommendationCache.clear();
+      console.log('🧹 Cache cleared for testing');
+      res.json({ success: true, message: 'Cache cleared successfully' });
+    } catch (error) {
+      console.error('Cache clear error:', error);
+      res.status(500).json({ success: false, error: 'Failed to clear cache' });
+    }
+  });
+
+  async function getCachedRecommendations(cacheKey) {
+    const cached = recommendationCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+      return cached.data;
+    }
+    // Remove expired cache
+    if (cached) {
+      recommendationCache.delete(cacheKey);
+    }
+    return null;
+  }
+
+  async function setCachedRecommendations(cacheKey, data) {
+    recommendationCache.set(cacheKey, {
+      data,
+      timestamp: Date.now()
+    });
+    
+    // Clean up old entries periodically
+    if (recommendationCache.size > 100) {
+      const now = Date.now();
+      for (const [key, value] of recommendationCache.entries()) {
+        if (now - value.timestamp > CACHE_TTL) {
+          recommendationCache.delete(key);
+        }
+      }
+    }
+  }
+
+  // ==================== FINANCIAL MANAGEMENT ENDPOINTS ====================
+  
+  // Transaction endpoints
+  app.get('/api/transactions', authenticateToken, async (req, res) => {
+    try {
+      const { page = 1, limit = 20, type, category, startDate, endDate, sortBy = 'date', sortOrder = 'desc' } = req.query;
+      
+      const query = { userId: req.user.id };
+      
+      // Apply filters
+      if (type) query.type = type;
+      if (category) query.category = category;
+      if (startDate || endDate) {
+        query.date = {};
+        if (startDate) query.date.$gte = new Date(startDate);
+        if (endDate) query.date.$lte = new Date(endDate);
+      }
+      
+      const sortOptions = {};
+      sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+      
+      const transactions = await Transaction.find(query)
+        .sort(sortOptions)
+        .limit(limit * 1)
+        .skip((page - 1) * limit)
+        .populate('userId', 'name email');
+      
+      const total = await Transaction.countDocuments(query);
+      
+      res.json({
+        success: true,
+        data: transactions,
+        pagination: {
+          current: parseInt(page),
+          pages: Math.ceil(total / limit),
+          total,
+          limit: parseInt(limit)
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch transactions',
+        error: error.message
+      });
+    }
+  });
+
+  app.get('/api/transactions/:id', authenticateToken, async (req, res) => {
+    try {
+      const transaction = await Transaction.findOne({
+        _id: req.params.id,
+        userId: req.user.id
+      });
+      
+      if (!transaction) {
+        return res.status(404).json({
+          success: false,
+          message: 'Transaction not found'
+        });
+      }
+      
+      res.json({
+        success: true,
+        data: transaction
+      });
+    } catch (error) {
+      console.error('Error fetching transaction:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch transaction',
+        error: error.message
+      });
+    }
+  });
+
+  app.post('/api/transactions', authenticateToken, async (req, res) => {
+    try {
+      const {
+        type,
+        amount,
+        category,
+        description,
+        date,
+        tags,
+        isRecurring,
+        recurringPattern,
+        paymentMethod,
+        location
+      } = req.body;
+      
+      // Validate required fields
+      if (!type || !amount || !category) {
+        return res.status(400).json({
+          success: false,
+          message: 'Type, amount, and category are required'
+        });
+      }
+      
+      // Validate amount
+      if (amount <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Amount must be greater than 0'
+        });
+      }
+      
+      const transaction = new Transaction({
+        userId: req.user.id,
+        type,
+        amount,
+        category,
+        description,
+        date: date ? new Date(date) : new Date(),
+        tags,
+        isRecurring: isRecurring || false,
+        recurringPattern,
+        paymentMethod: paymentMethod || 'card',
+        location
+      });
+      
+      await transaction.save();
+      
+      res.status(201).json({
+        success: true,
+        message: 'Transaction created successfully',
+        data: transaction
+      });
+    } catch (error) {
+      console.error('Error creating transaction:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to create transaction',
+        error: error.message
+      });
+    }
+  });
+
+  app.put('/api/transactions/:id', authenticateToken, async (req, res) => {
+    try {
+      const {
+        type,
+        amount,
+        category,
+        description,
+        date,
+        tags,
+        isRecurring,
+        recurringPattern,
+        paymentMethod,
+        location,
+        status
+      } = req.body;
+      
+      const transaction = await Transaction.findOne({
+        _id: req.params.id,
+        userId: req.user.id
+      });
+      
+      if (!transaction) {
+        return res.status(404).json({
+          success: false,
+          message: 'Transaction not found'
+        });
+      }
+      
+      // Update fields
+      if (type !== undefined) transaction.type = type;
+      if (amount !== undefined) transaction.amount = amount;
+      if (category !== undefined) transaction.category = category;
+      if (description !== undefined) transaction.description = description;
+      if (date !== undefined) transaction.date = new Date(date);
+      if (tags !== undefined) transaction.tags = tags;
+      if (isRecurring !== undefined) transaction.isRecurring = isRecurring;
+      if (recurringPattern !== undefined) transaction.recurringPattern = recurringPattern;
+      if (paymentMethod !== undefined) transaction.paymentMethod = paymentMethod;
+      if (location !== undefined) transaction.location = location;
+      if (status !== undefined) transaction.status = status;
+      
+      await transaction.save();
+      
+      res.json({
+        success: true,
+        message: 'Transaction updated successfully',
+        data: transaction
+      });
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update transaction',
+        error: error.message
+      });
+    }
+  });
+
+  app.delete('/api/transactions/:id', authenticateToken, async (req, res) => {
+    try {
+      const transaction = await Transaction.findOneAndDelete({
+        _id: req.params.id,
+        userId: req.user.id
+      });
+      
+      if (!transaction) {
+        return res.status(404).json({
+          success: false,
+          message: 'Transaction not found'
+        });
+      }
+      
+      res.json({
+        success: true,
+        message: 'Transaction deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete transaction',
+        error: error.message
+      });
+    }
+  });
+
+  // Budget endpoints
+  app.get('/api/budgets/current', authenticateToken, async (req, res) => {
+    try {
+      const budget = await Budget.findOne({
+        userId: req.user.id,
+        'period.isActive': true
+      });
+      
+      if (!budget) {
+        return res.status(404).json({
+          success: false,
+          message: 'No active budget found'
+        });
+      }
+      
+      // Update spent amounts from transactions
+      await budget.updateSpentAmounts();
+      
+      res.json({
+        success: true,
+        data: budget
+      });
+    } catch (error) {
+      console.error('Error fetching current budget:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch current budget',
+        error: error.message
+      });
+    }
+  });
+
+  app.post('/api/budgets', authenticateToken, async (req, res) => {
+    try {
+      const {
+        name,
+        description,
+        monthlyIncome,
+        savingsGoal,
+        categories,
+        alerts,
+        goals
+      } = req.body;
+      
+      // Validate required fields
+      if (!name || !monthlyIncome || !savingsGoal) {
+        return res.status(400).json({
+          success: false,
+          message: 'Name, monthly income, and savings goal are required'
+        });
+      }
+      
+      // Validate amounts
+      if (monthlyIncome <= 0 || savingsGoal < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Monthly income must be greater than 0 and savings goal must be non-negative'
+        });
+      }
+      
+      // Check if savings goal exceeds income
+      if (savingsGoal > monthlyIncome) {
+        return res.status(400).json({
+          success: false,
+          message: 'Savings goal cannot exceed monthly income'
+        });
+      }
+      
+      // Deactivate any existing active budget
+      await Budget.updateMany(
+        { userId: req.user.id, 'period.isActive': true },
+        { 'period.isActive': false }
+      );
+      
+      const budget = new Budget({
+        userId: req.user.id,
+        name,
+        description,
+        monthlyIncome,
+        savingsGoal,
+        categories: categories || [],
+        alerts: alerts || {
+          spendingThreshold: 0.8,
+          emailNotifications: true,
+          pushNotifications: true
+        },
+        goals: goals || []
+      });
+      
+      await budget.save();
+      
+      res.status(201).json({
+        success: true,
+        message: 'Budget created successfully',
+        data: budget
+      });
+    } catch (error) {
+      console.error('Error creating budget:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to create budget',
+        error: error.message
+      });
+    }
+  });
+
+  // Financial Reports endpoints
+  app.post('/api/reports/generate', authenticateToken, async (req, res) => {
+    try {
+      const { reportType, startDate, endDate } = req.body;
+      
+      if (!reportType || !startDate || !endDate) {
+        return res.status(400).json({
+          success: false,
+          message: 'Report type, start date, and end date are required'
+        });
+      }
+      
+      // Validate dates
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      if (start >= end) {
+        return res.status(400).json({
+          success: false,
+          message: 'Start date must be before end date'
+        });
+      }
+      
+      // Check if report already exists for this period
+      const existingReport = await FinancialReport.findOne({
+        userId: req.user.id,
+        reportType,
+        'period.startDate': start,
+        'period.endDate': end
+      });
+      
+      if (existingReport) {
+        return res.json({
+          success: true,
+          message: 'Report already exists',
+          data: existingReport
+        });
+      }
+      
+      // Generate new report
+      const report = await FinancialReport.generateReport(
+        req.user.id,
+        reportType,
+        start,
+        end
+      );
+      
+      res.status(201).json({
+        success: true,
+        message: 'Report generated successfully',
+        data: report
+      });
+    } catch (error) {
+      console.error('Error generating report:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate report',
+        error: error.message
+      });
+    }
+  });
+
+  app.get('/api/reports/overview/quick', authenticateToken, async (req, res) => {
+    try {
+      const { months = 3 } = req.query;
+      
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - parseInt(months));
+      
+      // Get latest monthly report or generate quick overview
+      let report = await FinancialReport.findOne({
+        userId: req.user.id,
+        reportType: 'monthly',
+        'period.startDate': { $gte: startDate }
+      }).sort({ generatedAt: -1 });
+      
+      if (!report) {
+        // Generate quick overview
+        report = await FinancialReport.generateReport(
+          req.user.id,
+          'monthly',
+          startDate,
+          endDate
+        );
+      }
+      
+      // Extract key metrics
+      const overview = {
+        totalIncome: report.summary.totalIncome,
+        totalExpenses: report.summary.totalExpenses,
+        netIncome: report.summary.netIncome,
+        savingsRate: report.summary.savingsRate,
+        topCategory: report.categoryBreakdown[0]?.category || 'N/A',
+        topCategoryAmount: report.categoryBreakdown[0]?.amount || 0,
+        insights: report.insights.recommendations.slice(0, 3), // Top 3 recommendations
+        period: report.formattedPeriod
+      };
+      
+      res.json({
+        success: true,
+        data: overview
+      });
+    } catch (error) {
+      console.error('Error fetching quick overview:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch quick overview',
+        error: error.message
+      });
+    }
+  });
+
+  // ==================== TRANSPORTATION ENDPOINTS ====================
+  
+  // Import transportation models
+  const Route = require('./models/route.model');
+  const Transit = require('./models/transit.model');
+  const Carpool = require('./models/carpool.model');
+
+  // Route Management endpoints
+  app.get('/api/transportation/routes', authenticateToken, async (req, res) => {
+    try {
+      const { method, isActive, isFavorite, sortBy = 'lastUsed', sortOrder = 'desc' } = req.query;
+      
+      const query = { userId: req.user.id };
+      
+      // Apply filters
+      if (method) query.method = method;
+      if (isActive !== undefined) query.isActive = isActive === 'true';
+      if (isFavorite !== undefined) query.isFavorite = isFavorite === 'true';
+      
+      const sortOptions = {};
+      sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+      
+      const routes = await Route.find(query)
+        .sort(sortOptions)
+        .populate('userId', 'name email');
+      
+      res.json({
+        success: true,
+        data: routes
+      });
+    } catch (error) {
+      console.error('Error fetching routes:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch routes',
+        error: error.message
+      });
+    }
+  });
+
+  app.post('/api/transportation/routes', authenticateToken, async (req, res) => {
+    try {
+      const {
+        name,
+        from,
+        to,
+        method,
+        duration,
+        distance,
+        cost,
+        frequency,
+        preferences,
+        schedule,
+        notes
+      } = req.body;
+      
+      // Validate required fields
+      if (!name || !from || !to || !method || !duration || !distance) {
+        return res.status(400).json({
+          success: false,
+          message: 'Name, from, to, method, duration, and distance are required'
+        });
+      }
+      
+      const route = new Route({
+        userId: req.user.id,
+        name,
+        from,
+        to,
+        method,
+        duration,
+        distance,
+        cost: cost || 0,
+        frequency: frequency || 'As needed',
+        preferences: preferences || {},
+        schedule: schedule || {},
+        notes
+      });
+      
+      await route.save();
+      
+      res.status(201).json({
+        success: true,
+        message: 'Route created successfully',
+        data: route
+      });
+    } catch (error) {
+      console.error('Error creating route:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to create route',
+        error: error.message
+      });
+    }
+  });
+
+  app.put('/api/transportation/routes/:id', authenticateToken, async (req, res) => {
+    try {
+      const {
+        name,
+        from,
+        to,
+        method,
+        duration,
+        distance,
+        cost,
+        frequency,
+        isActive,
+        isFavorite,
+        preferences,
+        schedule,
+        notes
+      } = req.body;
+      
+      const route = await Route.findOne({
+        _id: req.params.id,
+        userId: req.user.id
+      });
+      
+      if (!route) {
+        return res.status(404).json({
+          success: false,
+          message: 'Route not found'
+        });
+      }
+      
+      // Update fields
+      if (name !== undefined) route.name = name;
+      if (from !== undefined) route.from = from;
+      if (to !== undefined) route.to = to;
+      if (method !== undefined) route.method = method;
+      if (duration !== undefined) route.duration = duration;
+      if (distance !== undefined) route.distance = distance;
+      if (cost !== undefined) route.cost = cost;
+      if (frequency !== undefined) route.frequency = frequency;
+      if (isActive !== undefined) route.isActive = isActive;
+      if (isFavorite !== undefined) route.isFavorite = isFavorite;
+      if (preferences !== undefined) route.preferences = preferences;
+      if (schedule !== undefined) route.schedule = schedule;
+      if (notes !== undefined) route.notes = notes;
+      
+      await route.save();
+      
+      res.json({
+        success: true,
+        message: 'Route updated successfully',
+        data: route
+      });
+    } catch (error) {
+      console.error('Error updating route:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update route',
+        error: error.message
+      });
+    }
+  });
+
+  app.delete('/api/transportation/routes/:id', authenticateToken, async (req, res) => {
+    try {
+      const route = await Route.findOneAndDelete({
+        _id: req.params.id,
+        userId: req.user.id
+      });
+      
+      if (!route) {
+        return res.status(404).json({
+          success: false,
+          message: 'Route not found'
+        });
+      }
+      
+      res.json({
+        success: true,
+        message: 'Route deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting route:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete route',
+        error: error.message
+      });
+    }
+  });
+
+  // Route Planning endpoint
+  app.post('/api/transportation/plan', authenticateToken, async (req, res) => {
+    try {
+      const { from, to, preferences = {} } = req.body;
+      
+      if (!from || !to) {
+        return res.status(400).json({
+          success: false,
+          message: 'From and to locations are required'
+        });
+      }
+      
+      // Find existing routes
+      const existingRoutes = await Route.find({
+        userId: req.user.id,
+        from: { $regex: from, $options: 'i' },
+        to: { $regex: to, $options: 'i' },
+        isActive: true
+      }).sort({ usageCount: -1 });
+      
+      // Generate route suggestions based on preferences
+      const suggestions = [];
+      
+      // Bus route
+      if (!preferences.avoidBus) {
+        suggestions.push({
+          method: 'bus',
+          duration: 25,
+          distance: 3.2,
+          cost: 2.50,
+          frequency: 'Every 15 min',
+          description: 'Direct bus route with multiple stops'
+        });
+      }
+      
+      // Bike route
+      if (!preferences.avoidBike) {
+        suggestions.push({
+          method: 'bike',
+          duration: 15,
+          distance: 2.8,
+          cost: 0,
+          frequency: 'Always available',
+          description: 'Bike-friendly route with bike lanes'
+        });
+      }
+      
+      // Carpool route
+      suggestions.push({
+        method: 'carpool',
+        duration: 20,
+        distance: 3.0,
+        cost: 5.00,
+        frequency: 'Daily 8:00 AM',
+        description: 'Shared ride with verified drivers'
+      });
+      
+      // Walk route (if distance is reasonable)
+      if (!preferences.maxWalkDistance || preferences.maxWalkDistance >= 1) {
+        suggestions.push({
+          method: 'walk',
+          duration: 35,
+          distance: 1.2,
+          cost: 0,
+          frequency: 'Always available',
+          description: 'Walking route through campus'
+        });
+      }
+      
+      res.json({
+        success: true,
+        data: {
+          suggestions,
+          existingRoutes,
+          preferences
+        }
+      });
+    } catch (error) {
+      console.error('Error planning route:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to plan route',
+        error: error.message
+      });
+    }
+  });
+
+  // Live Transit endpoints
+  app.get('/api/transportation/transit', authenticateToken, async (req, res) => {
+    try {
+      const { line, status, limit = 20 } = req.query;
+      
+      const query = { isActive: true };
+      
+      if (line) query.line = { $regex: line, $options: 'i' };
+      if (status) query.status = status;
+      
+      const transit = await Transit.find(query)
+        .sort({ lastUpdated: -1 })
+        .limit(parseInt(limit));
+      
+      res.json({
+        success: true,
+        data: transit
+      });
+    } catch (error) {
+      console.error('Error fetching transit data:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch transit data',
+        error: error.message
+      });
+    }
+  });
+
+  app.post('/api/transportation/transit', authenticateToken, async (req, res) => {
+    try {
+      const {
+        line,
+        route,
+        destination,
+        nextArrival,
+        frequency,
+        cost,
+        amenities
+      } = req.body;
+      
+      // Validate required fields
+      if (!line || !route || !destination || !nextArrival || !frequency) {
+        return res.status(400).json({
+          success: false,
+          message: 'Line, route, destination, nextArrival, and frequency are required'
+        });
+      }
+      
+      const transit = new Transit({
+        line,
+        route,
+        destination,
+        nextArrival,
+        frequency,
+        cost: cost || 2.50,
+        amenities: amenities || []
+      });
+      
+      await transit.save();
+      
+      res.status(201).json({
+        success: true,
+        message: 'Transit route created successfully',
+        data: transit
+      });
+    } catch (error) {
+      console.error('Error creating transit route:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to create transit route',
+        error: error.message
+      });
+    }
+  });
+
+  // Carpool Management endpoints
+  app.get('/api/transportation/carpools', authenticateToken, async (req, res) => {
+    try {
+      const { type, status, from, to, limit = 20 } = req.query;
+      
+      const query = {};
+      
+      if (type) query.type = type;
+      if (status) query.status = status;
+      if (from) query['route.from'] = { $regex: from, $options: 'i' };
+      if (to) query['route.to'] = { $regex: to, $options: 'i' };
+      
+      const carpools = await Carpool.find(query)
+        .populate('driver.userId', 'name email')
+        .populate('passengers.userId', 'name email')
+        .sort({ lastActive: -1 })
+        .limit(parseInt(limit));
+      
+      res.json({
+        success: true,
+        data: carpools
+      });
+    } catch (error) {
+      console.error('Error fetching carpools:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch carpools',
+        error: error.message
+      });
+    }
+  });
+
+  app.post('/api/transportation/carpools', authenticateToken, async (req, res) => {
+    try {
+      const {
+        type,
+        route,
+        schedule,
+        vehicle,
+        capacity,
+        cost,
+        preferences,
+        notes
+      } = req.body;
+      
+      // Validate required fields
+      if (!type || !route || !schedule || !capacity || !cost) {
+        return res.status(400).json({
+          success: false,
+          message: 'Type, route, schedule, capacity, and cost are required'
+        });
+      }
+      
+      const carpool = new Carpool({
+        driver: {
+          userId: req.user.id,
+          name: req.user.name,
+          rating: 5.0
+        },
+        route,
+        schedule,
+        vehicle: vehicle || {},
+        capacity: {
+          total: capacity,
+          available: capacity
+        },
+        cost,
+        type,
+        preferences: preferences || {},
+        notes
+      });
+      
+      await carpool.save();
+      
+      res.status(201).json({
+        success: true,
+        message: 'Carpool created successfully',
+        data: carpool
+      });
+    } catch (error) {
+      console.error('Error creating carpool:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to create carpool',
+        error: error.message
+      });
+    }
+  });
+
+  app.post('/api/transportation/carpools/:id/join', authenticateToken, async (req, res) => {
+    try {
+      const { name, phone } = req.body;
+      
+      if (!name) {
+        return res.status(400).json({
+          success: false,
+          message: 'Name is required to join carpool'
+        });
+      }
+      
+      const carpool = await Carpool.findById(req.params.id);
+      
+      if (!carpool) {
+        return res.status(404).json({
+          success: false,
+          message: 'Carpool not found'
+        });
+      }
+      
+      if (carpool.capacity.available <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Carpool is full'
+        });
+      }
+      
+      const passengerData = {
+        userId: req.user.id,
+        name,
+        phone,
+        status: 'pending'
+      };
+      
+      await carpool.addPassenger(passengerData);
+      
+      res.json({
+        success: true,
+        message: 'Successfully joined carpool',
+        data: carpool
+      });
+    } catch (error) {
+      console.error('Error joining carpool:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to join carpool',
+        error: error.message
+      });
+    }
+  });
+
+  // Route Usage tracking
+  app.post('/api/transportation/routes/:id/use', authenticateToken, async (req, res) => {
+    try {
+      const route = await Route.findOne({
+        _id: req.params.id,
+        userId: req.user.id
+      });
+      
+      if (!route) {
+        return res.status(404).json({
+          success: false,
+          message: 'Route not found'
+        });
+      }
+      
+      await route.incrementUsage();
+      
+      res.json({
+        success: true,
+        message: 'Route usage recorded',
+        data: route
+      });
+    } catch (error) {
+      console.error('Error recording route usage:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to record route usage',
+        error: error.message
+      });
+    }
+  });
+
+  // Transportation Dashboard Summary
+  app.get('/api/transportation/dashboard', authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user.id;
+      
+      // Get active routes count
+      const activeRoutesCount = await Route.countDocuments({
+        userId,
+        isActive: true
+      });
+      
+      // Get favorite routes count
+      const favoriteRoutesCount = await Route.countDocuments({
+        userId,
+        isFavorite: true
+      });
+      
+      // Get active carpools
+      const activeCarpools = await Carpool.countDocuments({
+        'driver.userId': userId,
+        status: 'active'
+      });
+      
+      // Get recent carpools joined
+      const joinedCarpools = await Carpool.countDocuments({
+        'passengers.userId': userId,
+        'passengers.status': 'confirmed'
+      });
+      
+      // Get active transit routes
+      const activeTransitCount = await Transit.countDocuments({
+        isActive: true
+      });
+      
+      const dashboard = {
+        routes: {
+          active: activeRoutesCount,
+          favorites: favoriteRoutesCount
+        },
+        carpools: {
+          driving: activeCarpools,
+          riding: joinedCarpools
+        },
+        transit: {
+          active: activeTransitCount
+        }
+      };
+      
+      res.json({
+        success: true,
+        data: dashboard
+      });
+    } catch (error) {
+      console.error('Error fetching dashboard:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch dashboard',
+        error: error.message
+      });
+    }
+  });
+
+  // Test endpoint to verify server is running
+  app.get('/api/test', (req, res) => {
+    res.json({ 
+      success: true, 
+      message: 'Backend server is running',
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  const PORT = process.env.PORT || 8000;
+
+  server.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
   });
 
   module.exports = app;

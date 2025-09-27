@@ -7,8 +7,21 @@ import {
   MdShoppingBag, MdEvent, MdAnalytics, MdInsights, MdRocket
 } from 'react-icons/md';
 import { useNewRunAI } from '../../hooks/useNewRunAI';
-import { readCache, writeCache } from '../../utils/aiCache';
+import { 
+  readCache, 
+  writeCache, 
+  getCachedInsights, 
+  setCachedInsights, 
+  getCachedActions, 
+  setCachedActions,
+  invalidateUserCache 
+} from '../../utils/aiCache';
+import aiExplanationCache from '../../utils/aiExplanationCache';
 import NewRunDrawer from '../ui/NewRunDrawer';
+import PropertyCard from './PropertyCard';
+import PropertyGrid from './PropertyGrid';
+import CompactPropertyCard from './CompactPropertyCard';
+import PropertyTextParser from '../../utils/propertyTextParser';
 import axiosInstance from '../../utils/axiosInstance';
 
 /**
@@ -25,7 +38,8 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
     generateActions, 
     generateTimeline, 
     generateMarketAnalysis,
-    generatePredictions 
+    generatePredictions,
+    explainInsight
   } = useNewRunAI();
 
   // Optimized state management
@@ -45,6 +59,11 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
   // Drawer state for detailed AI insights
   const [showInsightDrawer, setShowInsightDrawer] = useState(false);
   const [selectedInsight, setSelectedInsight] = useState(null);
+  const [aiExplanation, setAiExplanation] = useState(null);
+  const [isExplaining, setIsExplaining] = useState(false);
+  const [hoveredInsight, setHoveredInsight] = useState(null);
+  const [displayedText, setDisplayedText] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
 
   // Helper functions for polished UI
   const scoreColor = (p) =>
@@ -79,11 +98,6 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
   // Initialize AI data when component mounts - OPTIMIZED
   useEffect(() => {
     if (shouldInitialize) {
-      // Clear cache for testing - remove this in production
-      const cacheKey = `insights-${userInfo?.id || 'anon'}`;
-      localStorage.removeItem(`ai-cache-${cacheKey}`);
-      console.log('🧹 Cleared AI cache for fresh data');
-      
       initializeAIData();
     }
   }, [shouldInitialize]);
@@ -93,20 +107,29 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
   
   // OPTIMIZED: Memoized AI data initialization with smart caching, staleness control, and request deduplication
   const initializeAIData = useCallback(async () => {
-    // Check cache with TTL and onboarding version
-    const cacheKey = `insights-${userInfo?.id || 'anon'}`;
-    const obVer = onboardingData?.updatedAt || JSON.stringify(onboardingData || {});
-    const cached = readCache(cacheKey, { maxAgeMs: 5*60*1000, obVer }); // 5min TTL for testing
+    const userId = userInfo?.id || 'anonymous';
+    const userData = { userInfo, dashboardData, onboardingData };
     
-    if (cached) { 
-      setState(prev => ({ ...prev, ...cached, isInitialized: true })); 
+    // Check smart cache first
+    const cachedInsights = getCachedInsights(userId, userData);
+    const cachedActions = getCachedActions(userId, userData);
+    
+    if (cachedInsights && cachedActions) {
+      console.log('🎯 Using cached AI data for insights and actions');
+      setState(prev => ({ 
+        ...prev, 
+        aiInsights: cachedInsights,
+        aiActions: cachedActions,
+        isInitialized: true 
+      })); 
       return; 
     }
 
     // Request deduplication - prevent multiple simultaneous calls
-    if (requestMap.current.has(cacheKey)) {
+    const requestKey = `ai-data-${userId}`;
+    if (requestMap.current.has(requestKey)) {
       console.log('🔄 Request already in progress, waiting...');
-      return requestMap.current.get(cacheKey);
+      return requestMap.current.get(requestKey);
     }
 
     const requestPromise = (async () => {
@@ -177,10 +200,8 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
         setState(newState);
 
         // Cache the results with smart cache utility
-        writeCache(cacheKey, {
-          aiInsights: transformedInsights,
-          aiActions: transformedActions
-        }, { obVer, ver: "insights-v3" });
+        setCachedInsights(userId, userData, transformedInsights);
+        setCachedActions(userId, userData, transformedActions);
 
         return newState;
       } catch (err) {
@@ -194,12 +215,12 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
         throw err;
       } finally {
         // Clean up request map
-        requestMap.current.delete(cacheKey);
+        requestMap.current.delete(requestKey);
       }
     })();
 
     // Store the promise to prevent duplicate requests
-    requestMap.current.set(cacheKey, requestPromise);
+    requestMap.current.set(requestKey, requestPromise);
     return requestPromise;
   }, [userInfo, dashboardData, generateInsights, generateActions]);
 
@@ -324,7 +345,7 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
         {
           label: 'Find Roommate',
           description: 'Connect with potential roommates',
-          path: '/Synapse',
+          path: '/Synapsematches',
           icon: 'people',
           color: 'purple',
           priority: 'medium'
@@ -393,26 +414,117 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
 
   const getTypeStyles = (type) => {
     const styles = {
-      urgent: 'border-red-500/50 bg-red-500/10 text-red-400',
-      warning: 'border-yellow-500/50 bg-yellow-500/10 text-yellow-400',
-      success: 'border-green-500/50 bg-green-500/10 text-green-400',
-      info: 'border-blue-500/50 bg-blue-500/10 text-blue-400'
+      urgent: 'border-orange-500/30 bg-orange-500/5 text-orange-300',
+      warning: 'border-amber-500/30 bg-amber-500/5 text-amber-300',
+      success: 'border-emerald-500/30 bg-emerald-500/5 text-emerald-300',
+      info: 'border-slate-500/30 bg-slate-500/5 text-slate-300'
     };
     return styles[type] || styles.info;
   };
 
 
+  // Typewriter effect for AI explanation
+  const typewriterEffect = useCallback((text, speed = 15) => {
+    if (!text) return;
+    
+    setIsTyping(true);
+    setDisplayedText('');
+    
+    let index = 0;
+    const timer = setInterval(() => {
+      if (index < text.length) {
+        setDisplayedText(text.slice(0, index + 1));
+        index++;
+      } else {
+        clearInterval(timer);
+        setIsTyping(false);
+      }
+    }, speed);
+    
+    return () => clearInterval(timer);
+  }, []);
+
+  // Cleanup typewriter effect on unmount
+  useEffect(() => {
+    return () => {
+      // Cleanup any running timers
+      setIsTyping(false);
+      setDisplayedText('');
+    };
+  }, []);
+
   // OPTIMIZED: Robust CTA-based navigation with analytics
-  const handleInsightClick = useCallback((insight) => {
+  const handleInsightClick = useCallback(async (insight) => {
     // Open drawer for detailed insight view
     setSelectedInsight(insight);
     setShowInsightDrawer(true);
-  }, []);
+    setIsExplaining(true);
+    setAiExplanation(null);
+    setDisplayedText('');
+    setIsTyping(false);
+
+    try {
+      // Check cache first
+      const userId = userInfo?.id || 'anonymous';
+      const insightId = insight.title?.toLowerCase().replace(/\s+/g, '-') || 'unknown';
+      const userData = { userInfo, dashboardData, onboardingData };
+      
+      const cachedExplanation = aiExplanationCache.getCachedExplanation(userId, insightId, userData);
+      
+      if (cachedExplanation) {
+        // Use cached explanation
+        console.log('🎯 Using cached AI explanation');
+        setAiExplanation({
+          explanation: cachedExplanation,
+          insight: insight,
+          aiGenerated: true,
+          cached: true
+        });
+        
+        // Start typewriter effect with cached content
+        typewriterEffect(cachedExplanation);
+        setIsExplaining(false);
+        return;
+      }
+
+      // Cache miss - make API call
+      console.log('❌ Cache miss - making API call');
+      const explanation = await explainInsight(insight, dashboardData);
+      setAiExplanation(explanation);
+      
+      // Cache the new explanation
+      if (explanation?.explanation) {
+        aiExplanationCache.setCachedExplanation(userId, insightId, userData, explanation.explanation);
+        
+        // Start typewriter effect
+        typewriterEffect(explanation.explanation);
+      }
+    } catch (error) {
+      console.error('Failed to get AI explanation:', error);
+      // Set fallback explanation
+      const fallbackExplanation = `This recommendation is important for your success. ${insight.title} is a ${insight.priority} priority that will help you stay on track with your goals.`;
+      setAiExplanation({
+        explanation: fallbackExplanation,
+        insight: insight,
+        aiGenerated: false,
+        fallback: true
+      });
+      
+      // Start typewriter effect for fallback
+      typewriterEffect(fallbackExplanation);
+    } finally {
+      setIsExplaining(false);
+    }
+  }, [explainInsight, dashboardData, typewriterEffect, userInfo, onboardingData]);
 
   // Handle drawer close
   const handleDrawerClose = useCallback(() => {
     setShowInsightDrawer(false);
     setSelectedInsight(null);
+    setAiExplanation(null);
+    setIsExplaining(false);
+    setDisplayedText('');
+    setIsTyping(false);
   }, []);
 
   // OPTIMIZED: Memoized action click handler
@@ -551,15 +663,15 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
                         onClick={() => handleInsightClick(insight)}
                         onMouseEnter={() => setHoveredInsight(index)}
                         onMouseLeave={() => setHoveredInsight(null)}
-                        className={`p-5 rounded-xl border-2 transition-all duration-300 ${
+                        className={`p-5 rounded-xl border transition-all duration-300 ${
                           insight.action === 'Learn more' && insight.type === 'info' 
                             ? 'cursor-default' 
                             : 'cursor-pointer'
                         } ${
-                          insight.type === 'urgent' ? 'border-red-500/50 bg-red-500/10 hover:bg-red-500/20' :
-                          insight.type === 'warning' ? 'border-yellow-500/50 bg-yellow-500/10 hover:bg-yellow-500/20' :
-                          insight.type === 'success' ? 'border-green-500/50 bg-green-500/10 hover:bg-green-500/20' :
-                          'border-blue-500/50 bg-blue-500/10 hover:bg-blue-500/20'
+                          insight.type === 'urgent' ? 'border-orange-500/30 bg-orange-500/5 hover:bg-orange-500/10' :
+                          insight.type === 'warning' ? 'border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10' :
+                          insight.type === 'success' ? 'border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10' :
+                          'border-slate-500/30 bg-slate-500/5 hover:bg-slate-500/10'
                         }`}
                         role="button"
                         tabIndex={0}
@@ -573,25 +685,29 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
                       >
                   <div className="flex items-start gap-4">
                     <div className={`p-3 rounded-lg ${
-                      insight.type === 'urgent' ? 'bg-red-500/20' :
-                      insight.type === 'warning' ? 'bg-yellow-500/20' :
-                      insight.type === 'success' ? 'bg-green-500/20' :
-                      'bg-blue-500/20'
+                      insight.type === 'urgent' ? 'bg-orange-500/10' :
+                      insight.type === 'warning' ? 'bg-amber-500/10' :
+                      insight.type === 'success' ? 'bg-emerald-500/10' :
+                      'bg-slate-500/10'
                     }`}>
                       <IconComponent className="text-xl text-white" />
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-3">
-                        <h4 className="font-bold text-white text-base">{insight.title}</h4>
+        <h4 className="font-bold text-white text-base" dangerouslySetInnerHTML={{ 
+          __html: insight.title?.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*Title:\s*"(.*?)"\*/g, '<strong>$1</strong>').replace(/\*Priority:\*\*/g, '').replace(/\*Message:\*\*/g, '').replace(/\*Action:\*\*/g, '') || 'AI Insight'
+        }}></h4>
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          insight.priority === 'high' ? 'bg-red-500/20 text-red-300' :
-                          insight.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-300' :
-                          'bg-green-500/20 text-green-300'
+                          insight.priority === 'high' ? 'bg-orange-500/20 text-orange-300' :
+                          insight.priority === 'medium' ? 'bg-amber-500/20 text-amber-300' :
+                          'bg-emerald-500/20 text-emerald-300'
                         }`}>
                           {insight.priority?.toUpperCase()}
                         </span>
                       </div>
-                      <p className="text-white/80 text-sm mb-4 leading-relaxed">{insight.message}</p>
+        <p className="text-white/80 text-sm mb-4 leading-relaxed" dangerouslySetInnerHTML={{ 
+          __html: insight.message?.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*Title:\s*"(.*?)"\*/g, '<strong>$1</strong>').replace(/\*Priority:\*\*/g, '').replace(/\*Message:\*\*/g, '').replace(/\*Action:\*\*/g, '') || 'Personalized recommendation available.'
+        }}></p>
                             <div className="flex items-center justify-between">
                             <div className="inline-flex items-center gap-2 text-sm font-medium text-blue-400 hover:text-blue-300">
                               <span>{insight.cta?.label || 'Learn more'}</span>
@@ -1073,88 +1189,252 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
         isOpen={showInsightDrawer}
         onClose={handleDrawerClose}
         title="AI Insight Details"
-        size="lg"
+        width="w-[500px]"
+        maxWidth="max-w-xl"
       >
         {selectedInsight && (
-          <div className="space-y-6">
-            {/* Insight Header */}
-            <div className="flex items-start gap-4">
-              <div className={`p-3 rounded-lg ${
-                selectedInsight.type === 'urgent' ? 'bg-red-500/20' :
-                selectedInsight.type === 'warning' ? 'bg-yellow-500/20' :
-                selectedInsight.type === 'success' ? 'bg-green-500/20' :
-                'bg-blue-500/20'
-              }`}>
-                {(() => {
-                  const IconComponent = getIconComponent(selectedInsight.icon);
-                  return <IconComponent className="text-2xl text-white" />;
-                })()}
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className="text-xl font-bold text-white">{selectedInsight.title}</h3>
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    selectedInsight.priority === 'high' ? 'bg-red-500/20 text-red-300' :
-                    selectedInsight.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-300' :
-                    'bg-green-500/20 text-green-300'
-                  }`}>
-                    {selectedInsight.priority?.toUpperCase()}
-                  </span>
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    selectedInsight.type === 'urgent' ? 'bg-red-500/20 text-red-300' :
-                    selectedInsight.type === 'warning' ? 'bg-yellow-500/20 text-yellow-300' :
-                    selectedInsight.type === 'success' ? 'bg-green-500/20 text-green-300' :
-                    'bg-blue-500/20 text-blue-300'
-                  }`}>
-                    {selectedInsight.type?.toUpperCase()}
-                  </span>
-                </div>
-                <p className="text-white/80 text-lg leading-relaxed">{selectedInsight.message}</p>
+          <div className="flex flex-col h-full">
+            {/* ChatGPT-style AI Message */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="p-6">
+                {isExplaining ? (
+                  <div className="flex items-center gap-3 py-8">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-400"></div>
+                    <span className="text-white/70">AI is analyzing your situation...</span>
+                  </div>
+                ) : aiExplanation ? (
+                  <div className="prose prose-invert max-w-none">
+                    {/* AI Message with Smart Property Cards */}
+                    <div className="space-y-6">
+                      {/* AI Explanation Text - KEEP THE MAIN MESSAGE */}
+                      <div 
+                        className="whitespace-pre-wrap text-white/90 leading-relaxed text-base"
+                        dangerouslySetInnerHTML={{ 
+                          __html: (displayedText || '')
+                            // Fix all markdown patterns
+                            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                            .replace(/\*Title:\s*"(.*?)"\*/g, '<strong>$1</strong>')
+                            .replace(/\*Priority:\*\*/g, '')
+                            .replace(/\*Message:\*\*/g, '')
+                            .replace(/\*Action:\*\*/g, '')
+                            // Remove S3 URLs and references
+                            .replace(/https:\/\/newrun-property-images\.s3\.us-east-1\.amazonaws\.com\/[^\s\)]+/g, '')
+                            .replace(/\[Check it out here\.\]/g, '')
+                            .replace(/\[See the image\.\]/g, '')
+                            .replace(/\[Property Image\]/g, '')
+                            // Clean up any remaining markdown artifacts
+                            .replace(/\*([^*]+)\*/g, '<strong>$1</strong>')
+                            .replace(/\*\*/g, '')
+                            .replace(/\*/g, '') + 
+                          (isTyping ? '<span class="inline-block w-2 h-5 bg-white/90 ml-1 animate-pulse"></span>' : '')
+                        }}
+                      ></div>
+                      
+                      {/* Smart Property Cards - ONLY SHOW AFTER TYPING IS COMPLETE */}
+                      {!isTyping && (() => {
+                        // Automatically detect properties from AI text
+                        const detectedProperties = PropertyTextParser.parsePropertiesFromText(displayedText);
+                        
+                        if (detectedProperties.length > 0) {
+                          return (
+                            <div className="mt-6">
+                              <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                Recommended Properties
+                              </h3>
+                              {/* VERTICAL STACKING WITH COMPACT CARDS */}
+                              <div className="space-y-3">
+                                {detectedProperties.map((property, index) => (
+                                  <CompactPropertyCard
+                                    key={property.id}
+                                    property={property}
+                                    index={index}
+                                    isRecommended={index === 0}
+                                    onClick={(property) => {
+                                      console.log('Property clicked:', property);
+                                      // Handle property click - could open contact form, booking flow, etc.
+                                    }}
+                                    showContactActions={false}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                      
+                      {/* Next Steps Section - ONLY SHOW AFTER CARDS ARE DISPLAYED */}
+                      {!isTyping && (() => {
+                        const detectedProperties = PropertyTextParser.parsePropertiesFromText(displayedText);
+                        if (detectedProperties.length > 0) {
+                          return (
+                            <div className="mt-6 p-4 bg-slate-500/5 border border-slate-500/20 rounded-lg">
+                              <h4 className="text-white font-semibold text-sm mb-3">For next steps:</h4>
+                              <div className="space-y-2 text-white/80 text-sm">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-blue-400 font-bold">•</span>
+                                  <span>Decide which property best fits your needs and reach out to schedule a viewing.</span>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <span className="text-blue-400 font-bold">•</span>
+                                  <span>Consider who you'd like to share with, as these options are perfect for roommates.</span>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <span className="text-blue-400 font-bold">•</span>
+                                  <span>Prepare any questions you have about each property or the leasing process.</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                    
+                    {/* Show specific recommendations if available */}
+                    {selectedInsight?.hasSpecificRecommendations && selectedInsight?.specificRecommendations && (
+                      <div className="mt-6 space-y-4">
+                        <div className="border-t border-white/10 pt-4">
+                          <h3 className="text-lg font-semibold text-white mb-4">🎯 Specific Recommendations Found</h3>
+                          
+                          {/* Properties - Beautiful Property Cards */}
+                          {selectedInsight.specificRecommendations.recommendations?.properties && (
+                            <div className="mb-6">
+                              <PropertyGrid
+                                properties={selectedInsight.specificRecommendations.recommendations.properties}
+                                title="🏠 AI-Recommended Properties"
+                                subtitle="Properties perfectly matched to your budget and preferences"
+                                onPropertyClick={(property) => {
+                                  console.log('Property clicked:', property);
+                                  // Handle property click - could open property details, contact form, etc.
+                                }}
+                                maxDisplay={6}
+                                showRecommendations={true}
+                              />
+                            </div>
+                          )}
+                          
+                          {/* Roommates - Enhanced Cards */}
+                          {selectedInsight.specificRecommendations.recommendations?.roommates && (
+                            <div className="mb-6">
+                              <h4 className="text-md font-medium text-purple-300 mb-3">👥 Compatible Roommates ({selectedInsight.specificRecommendations.recommendations.roommates.length})</h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {selectedInsight.specificRecommendations.recommendations.roommates.slice(0, 4).map((roommate, index) => (
+                                  <motion.div
+                                    key={index}
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.4, delay: index * 0.1 }}
+                                    className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-xl border border-purple-500/20 p-4 hover:border-purple-500/40 transition-all duration-300"
+                                  >
+                                    <div className="flex justify-between items-start mb-3">
+                                      <div>
+                                        <h5 className="font-bold text-white text-lg">{roommate.firstName} {roommate.lastName}</h5>
+                                        <p className="text-white/70 text-sm">{roommate.major} • {roommate.university}</p>
+                                    </div>
+                                      <div className="text-right">
+                                        <div className="text-2xl font-bold text-purple-400">{roommate.compatibilityScore}%</div>
+                                        <div className="text-xs text-white/60">match</div>
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="space-y-2 mb-3">
+                                      <div className="flex items-center gap-2 text-sm text-white/60">
+                                      <span>💰 Budget: ${roommate.onboardingData?.budgetRange?.min}-${roommate.onboardingData?.budgetRange?.max}</span>
+                                    </div>
+                                      {roommate.languageMatch && (
+                                        <div className="flex items-center gap-2 text-sm text-green-400">
+                                          <span>🗣️ Same language</span>
+                                        </div>
+                                    )}
+                                  </div>
+                                    
+                                    {roommate.recommendation && (
+                                      <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
+                                        <p className="text-purple-300 text-sm leading-relaxed">{roommate.recommendation}</p>
+                                      </div>
+                                    )}
+                                  </motion.div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Best Matches */}
+                          {selectedInsight.specificRecommendations.recommendations?.bestMatches && (
+                            <div className="mb-6">
+                              <h4 className="text-md font-medium text-green-300 mb-3">✨ Perfect Property + Roommate Pairs</h4>
+                              <div className="space-y-3">
+                                {selectedInsight.specificRecommendations.recommendations.bestMatches.slice(0, 2).map((match, index) => (
+                                  <div key={index} className="bg-gradient-to-r from-green-500/10 to-blue-500/10 rounded-lg p-4 border border-green-500/20">
+                                    <div className="flex justify-between items-start mb-2">
+                                      <h5 className="font-medium text-white">{match.property.title} + {match.roommate.firstName}</h5>
+                                      <span className="text-green-400 font-semibold">Save ${Math.round(match.savings)}/mo</span>
+                                    </div>
+                                    <p className="text-white/70 text-sm mb-2">{match.recommendation}</p>
+                                    <div className="flex items-center gap-4 text-sm text-white/60">
+                                      <span>🏠 {match.property.bedrooms} bed • ${match.property.price}/mo</span>
+                                      <span>👥 {match.roommate.firstName} • {match.pairScore}% compatibility</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="py-8">
+                    <p className="text-white/70">Loading AI explanation...</p>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Rationale Section */}
-            {selectedInsight.rationale && (
-              <div className="p-4 rounded-lg bg-white/5 border border-white/10">
-                <h4 className="text-white font-semibold mb-2">Why you're seeing this</h4>
-                <p className="text-white/70 text-sm">{selectedInsight.rationale}</p>
-              </div>
-            )}
-
-            {/* CTA Section */}
-            {selectedInsight.cta && (
-              <div className="p-4 rounded-lg bg-white/5 border border-white/10">
-                <h4 className="text-white font-semibold mb-3">Recommended Action</h4>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => {
-                      const route = selectedInsight.cta?.route;
-                      if (route) {
-                        const search = selectedInsight.cta?.params ? `?${new URLSearchParams(selectedInsight.cta.params)}` : '';
-                        navigate(`${route}${search}`);
-                        handleDrawerClose();
-                      }
-                    }}
-                    className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
-                  >
-                    {selectedInsight.cta.label || 'Take Action'}
+            {/* Cursor-style Input Box */}
+            <div className="border-t border-white/10 bg-[#0f1115]">
+              <div className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-300 text-sm font-medium hover:bg-blue-500/30 transition-colors">
+                    <span className="text-xs">∞</span>
+                    <span>Agent AI</span>
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
                   </button>
-                  <span className="text-white/60 text-sm">
-                    {selectedInsight.cta.route || 'Dashboard'}
-                  </span>
+                  <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 text-white/70 text-sm font-medium hover:bg-white/20 transition-colors">
+                    <span>Auto</span>
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
                 </div>
+                
+                <div className="relative">
+                  <textarea
+                    placeholder="Ask AI about this insight or get more personalized advice..."
+                    className="w-full p-4 pr-12 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/50 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
+                    rows="3"
+                    style={{ minHeight: '80px' }}
+                  />
+                  <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                    <button className="p-2 rounded-lg hover:bg-white/10 transition-colors">
+                      <svg className="w-4 h-4 text-white/50" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                    <button className="p-2 rounded-lg bg-blue-500 hover:bg-blue-600 transition-colors">
+                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                
               </div>
-            )}
-
-            {/* Expiration Info */}
-            {selectedInsight.expiresAt && (
-              <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
-                <p className="text-yellow-300 text-sm">
-                  ⏰ This insight expires on {new Date(selectedInsight.expiresAt).toLocaleDateString()}
-                </p>
-              </div>
-            )}
-
+            </div>
           </div>
         )}
       </NewRunDrawer>

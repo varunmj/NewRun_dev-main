@@ -18,6 +18,9 @@ import {
   MdLogout,
   MdNotificationsNone,
   MdClose,
+  MdAttachMoney,
+  MdSchool,
+  MdDirectionsBus,
 } from "react-icons/md";
 
 /* ---------- helpers ---------- */
@@ -349,6 +352,12 @@ export default function Navbar() {
     { title: "Build my plan", desc: "Let AI craft everything for me.", to: "/onboarding", icon: MdAutoAwesome },
   ];
 
+  const studentHubItems = [
+    { title: "Student Finance", desc: "AI-powered budgeting & expense tracking", to: "/finance", icon: MdAttachMoney, featured: true },
+    { title: "Academic Hub", desc: "Course planning & study groups", to: "/academic", icon: MdSchool, featured: true },
+    { title: "Transportation", desc: "Smart routes & carpool matching", to: "/transport", icon: MdDirectionsBus, featured: true },
+  ];
+
   return (
     <header className="sticky top-0 z-40 w-full">
       <div className="mx-auto mt-3 flex max-w-7xl items-center justify-between rounded-2xl bg-[#0b0c0f]/90 px-4 py-2.5 backdrop-blur border border-white/5">
@@ -362,17 +371,12 @@ export default function Navbar() {
         {/* center links */}
         <nav className="hidden items-center gap-8 md:flex">
           <MegaMenu label="Products" items={productItems} />
+          <MegaMenu label="Student Hub" items={studentHubItems} />
           <Link
             to="/solve-threads"
             className={`text-sm font-semibold ${loc.pathname.startsWith("/solve-threads") ? "text-orange-400" : "text-orange-400/80 hover:text-orange-400"}`}
           >
             Solve Threads
-          </Link>
-          <Link
-            to="/community"
-            className={`text-sm ${loc.pathname.startsWith("/community") ? "text-white" : "text-white/80 hover:text-white"}`}
-          >
-            Get Help
           </Link>
           <Link
             to="/blogs"

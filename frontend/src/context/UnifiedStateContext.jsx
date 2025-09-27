@@ -93,20 +93,26 @@ export const UnifiedStateProvider = ({ children }) => {
 
   // Unified state update function
   const updateState = useCallback((updates) => {
-    setState(prev => {
-      const newState = { ...prev };
-      
-      // Deep merge for nested objects
-      Object.keys(updates).forEach(key => {
-        if (typeof updates[key] === 'object' && updates[key] !== null && !Array.isArray(updates[key])) {
-          newState[key] = { ...prev[key], ...updates[key] };
-        } else {
-          newState[key] = updates[key];
-        }
+    try {
+      setState(prev => {
+        const newState = { ...prev };
+        
+        // Deep merge for nested objects
+        Object.keys(updates).forEach(key => {
+          if (typeof updates[key] === 'object' && updates[key] !== null && !Array.isArray(updates[key])) {
+            newState[key] = { ...prev[key], ...updates[key] };
+          } else {
+            newState[key] = updates[key];
+          }
+        });
+        
+        return newState;
       });
-      
-      return newState;
-    });
+    } catch (error) {
+      console.error('Error updating state:', error);
+      // Fallback to simple update
+      setState(prev => ({ ...prev, ...updates }));
+    }
   }, []);
 
   // Cache invalidation system
@@ -160,6 +166,19 @@ export const UnifiedStateProvider = ({ children }) => {
     const requestKey = 'fetchUserData';
     
     return executeRequest(requestKey, async () => {
+      // Check if user is authenticated before making API calls
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token') || localStorage.getItem('userToken');
+      if (!token) {
+        console.log('No token found, skipping user data fetch');
+        updateState({
+          userInfo: null,
+          initialized: { ...state.initialized, user: true },
+          loading: { ...state.loading, user: false },
+          errors: { ...state.errors, user: null }
+        });
+        return null;
+      }
+
       updateState({ loading: { ...state.loading, user: true } });
       
       try {
@@ -195,6 +214,19 @@ export const UnifiedStateProvider = ({ children }) => {
     const requestKey = 'fetchOnboardingData';
     
     return executeRequest(requestKey, async () => {
+      // Check if user is authenticated before making API calls
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token') || localStorage.getItem('userToken');
+      if (!token) {
+        console.log('No token found, skipping onboarding data fetch');
+        updateState({
+          onboardingData: null,
+          initialized: { ...state.initialized, onboarding: true },
+          loading: { ...state.loading, onboarding: false },
+          errors: { ...state.errors, onboarding: null }
+        });
+        return null;
+      }
+
       updateState({ loading: { ...state.loading, onboarding: true } });
       
       try {
@@ -230,6 +262,19 @@ export const UnifiedStateProvider = ({ children }) => {
     const requestKey = 'fetchDashboardData';
     
     return executeRequest(requestKey, async () => {
+      // Check if user is authenticated before making API calls
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token') || localStorage.getItem('userToken');
+      if (!token) {
+        console.log('No token found, skipping dashboard data fetch');
+        updateState({
+          dashboardData: null,
+          initialized: { ...state.initialized, dashboard: true },
+          loading: { ...state.loading, dashboard: false },
+          errors: { ...state.errors, dashboard: null }
+        });
+        return null;
+      }
+
       updateState({ loading: { ...state.loading, dashboard: true } });
       
       try {
@@ -265,6 +310,19 @@ export const UnifiedStateProvider = ({ children }) => {
     const requestKey = 'fetchConversations';
     
     return executeRequest(requestKey, async () => {
+      // Check if user is authenticated before making API calls
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token') || localStorage.getItem('userToken');
+      if (!token) {
+        console.log('No token found, skipping conversations fetch');
+        updateState({
+          conversations: [],
+          initialized: { ...state.initialized, conversations: true },
+          loading: { ...state.loading, conversations: false },
+          errors: { ...state.errors, conversations: null }
+        });
+        return [];
+      }
+
       updateState({ loading: { ...state.loading, conversations: true } });
       
       try {
@@ -295,6 +353,19 @@ export const UnifiedStateProvider = ({ children }) => {
     const requestKey = 'fetchSynapseProfile';
     
     return executeRequest(requestKey, async () => {
+      // Check if user is authenticated before making API calls
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token') || localStorage.getItem('userToken');
+      if (!token) {
+        console.log('No token found, skipping synapse profile fetch');
+        updateState({
+          synapseProfile: null,
+          initialized: { ...state.initialized, synapse: true },
+          loading: { ...state.loading, synapse: false },
+          errors: { ...state.errors, synapse: null }
+        });
+        return null;
+      }
+
       updateState({ loading: { ...state.loading, synapse: true } });
       
       try {
@@ -401,6 +472,23 @@ export const UnifiedStateProvider = ({ children }) => {
     const requestKey = `fetchAIData_${state.cacheVersion}`;
     
     return executeRequest(requestKey, async () => {
+      // Check if user is authenticated before making API calls
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token') || localStorage.getItem('userToken');
+      if (!token) {
+        console.log('No token found, skipping AI data fetch');
+        updateState({
+          aiInsights: [],
+          aiActions: [],
+          aiTimeline: null,
+          aiMarketAnalysis: null,
+          aiPredictions: null,
+          initialized: { ...state.initialized, ai: true },
+          loading: { ...state.loading, ai: false },
+          errors: { ...state.errors, ai: null }
+        });
+        return null;
+      }
+
       // Check if we have all required data
       if (!state.userInfo || !state.dashboardData || !state.onboardingData) {
         console.log('🤖 AI data fetch skipped: missing required data');
@@ -552,10 +640,65 @@ export const UnifiedStateProvider = ({ children }) => {
     return () => cacheInvalidationTriggers.current.delete(callback);
   }, []);
 
-  // Auto-initialization on mount
+  // Auto-initialization on mount - only run once
+  const hasInitialized = useRef(false);
   useEffect(() => {
-    initializeAll();
+    if (!hasInitialized.current) {
+      hasInitialized.current = true;
+      initializeAll();
+    }
   }, []);
+
+  // Listen for authentication state changes
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'accessToken' || e.key === 'token' || e.key === 'userToken') {
+        if (!e.newValue) {
+          // Token was removed, reset initialization flag and clear state
+          hasInitialized.current = false;
+          updateState({
+            userInfo: null,
+            onboardingData: null,
+            dashboardData: null,
+            conversations: [],
+            synapseProfile: null,
+            aiInsights: [],
+            aiActions: [],
+            aiTimeline: null,
+            aiMarketAnalysis: null,
+            aiPredictions: null,
+            initialized: {
+              user: false,
+              dashboard: false,
+              ai: false,
+              onboarding: false,
+              conversations: false,
+              synapse: false
+            },
+            loading: {
+              user: false,
+              dashboard: false,
+              ai: false,
+              onboarding: false,
+              conversations: false,
+              synapse: false
+            },
+            errors: {
+              user: null,
+              dashboard: null,
+              ai: null,
+              onboarding: null,
+              conversations: null,
+              synapse: null
+            }
+          });
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [updateState]);
 
   // Auto-refresh when data changes
   useEffect(() => {

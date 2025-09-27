@@ -50,7 +50,7 @@ const ONBOARDING_STEPS = [
     title: 'When will you arrive?',
     subtitle: 'This helps us prepare everything for you',
     type: 'date',
-    field: 'arrival_date'
+    field: 'arrivalDate'
   },
   {
     id: 'location',
@@ -80,6 +80,7 @@ const ONBOARDING_STEPS = [
     title: 'What type of housing do you need?',
     subtitle: 'Help us find the perfect match',
     type: 'selection',
+    field: 'housingNeed',
     options: [
       { label: 'On-campus', icon: Building, description: 'University housing' },
       { label: 'Off-campus', icon: Building2, description: 'Private apartments/houses' },
@@ -92,7 +93,7 @@ const ONBOARDING_STEPS = [
     title: 'Are you looking for a roommate?',
     subtitle: 'This helps us connect you with others',
     type: 'boolean',
-    field: 'roommate_interest'
+    field: 'roommateInterest'
   },
   {
     id: 'essentials',
@@ -119,16 +120,16 @@ const ONBOARDING_STEPS = [
 // Initial profile state
 const initProfile = () => ({
   focus: null,
-  arrival_date: '',
+  arrivalDate: '',
   city: '',
   university: '',
-  budget_range: { min: '', max: '' },
-  housing_need: null,
-  roommate_interest: null,
+  budget_range: { min: null, max: null },
+  housingNeed: null,
+  roommateInterest: null,
   essentials: [],
   completed: false,
-  started_at: new Date().toISOString(),
-  completed_at: null
+  startedAt: new Date().toISOString(),
+  completedAt: null
 });
 
 export default function UnifiedOnboarding() {
@@ -137,7 +138,7 @@ export default function UnifiedOnboarding() {
   const [currentStep, setCurrentStep] = useState(0);
   const [profile, setProfile] = useState(() => {
     try {
-      const saved = localStorage.getItem('nr_unified_onboarding');
+      const saved = localStorage.getItem('nr_onboarding');
       if (saved) {
         const parsed = JSON.parse(saved);
         // If onboarding is completed, redirect to appropriate page
@@ -194,7 +195,7 @@ export default function UnifiedOnboarding() {
 
   // Save profile to localStorage whenever it changes
   useEffect(() => {
-    localStorage.setItem('nr_unified_onboarding', JSON.stringify(profile));
+    localStorage.setItem('nr_onboarding', JSON.stringify(profile));
   }, [profile]);
 
   // Save current step to profile
@@ -293,7 +294,7 @@ export default function UnifiedOnboarding() {
       case 'text':
         return profile[stepConfig.field] !== '';
       case 'budget':
-        return profile.budget_range.min !== '' && profile.budget_range.max !== '';
+        return profile.budget_range.min !== null && profile.budget_range.max !== null;
       case 'boolean':
         return profile[stepConfig.field] !== null;
       case 'multi-select':
@@ -320,21 +321,21 @@ export default function UnifiedOnboarding() {
       };
       
       setProfile(completedProfile);
-      localStorage.setItem('nr_unified_onboarding', JSON.stringify(completedProfile));
+      localStorage.setItem('nr_onboarding', JSON.stringify(completedProfile));
       
       // Save onboarding data to backend
       try {
         const onboardingPayload = {
           focus: profile.focus || 'Everything', // Default to 'Everything' if null
-          arrivalDate: profile.arrival_date ? new Date(profile.arrival_date) : null,
+          arrivalDate: profile.arrivalDate ? new Date(profile.arrivalDate) : null,
           city: profile.city || '',
           university: profile.university || '',
           budgetRange: {
             min: profile.budget_range?.min ? parseInt(profile.budget_range.min) : null,
             max: profile.budget_range?.max ? parseInt(profile.budget_range.max) : null
           },
-          housingNeed: profile.housing_need || 'Undecided', // Default to 'Undecided' if null
-          roommateInterest: profile.roommate_interest || false,
+          housingNeed: profile.housingNeed || 'Undecided', // Default to 'Undecided' if null
+          roommateInterest: profile.roommateInterest || false,
           essentials: profile.essentials || [],
           completed: true,
           completedAt: new Date()
@@ -430,7 +431,7 @@ export default function UnifiedOnboarding() {
   // Navigation functions
   const nextStep = useCallback(() => {
     // Save progress before moving to next step
-    localStorage.setItem('nr_unified_onboarding', JSON.stringify(profile));
+    localStorage.setItem('nr_onboarding', JSON.stringify(profile));
     
     if (isLastStep) {
       handleCompletion();
