@@ -1915,8 +1915,10 @@ app.use('/activity', activityRouter);
 // New Platform Entity Routes
 const studentFinanceRouter = require('./routes/studentFinance');
 const academicHubRouter = require('./routes/academicHub');
+const academicRoutes = require('./routes/academicRoutes');
 app.use('/api/finance', studentFinanceRouter);
 app.use('/api/academic', academicHubRouter);
+app.use('/api/academic', academicRoutes);
 
 // Financial Management Models
 const Transaction = require('./models/transaction.model');
@@ -5229,7 +5231,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
     try {
       const { page = 1, limit = 20, type, category, startDate, endDate, sortBy = 'date', sortOrder = 'desc' } = req.query;
       
-      const query = { userId: req.user.id };
+      const query = { userId: getAuthUserId(req) };
       
       // Apply filters
       if (type) query.type = type;
@@ -5275,7 +5277,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
     try {
       const transaction = await Transaction.findOne({
         _id: req.params.id,
-        userId: req.user.id
+        userId: getAuthUserId(req)
       });
       
       if (!transaction) {
@@ -5331,7 +5333,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
       }
       
       const transaction = new Transaction({
-        userId: req.user.id,
+        userId: getAuthUserId(req),
         type,
         amount,
         category,
@@ -5379,7 +5381,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
       
       const transaction = await Transaction.findOne({
         _id: req.params.id,
-        userId: req.user.id
+        userId: getAuthUserId(req)
       });
       
       if (!transaction) {
@@ -5423,7 +5425,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
     try {
       const transaction = await Transaction.findOneAndDelete({
         _id: req.params.id,
-        userId: req.user.id
+        userId: getAuthUserId(req)
       });
       
       if (!transaction) {
@@ -5451,7 +5453,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
   app.get('/api/budgets/current', authenticateToken, async (req, res) => {
     try {
       const budget = await Budget.findOne({
-        userId: req.user.id,
+        userId: getAuthUserId(req),
         'period.isActive': true
       });
       
@@ -5517,12 +5519,12 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
       
       // Deactivate any existing active budget
       await Budget.updateMany(
-        { userId: req.user.id, 'period.isActive': true },
+        { userId: getAuthUserId(req), 'period.isActive': true },
         { 'period.isActive': false }
       );
       
       const budget = new Budget({
-        userId: req.user.id,
+        userId: getAuthUserId(req),
         name,
         description,
         monthlyIncome,
@@ -5578,7 +5580,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
       
       // Check if report already exists for this period
       const existingReport = await FinancialReport.findOne({
-        userId: req.user.id,
+        userId: getAuthUserId(req),
         reportType,
         'period.startDate': start,
         'period.endDate': end
@@ -5594,7 +5596,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
       
       // Generate new report
       const report = await FinancialReport.generateReport(
-        req.user.id,
+        getAuthUserId(req),
         reportType,
         start,
         end
@@ -5625,7 +5627,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
       
       // Get latest monthly report or generate quick overview
       let report = await FinancialReport.findOne({
-        userId: req.user.id,
+        userId: getAuthUserId(req),
         reportType: 'monthly',
         'period.startDate': { $gte: startDate }
       }).sort({ generatedAt: -1 });
@@ -5633,7 +5635,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
       if (!report) {
         // Generate quick overview
         report = await FinancialReport.generateReport(
-          req.user.id,
+          getAuthUserId(req),
           'monthly',
           startDate,
           endDate
@@ -5678,7 +5680,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
     try {
       const { method, isActive, isFavorite, sortBy = 'lastUsed', sortOrder = 'desc' } = req.query;
       
-      const query = { userId: req.user.id };
+      const query = { userId: getAuthUserId(req) };
       
       // Apply filters
       if (method) query.method = method;
@@ -5731,7 +5733,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
       }
       
       const route = new Route({
-        userId: req.user.id,
+        userId: getAuthUserId(req),
         name,
         from,
         to,
@@ -5782,7 +5784,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
       
       const route = await Route.findOne({
         _id: req.params.id,
-        userId: req.user.id
+        userId: getAuthUserId(req)
       });
       
       if (!route) {
@@ -5828,7 +5830,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
     try {
       const route = await Route.findOneAndDelete({
         _id: req.params.id,
-        userId: req.user.id
+        userId: getAuthUserId(req)
       });
       
       if (!route) {
@@ -5866,7 +5868,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
       
       // Find existing routes
       const existingRoutes = await Route.find({
-        userId: req.user.id,
+        userId: getAuthUserId(req),
         from: { $regex: from, $options: 'i' },
         to: { $regex: to, $options: 'i' },
         isActive: true
@@ -6069,7 +6071,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
       
       const carpool = new Carpool({
         driver: {
-          userId: req.user.id,
+          userId: getAuthUserId(req),
           name: req.user.name,
           rating: 5.0
         },
@@ -6131,7 +6133,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
       }
       
       const passengerData = {
-        userId: req.user.id,
+        userId: getAuthUserId(req),
         name,
         phone,
         status: 'pending'
@@ -6159,7 +6161,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
     try {
       const route = await Route.findOne({
         _id: req.params.id,
-        userId: req.user.id
+        userId: getAuthUserId(req)
       });
       
       if (!route) {
@@ -6189,7 +6191,7 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
   // Transportation Dashboard Summary
   app.get('/api/transportation/dashboard', authenticateToken, async (req, res) => {
     try {
-      const userId = req.user.id;
+      const userId = getAuthUserId(req);
       
       // Get active routes count
       const activeRoutesCount = await Route.countDocuments({
