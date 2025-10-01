@@ -13,6 +13,9 @@ const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const { Upload } = require("@aws-sdk/lib-storage");
 const axios = require('axios');
 const { authenticateToken, getAuthUserId } = require('./utilities');
+const { loginRateLimit, availabilityLimiter } = require('./middleware/rateLimiter');
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
 
 // Helper function to track user activities
 async function trackActivity(userId, activityType, targetType, targetId, metadata = {}, location = {}) {
@@ -66,6 +69,52 @@ const io = require('socket.io')(server, {
 
 app.use(express.json());
 app.use(cors({ origin: '*' }));
+
+// Passport configuration
+app.use(passport.initialize());
+
+// Google OAuth Strategy (only if credentials are provided)
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: `${process.env.BACKEND_URL || 'http://localhost:8000'}/api/auth/google/callback`
+  }, async (accessToken, refreshToken, profile, done) => {
+  try {
+    // Check if user already exists
+    let user = await User.findOne({ googleId: profile.id });
+    
+    if (user) {
+      return done(null, user);
+    }
+    
+    // Check if user exists with same email
+    user = await User.findOne({ email: profile.emails[0].value });
+    if (user) {
+      // Link Google account to existing user
+      user.googleId = profile.id;
+      user.emailVerified = true; // Google emails are pre-verified
+      await user.save();
+      return done(null, user);
+    }
+    
+    // Create new user
+    user = new User({
+      googleId: profile.id,
+      email: profile.emails[0].value,
+      firstName: profile.name.givenName,
+      lastName: profile.name.familyName,
+      emailVerified: true,
+      password: null // No password for Google users
+    });
+    
+    await user.save();
+    return done(null, user);
+  } catch (error) {
+    return done(error, null);
+  }
+  }));
+}
 
 // Activity tracking middleware
 app.use((req, res, next) => {
@@ -172,7 +221,7 @@ io.on('connection', (socket) => {
 //Create Account API:
 app.post("/create-account", async(req,res)=>{
 
-    let { firstName, lastName, email, password, username } = req.body;
+    let { firstName, lastName, email, password, username, termsConsent } = req.body;
 
     if (!firstName){
         return res
@@ -228,13 +277,21 @@ app.post("/create-account", async(req,res)=>{
         lastName,
         email,
         password: hashedPassword, // Store hashed password
-        username
+        username,
+        termsConsent: {
+          accepted: termsConsent?.accepted === true,
+          version: termsConsent?.version || '',
+          acceptedAt: termsConsent?.acceptedAt ? new Date(termsConsent.acceptedAt) : new Date(),
+          ip: req.ip,
+          userAgent: req.headers['user-agent'] || ''
+        }
     });
 
     await user.save();
 
+    // Fix JWT expiry - use 24h instead of 25 days
     const accessToken = jwt.sign({user},process.env.ACCESS_TOKEN_SECRET,{
-        expiresIn: '36000m',
+        expiresIn: '24h',
     });
 
     return res.json({
@@ -244,6 +301,78 @@ app.post("/create-account", async(req,res)=>{
         message: "Registration Successful",
     });
 });
+
+// Live username availability check
+app.get('/check-username', availabilityLimiter, async (req, res) => {
+  try {
+    let { username } = req.query;
+    if (!username || typeof username !== 'string') {
+      return res.status(400).json({ error: true, message: 'username is required' });
+    }
+    username = String(username).toLowerCase().trim();
+    if (username.length < 3) {
+      return res.json({ available: false, reason: 'too_short' });
+    }
+    const exists = await User.findOne({ username }).select('_id').lean();
+    return res.json({ available: !exists });
+  } catch (err) {
+    console.error('check-username error:', err);
+    return res.status(500).json({ error: true, message: 'Server error' });
+  }
+});
+
+// Live email availability check
+app.get('/check-email', availabilityLimiter, async (req, res) => {
+  try {
+    let { email } = req.query;
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ error: true, message: 'email is required' });
+    }
+    email = String(email).toLowerCase().trim();
+    // simple email pattern guard
+    const isEmail = /[^@\s]+@[^@\s]+\.[^@\s]+/.test(email);
+    if (!isEmail) return res.json({ available: true }); // treat non-email (e.g., phone) as available
+    const exists = await User.findOne({ email }).select('_id').lean();
+    return res.json({ available: !exists });
+  } catch (err) {
+    console.error('check-email error:', err);
+    return res.status(500).json({ error: true, message: 'Server error' });
+  }
+});
+
+// Google OAuth Routes (only if credentials are configured)
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  app.get('/api/auth/google', 
+    passport.authenticate('google', { scope: ['profile', 'email'] })
+  );
+
+  app.get('/api/auth/google/callback', 
+    passport.authenticate('google', { failureRedirect: '/login?error=google_auth_failed' }),
+    async (req, res) => {
+      try {
+        const user = req.user;
+        const userData = { user: user };
+        const accessToken = jwt.sign(userData, process.env.ACCESS_TOKEN_SECRET, {
+          expiresIn: '24h',
+        });
+
+        // Redirect to frontend with token
+        res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?token=${accessToken}`);
+      } catch (error) {
+        console.error('Google OAuth callback error:', error);
+        res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=oauth_error`);
+      }
+    }
+  );
+} else {
+  // Fallback when Google OAuth is not configured
+  app.get('/api/auth/google', (req, res) => {
+    res.status(503).json({
+      error: true,
+      message: 'Google OAuth is not configured. Please contact administrator.'
+    });
+  });
+}
 
 //Login API:
 // app.post ("/login", async(req,res)=>{
@@ -289,8 +418,8 @@ app.post("/create-account", async(req,res)=>{
 //     }
 // });
 
-app.post('/login', async (req, res) => {
-  let { identifier, email, password } = req.body;
+app.post('/login', loginRateLimit, async (req, res) => {
+  let { identifier, email, password, rememberMe } = req.body;
 
   console.log('Login attempt:', { identifier, email: email ? 'provided' : 'not provided', password: password ? 'provided' : 'not provided' });
 
@@ -309,7 +438,7 @@ app.post('/login', async (req, res) => {
     const query = identifier.includes("@")
       ? { email: identifier.toLowerCase().trim() }
       : { username: identifier.toLowerCase().trim() };
-    const userInfo = await User.findOne(query, 'email username password firstName lastName _id');
+    const userInfo = await User.findOne(query, 'email username password firstName lastName _id emailVerified failedLoginAttempts lockedUntil');
 
     console.log('User found:', { 
       found: !!userInfo, 
@@ -322,35 +451,54 @@ app.post('/login', async (req, res) => {
       return res.status(400).json({ error: true, message: 'Invalid credentials' });
     }
 
-    // Compare password - handle both hashed and plain text (for existing users)
+    // Check if account is locked
+    if (userInfo.lockedUntil && userInfo.lockedUntil > Date.now()) {
+      const lockTimeRemaining = Math.ceil((userInfo.lockedUntil - Date.now()) / (1000 * 60));
+      return res.status(423).json({ 
+        error: true, 
+        message: `Account locked due to too many failed attempts. Try again in ${lockTimeRemaining} minutes.` 
+      });
+    }
+
+    // Email verification check (commented out for existing users)
+    // TODO: Implement email verification for new signups only
+    // if (userInfo.emailVerified === false) {
+    //   return res.status(403).json({
+    //     error: true,
+    //     message: 'Please verify your email address before logging in. Check your inbox for verification link.',
+    //   });
+    // }
+
+    // Compare password - only support hashed passwords (security requirement)
     let isPasswordValid = false;
     
-    // Check if password is already hashed (starts with $2a$ or $2b$)
+    // Check if password is properly hashed
     if (userInfo.password.startsWith('$2a$') || userInfo.password.startsWith('$2b$')) {
       // Password is hashed, use bcrypt compare
       isPasswordValid = await bcrypt.compare(password, userInfo.password);
     } else {
-      // Password is plain text (legacy), compare directly
-      isPasswordValid = (userInfo.password === password);
-      
-      // If login successful with plain text, hash the password for future use
-      if (isPasswordValid) {
-        try {
-          const saltRounds = 12;
-          const hashedPassword = await bcrypt.hash(password, saltRounds);
-          await User.findByIdAndUpdate(userInfo._id, { password: hashedPassword });
-          console.log(`Updated password for user ${userInfo.email} to hashed format`);
-        } catch (hashError) {
-          console.error('Error hashing password during login:', hashError);
-          // Continue with login even if hashing fails
-        }
-      }
+      // Password is not properly hashed - security risk
+      console.error(`User ${userInfo.email} has unhashed password - security risk`);
+      return res.status(400).json({
+        error: true,
+        message: 'Account security issue. Please reset your password.',
+      });
     }
     
     if (isPasswordValid) {
+      // Reset failed attempts on successful login
+      if (userInfo.failedLoginAttempts > 0 || userInfo.lockedUntil) {
+        await User.findByIdAndUpdate(userInfo._id, {
+          failedLoginAttempts: 0,
+          lockedUntil: null
+        });
+      }
+
       const user = { user: userInfo };
+      // Set token expiry based on rememberMe option
+      const tokenExpiry = rememberMe ? '7d' : '24h'; // 7 days if remember me, 24 hours otherwise
       const accessToken = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
-        expiresIn: '36000m',
+        expiresIn: tokenExpiry,
       });
 
       return res.json({
@@ -362,10 +510,33 @@ app.post('/login', async (req, res) => {
         user: userInfo, // Include user data in response
       });
     } else {
-      return res.status(400).json({
-        error: true,
-        message: 'Invalid credentials',
-      });
+      // Handle failed login attempt
+      const failedAttempts = (userInfo.failedLoginAttempts || 0) + 1;
+      const maxAttempts = 5;
+      const lockTime = 30 * 60 * 1000; // 30 minutes
+
+      if (failedAttempts >= maxAttempts) {
+        // Lock the account
+        await User.findByIdAndUpdate(userInfo._id, {
+          failedLoginAttempts: failedAttempts,
+          lockedUntil: Date.now() + lockTime
+        });
+        
+        return res.status(423).json({
+          error: true,
+          message: 'Account locked due to too many failed attempts. Try again in 30 minutes.',
+        });
+      } else {
+        // Update failed attempts
+        await User.findByIdAndUpdate(userInfo._id, {
+          failedLoginAttempts: failedAttempts
+        });
+        
+        return res.status(400).json({
+          error: true,
+          message: `Invalid credentials. ${maxAttempts - failedAttempts} attempts remaining.`,
+        });
+      }
     }
   } catch (error) {
     console.error('Error during login:', error);

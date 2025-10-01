@@ -137,3 +137,4 @@ courseSchema.methods.calculateGPA = function() {
 };
 
 module.exports = mongoose.model('Course', courseSchema);
+

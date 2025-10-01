@@ -60,6 +60,15 @@ const userSchema = new Schema({
   passwordResetTokenId: { type: String, default: null },
   passwordResetExpires: { type: Date, default: null },
 
+  // Legal consent (Terms/Privacy)
+  termsConsent: {
+    accepted:   { type: Boolean, default: false },
+    version:    { type: String,  default: '' },
+    acceptedAt: { type: Date,    default: null },
+    ip:         { type: String,  default: '' },
+    userAgent:  { type: String,  default: '' }
+  },
+
   createdOn: { type: Date, default: Date.now },
 });
 

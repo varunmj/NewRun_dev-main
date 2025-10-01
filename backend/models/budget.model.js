@@ -263,3 +263,4 @@ budgetSchema.statics.getBudgetSummary = async function(userId) {
 };
 
 module.exports = mongoose.model('Budget', budgetSchema);
+

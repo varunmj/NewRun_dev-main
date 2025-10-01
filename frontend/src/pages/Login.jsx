@@ -4,75 +4,159 @@ import axiosInstance from "../utils/axiosInstance";
 import { useAuth } from "../context/AuthContext.jsx";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
+import MagicBento from "../components/MagicBento";
+import { BorderBeam } from "../components/ui/border-beam";
 
 // --- tiny helper for consistent input styling ---
 const inputClass =
   "h-11 w-full rounded-md border border-white/12 bg-white/[0.03] " +
-  "px-3 text-[14px] text-white outline-none " +
-  "placeholder:text-white/45 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10";
+  "px-3 text-[14px] text-white outline-none transition-all duration-200 " +
+  "placeholder:text-white/45 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 " +
+  "hover:border-white/20 hover:bg-white/[0.05]";
 
-// --- Left hero like IG (mock phone + floating cards) ---
+// --- Left hero with animated brand story ---
 function LeftHero() {
   return (
     <div className="hidden md:flex items-center justify-center">
-      <div className="relative w-[360px] h-[640px] rounded-[42px] border border-white/10 bg-white/[0.03] shadow-2xl overflow-hidden">
-        {/* phone notch-ish bar */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center">
-          <div className="mt-3 h-5 w-36 rounded-full bg-black/40 backdrop-blur" />
+      <div className="w-full max-w-lg space-y-8">
+        {/* Main Brand Message */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="text-center"
+        >
+          <h1 className="brand-script text-5xl leading-none
+                  
+                  bg-clip-text text-transparent text-4xl font-bold text-white mb-4">
+            Your College Journey
+            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-400 font-bold">
+              Starts Here
+            </span>
+          </h1>
+          <p className="text-white/70 text-lg leading-relaxed">
+            The all-in-one platform for student housing, academics, and campus life
+          </p>
+        </motion.div>
+
+        {/* Animated Journey Steps with Magic Bento Effects */}
+        <div className="space-y-6">
+          <motion.div 
+            initial={{ opacity: 0, x: -30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.4 }}
+            className="magic-bento-card flex items-center gap-4 p-4 rounded-xl bg-transparent border border-white/10 hover:bg-transparent transition-all duration-300"
+            style={{
+              '--glow-x': '50%',
+              '--glow-y': '50%',
+              '--glow-intensity': '0',
+              '--glow-radius': '200px'
+            }}
+          >
+            <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center">
+              <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-white font-semibold">Find Your Perfect Home</h3>
+              <p className="text-white/60 text-sm">Verified student housing near your campus</p>
+            </div>
+          </motion.div>
+
+          <motion.div 
+            initial={{ opacity: 0, x: -30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.6 }}
+            className="magic-bento-card flex items-center gap-4 p-4 rounded-xl bg-transparent border border-white/10 hover:bg-transparent transition-all duration-300"
+            style={{
+              '--glow-x': '50%',
+              '--glow-y': '50%',
+              '--glow-intensity': '0',
+              '--glow-radius': '200px'
+            }}
+          >
+            <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center">
+              <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-white font-semibold">Connect & Collaborate</h3>
+              <p className="text-white/60 text-sm">Join study groups and build your network</p>
+            </div>
+          </motion.div>
+
+          <motion.div 
+            initial={{ opacity: 0, x: -30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.8 }}
+            className="magic-bento-card flex items-center gap-4 p-4 rounded-xl bg-transparent border border-white/10 hover:bg-transparent transition-all duration-300"
+            style={{
+              '--glow-x': '50%',
+              '--glow-y': '50%',
+              '--glow-intensity': '0',
+              '--glow-radius': '200px'
+            }}
+          >
+            <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center">
+              <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-2 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-white font-semibold">AI-Powered Insights</h3>
+              <p className="text-white/60 text-sm">Smart recommendations for your academic journey</p>
+            </div>
+          </motion.div>
         </div>
 
-        {/* "screen" gradient */}
-        <div className="absolute inset-0 rounded-[42px] bg-[radial-gradient(80%_80%_at_50%_0%,#2a3bff22,transparent_60%),linear-gradient(180deg,#0f131d_0%,#0b0c0f_100%)]" />
-
-        {/* center card (mock photo) */}
-        <motion.div
-          className="absolute left-1/2 top-1/2 h-[420px] w-[260px] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-[linear-gradient(180deg,#1c2433,#0f1117)] ring-1 ring-white/10"
-          animate={{ y: [-6, 6, -6] }}
-          transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }}
+        {/* Trust Indicators */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.0 }}
+          className="pt-6 border-t border-white/10"
         >
-          {/* pretend bottom UI bar */}
-          <div className="absolute bottom-4 left-1/2 h-8 w-40 -translate-x-1/2 rounded-full border border-white/15 bg-white/[0.04]" />
-          {/* pretend like icon */}
-          <div className="absolute bottom-5 right-5 grid h-9 w-9 place-items-center rounded-full border border-white/15 bg-white/[0.06] text-white/70">
-            ♥
+          <div className="text-center space-y-4">
+            <div className="flex items-center justify-center gap-6 text-white/60 text-sm">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+                </svg>
+                <span>Verified Properties</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd"/>
+                </svg>
+                <span>Secure Platform</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span>AI-Powered</span>
+              </div>
+            </div>
           </div>
         </motion.div>
 
-        {/* left portrait card */}
-        <motion.div
-          className="absolute -left-10 bottom-10 h-64 w-40 rotate-[-10deg] rounded-2xl bg-[linear-gradient(180deg,#513726,#1b1110)] ring-1 ring-white/10"
-          animate={{ y: [0, -10, 0] }}
-          transition={{ repeat: Infinity, duration: 4.5, ease: "easeInOut", delay: 0.2 }}
-        />
-
-        {/* right portrait card */}
-        <motion.div
-          className="absolute -right-10 top-16 h-64 w-40 rotate-[12deg] rounded-2xl bg-[linear-gradient(180deg,#2c1d4f,#12101b)] ring-1 ring-white/10"
-          animate={{ y: [0, 12, 0] }}
-          transition={{ repeat: Infinity, duration: 4.8, ease: "easeInOut", delay: 0.4 }}
-        />
-
-        {/* reaction bubbles */}
-        <motion.div
-          className="absolute left-8 top-10 grid h-12 w-20 place-items-center rounded-xl border border-white/15 bg-white/[0.06] text-lg"
-          animate={{ y: [-2, 2, -2] }}
-          transition={{ repeat: Infinity, duration: 2.6, ease: "easeInOut" }}
+        {/* Call to Action */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 1.2 }}
+          className="text-center"
         >
-          🔥 💜
-        </motion.div>
-        <motion.div
-          className="absolute right-8 top-48 grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-white/[0.06]"
-          animate={{ y: [2, -2, 2] }}
-          transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut" }}
-        >
-          ⭐
-        </motion.div>
-        <motion.div
-          className="absolute left-10 bottom-28 grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-white/[0.06]"
-          animate={{ y: [-3, 3, -3] }}
-          transition={{ repeat: Infinity, duration: 2.8, ease: "easeInOut" }}
-        >
-          💬
+          <p className="text-white/80 text-sm mb-4">
+            Be among the first to experience the future of student life
+          </p>
+          <div className="flex items-center justify-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-blue-400"></div>
+            <div className="w-2 h-2 rounded-full bg-white/20"></div>
+            <div className="w-2 h-2 rounded-full bg-white/20"></div>
+          </div>
         </motion.div>
       </div>
     </div>
@@ -87,6 +171,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -102,6 +187,7 @@ export default function Login() {
       const res = await axiosInstance.post("/login", {
         identifier: identifier.trim(),
         password,
+        rememberMe,
       });
       
       if (res?.data?.error) {
@@ -146,19 +232,66 @@ export default function Login() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0b0c0f]">
-      <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-10 px-4 py-12 md:grid-cols-2">
-        {/* LEFT: IG-like media collage */}
+    <>
+      <style>
+        {`
+          .magic-bento-card {
+            --glow-x: 50%;
+            --glow-y: 50%;
+            --glow-intensity: 0;
+            --glow-radius: 200px;
+            --glow-color: 47, 100, 255;
+            position: relative;
+            overflow: hidden;
+          }
+          
+          .magic-bento-card::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            padding: 1px;
+            background: radial-gradient(100px circle at var(--glow-x) var(--glow-y),
+                rgba(var(--glow-color), calc(var(--glow-intensity) * 1)) 0%,
+                rgba(var(--glow-color), calc(var(--glow-intensity) * 0.8)) 20%,
+                rgba(var(--glow-color), calc(var(--glow-intensity) * 0.4)) 40%,
+                transparent 70%);
+            border-radius: inherit;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: subtract;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            z-index: 1;
+            opacity: 0;
+          }
+          
+          .magic-bento-card:hover::after {
+            opacity: 1;
+          }
+          
+          .magic-bento-card:hover {
+            box-shadow: 0 0 20px rgba(47, 100, 255, 0.6), 0 0 40px rgba(47, 100, 255, 0.4), 0 0 60px rgba(47, 100, 255, 0.2);
+          }
+          
+        `}
+      </style>
+      <main className="min-h-screen bg-black">
+      <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-6 sm:gap-8 lg:gap-10 px-4 sm:px-6 lg:px-8 py-8 sm:py-12 md:grid-cols-2 relative">
+        {/* LEFT: Brand story with Magic Bento effects */}
         <LeftHero />
+
+        {/* Gradient Separator Line */}
+        <div className="hidden md:block absolute left-1/2 top-1/2 bottom-1/2 w-px bg-gradient-to-b from-transparent via-blue-500/50 to-transparent transform -translate-x-1/2 -translate-y-1/2 h-3/4"></div>
 
         {/* RIGHT: login card */}
         <div className="w-full">
-          <div className="mx-auto w-full max-w-sm rounded-2xl border border-white/10 bg-white/[0.02] p-6 shadow-xl">
+          <div className="relative mx-auto w-full max-w-sm rounded-2xl border border-white/10 bg-transparent p-4 sm:p-6 overflow-hidden">
             {/* wordmark */}
             <div className="mb-6 text-center">
               <h1
                 className="
-                  brand-script text-5xl leading-none
+                  brand-script text-6xl leading-none
                   bg-gradient-to-r from-blue-600 to-teal-500
                   bg-clip-text text-transparent
                 "
@@ -194,16 +327,35 @@ export default function Login() {
                 </button>
               </div>
 
+
+              {/* Remember Me checkbox */}
+              <div className="flex items-center justify-between mt-3">
+                <label className="flex items-center gap-2 text-sm text-white/70 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 rounded border-white/20 bg-white/[0.03] text-blue-500 focus:ring-blue-500 focus:ring-2"
+                  />
+                  Remember me
+                </label>
+              </div>
+
               {error && (
-                <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-center text-[13px] text-red-300">
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-center text-[13px] text-red-300 transition-all duration-200"
+                >
                   {error}
-                </div>
+                </motion.div>
               )}
 
               <button
                 type="submit"
                 disabled={isLoading}
-                className="mt-1 inline-flex h-10 w-full items-center justify-center rounded-md bg-[#2f64ff] text-[14px] font-medium text-white hover:bg-[#2958e3] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="mt-1 inline-flex h-10 w-full items-center justify-center rounded-md bg-[#2f64ff] text-[14px] font-medium text-white hover:bg-[#2958e3] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-500/25 active:scale-[0.98]"
               >
                 {isLoading ? (
                   <div className="flex items-center gap-2">
@@ -226,23 +378,57 @@ export default function Login() {
             {/* Social (optional) */}
             <button
               type="button"
-              className="mb-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-white/12 bg-white/[0.03] text-[14px] font-medium text-white hover:bg-white/[0.06]"
+              onClick={() => {
+                // Check if Google OAuth is configured
+                fetch('http://localhost:8000/api/auth/google')
+                  .then(response => {
+                    if (response.ok) {
+                      window.location.href = 'http://localhost:8000/api/auth/google';
+                    } else {
+                      setError('Google OAuth is not configured. Please use email/password login.');
+                    }
+                  })
+                  .catch(() => {
+                    setError('Google OAuth is not available. Please use email/password login.');
+                  });
+              }}
+              className="mb-2 inline-flex h-10 w-full items-center justify-center gap-3 rounded-md border border-gray-300 bg-white text-[14px] font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-sm hover:shadow-md"
             >
-              <span className="text-[#ea4335]">●</span> Continue with Google
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              Continue with Google
             </button>
 
             {/* links */}
-            <div className="mt-2 flex items-center justify-between text-[13px]">
-              <Link to="/forgot" className="text-sky-400 hover:underline">
-                Forgot password?
+            <div className="mt-2 flex items-center justify-center text-[13px]">
+              <Link to="/forgot" className="text-white hover:underline">
+                Forgotten your password?
               </Link>
-              <Link to="/signup" className="text-sky-400 hover:underline">
-                Sign up
-              </Link>
+            </div>
+            <BorderBeam 
+              size={300}
+              duration={4}
+              colorFrom="#2F64FF"
+              colorTo="#00D4FF"
+              borderWidth={2.5}
+            />
+          </div>
+
+          {/* Signup Box - directly below login form */}
+          <div className="w-full max-w-sm mx-auto mt-4">
+            <div className="rounded-2xl border border-white/10 bg-transparent p-4 text-center">
+              <p className="text-white/70 text-sm">
+                Don't have an account? <Link to="/signup" className="text-sky-400 hover:underline font-medium">Sign up</Link>
+              </p>
             </div>
           </div>
         </div>
       </div>
     </main>
+    </>
   );
 }

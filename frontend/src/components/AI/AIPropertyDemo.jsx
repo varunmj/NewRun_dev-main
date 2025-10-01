@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import PropertyCard from './PropertyCard';
 import PropertyGrid from './PropertyGrid';
 
 /**
@@ -207,3 +206,4 @@ const AIPropertyDemo = () => {
 };
 
 export default AIPropertyDemo;
+

@@ -242,3 +242,4 @@ academicCalendarSchema.methods.updateAttendeeStatus = function(userId, status) {
 };
 
 module.exports = mongoose.model('AcademicCalendar', academicCalendarSchema);
+

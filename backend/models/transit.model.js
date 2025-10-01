@@ -98,3 +98,4 @@ transitSchema.statics.getActiveTransit = function() {
 };
 
 module.exports = mongoose.model('Transit', transitSchema);
+

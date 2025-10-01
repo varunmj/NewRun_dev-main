@@ -40,6 +40,11 @@ import RouteGuard from "./components/Auth/RouteGuard";
 import StudentFinance from "./pages/StudentFinance";
 import AcademicHub from "./pages/AcademicHub";
 import Transportation from "./pages/Transportation";
+import HelpCenter from "./pages/HelpCenter";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
+import Cookies from "./pages/Cookies";
+import CookieSettings from "./pages/CookieSettings";
 // guards
 import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
 
@@ -61,6 +66,11 @@ const App = () => {
           <Route path="/email-test" element={<EmailTestPage />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/signup" element={<SignUp />} />
+          <Route path="/help" element={<HelpCenter />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/cookies" element={<Cookies />} />
+          <Route path="/cookies/settings" element={<CookieSettings />} />
           <Route path="/marketplace" element={<Marketplace />} />
           <Route path="/blogs" element={<Blogs />} />
           <Route path="/community" element={<Community />} />

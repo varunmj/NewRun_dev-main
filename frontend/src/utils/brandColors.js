@@ -142,3 +142,4 @@ export const getPropertyCardColors = (isRecommended = false) => {
 };
 
 export default brandColors;
+

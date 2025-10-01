@@ -175,3 +175,4 @@ assignmentSchema.methods.getTimeRemaining = function() {
 };
 
 module.exports = mongoose.model('Assignment', assignmentSchema);
+

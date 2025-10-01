@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import PropertyCard from './PropertyCard';
+import PropertyCard from '../Cards/PropertyCard';
 
 /**
  * Property Grid Component for AI Drawer
@@ -102,3 +102,4 @@ const PropertyGrid = ({
 };
 
 export default PropertyGrid;
+

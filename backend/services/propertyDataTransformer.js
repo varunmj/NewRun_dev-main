@@ -238,3 +238,4 @@ class PropertyDataTransformer {
 }
 
 module.exports = PropertyDataTransformer;
+

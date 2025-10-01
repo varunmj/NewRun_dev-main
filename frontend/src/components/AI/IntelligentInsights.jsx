@@ -18,7 +18,6 @@ import {
 } from '../../utils/aiCache';
 import aiExplanationCache from '../../utils/aiExplanationCache';
 import NewRunDrawer from '../ui/NewRunDrawer';
-import PropertyCard from './PropertyCard';
 import PropertyGrid from './PropertyGrid';
 import CompactPropertyCard from './CompactPropertyCard';
 import PropertyTextParser from '../../utils/propertyTextParser';

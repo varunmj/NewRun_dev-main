@@ -252,3 +252,4 @@ studyGroupSchema.methods.isAdmin = function(userId) {
 };
 
 module.exports = mongoose.model('StudyGroup', studyGroupSchema);
+
