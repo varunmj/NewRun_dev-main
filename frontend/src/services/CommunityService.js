@@ -56,15 +56,58 @@ function seed() {
   return threads;
 }
 
-async function list({ q = '', limit = 20 } = {}) {
+async function list({ q = '', limit = 20, school = '', page = 1 } = {}) {
   try {
-    const r = await axiosInstance.get('/community/threads', { params: { q, limit } });
-    if (r?.data?.items) return r.data.items;
-  } catch {}
+    const params = { q, limit, page };
+    if (school) params.school = school;
+    const r = await axiosInstance.get('/community/threads', { params });
+    if (r?.data) {
+      return {
+        items: r.data.items || [],
+        pagination: r.data.pagination || null
+      };
+    }
+  } catch (err) {
+    console.log('Backend fetch failed, using local storage fallback:', err.message);
+  }
+  
+  // Fallback to local storage with pagination
   const all = seed();
-  if (!q) return all.slice(0, limit);
-  const qq = q.toLowerCase();
-  return all.filter(t => t.title.toLowerCase().includes(qq) || t.body.toLowerCase().includes(qq) || t.tags.some(tag => tag.toLowerCase().includes(qq))).slice(0, limit);
+  let filtered = all;
+  
+  // Apply school filter
+  if (school) {
+    filtered = filtered.filter(t => t.school && t.school.toLowerCase().includes(school.toLowerCase()));
+  }
+  
+  // Apply search filter
+  if (q) {
+    const qq = q.toLowerCase();
+    filtered = filtered.filter(t => 
+      t.title.toLowerCase().includes(qq) || 
+      t.body.toLowerCase().includes(qq) || 
+      t.tags.some(tag => tag.toLowerCase().includes(qq))
+    );
+  }
+  
+  // Calculate pagination for local storage
+  const totalItems = filtered.length;
+  const totalPages = Math.ceil(totalItems / limit);
+  const startIndex = (page - 1) * limit;
+  const endIndex = startIndex + limit;
+  const paginatedItems = filtered.slice(startIndex, endIndex);
+  
+  return {
+    items: paginatedItems,
+    pagination: {
+      currentPage: page,
+      totalPages,
+      totalItems,
+      itemsPerPage: limit,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1
+    }
+  };
 }
 
 async function get(id) {

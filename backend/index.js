@@ -198,7 +198,7 @@ app.get('/', (req, res) => {
 // List threads (simple text search by q)
 app.get('/community/threads', async (req, res) => {
   try {
-    const { q = '', limit = 20, school = '' } = req.query;
+    const { q = '', limit = 20, school = '', page = 1, offset = 0 } = req.query;
     // Auto-seed if the collection is empty (first run)
     const total = await CommunityThread.countDocuments();
     if (total === 0) {
@@ -249,8 +249,35 @@ app.get('/community/threads', async (req, res) => {
     }
 
     const query = conditions.length > 0 ? { $and: conditions } : {};
-    const items = await CommunityThread.find(query).sort({ createdAt: -1 }).limit(Number(limit));
-    res.json({ success: true, items });
+    
+    // Calculate pagination
+    const limitNum = Number(limit);
+    const pageNum = Number(page);
+    const offsetNum = Number(offset);
+    const skip = offsetNum || (pageNum - 1) * limitNum;
+    
+    // Get total count for pagination info
+    const totalItems = await CommunityThread.countDocuments(query);
+    const totalPages = Math.ceil(totalItems / limitNum);
+    
+    // Get paginated results
+    const items = await CommunityThread.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum);
+    
+    res.json({ 
+      success: true, 
+      items,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalItems,
+        itemsPerPage: limitNum,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1
+      }
+    });
   } catch (e) {
     console.error('List threads error', e);
     res.status(500).json({ success: false, message: 'Server error' });

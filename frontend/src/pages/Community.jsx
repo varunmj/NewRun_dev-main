@@ -8,6 +8,8 @@ import "../styles/newrun-hero.css";
 import CommunityService from "../services/CommunityService";
 import { timeAgo } from "../utils/timeUtils";
 import { getUniversityBranding, getContrastTextColor } from "../utils/universityBranding";
+import ViewAllModal from "../components/Community/ViewAllModal";
+import MagicBento, { ParticleCard } from "../components/MagicBento";
 
 /* ------------------------------------------------------------------ */
 /* Tiny UI atoms that match your Marketplace look                      */
@@ -126,6 +128,16 @@ export default function Community() {
   const [universityFilter, setUniversityFilter] = useState('my'); // 'my' or 'all'
   const [universityBranding, setUniversityBranding] = useState(null);
   const [logoError, setLogoError] = useState(false); // Track if logo failed to load
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
+  const [showViewAllModal, setShowViewAllModal] = useState(false);
+  
+  // Voting states
+  const [votingStates, setVotingStates] = useState({}); // Track voting for each thread
+  
+  const QUESTIONS_PER_PAGE = 6;
 
   const scrollToAsk = () => askRef.current?.scrollIntoView({ behavior: "smooth" });
 
@@ -139,17 +151,25 @@ export default function Community() {
         params.school = userInfo.university;
       }
       if (!q) {
-        const items = await CommunityService.list(params);
-        setLatest(Array.isArray(items) ? items : []);
-        setShowAll(false);
+        await loadThreads(1); // Reset to first page
         setActiveFilter('');
         return;
       }
       params.q = q;
-      const items = await CommunityService.list(params);
-      console.log('Search results for:', q, items);
-      setLatest(Array.isArray(items) ? items : []);
-      setShowAll(true); // Show all results when searching
+      params.limit = QUESTIONS_PER_PAGE;
+      params.page = 1;
+      
+      const result = await CommunityService.list(params);
+      console.log('Search results for:', q, result);
+      
+      if (result && result.items) {
+        setLatest(result.items);
+        setPagination(result.pagination);
+        setCurrentPage(1);
+      } else {
+        setLatest(Array.isArray(result) ? result : []);
+        setPagination(null);
+      }
       setActiveFilter(q);
     } catch (error) {
       console.error('Search error:', error);
@@ -187,18 +207,34 @@ export default function Community() {
     loadThreads();
   }, [universityFilter]);
 
-  const loadThreads = async () => {
+  const loadThreads = async (page = 1) => {
     setSearching(true);
     try {
-      const params = {};
+      const params = { 
+        limit: QUESTIONS_PER_PAGE, 
+        page: page 
+      };
       if (universityFilter === 'my' && userInfo?.university) {
         params.school = userInfo.university;
       }
-      const items = await CommunityService.list(params);
-      setLatest(Array.isArray(items) ? items : []);
+      console.log('🔄 Loading threads with params:', params);
+      const result = await CommunityService.list(params);
+      
+      if (result && result.items) {
+        console.log('📋 Loaded threads:', result.items.length, 'Pagination:', result.pagination);
+        setLatest(result.items);
+        setPagination(result.pagination);
+        setCurrentPage(page);
+      } else {
+        // Fallback for old API response format
+        console.log('📋 Loaded threads (fallback):', Array.isArray(result) ? result.length : 0);
+        setLatest(Array.isArray(result) ? result.slice(0, QUESTIONS_PER_PAGE) : []);
+        setPagination(null);
+      }
     } catch (error) {
       console.error('Error loading threads:', error);
       setLatest([]);
+      setPagination(null);
     } finally {
       setSearching(false);
     }
@@ -231,9 +267,8 @@ export default function Community() {
         author: userInfo?.username || '@anonymous'
       });
       setShowAskModal(false);
-      // Refresh the list
-      const items = await CommunityService.list();
-      setLatest(Array.isArray(items) ? items : []);
+      // Refresh the list with current filter context
+      await loadThreads(); // Use existing loadThreads function to respect university filter
       // Navigate to the new thread
       if (newThread?._id || newThread?.id) {
         navigate(`/community/thread/${newThread._id || newThread.id}`);
@@ -294,16 +329,30 @@ export default function Community() {
     }
   };
 
-  const loadMoreThreads = async () => {
-    setLoadingMore(true);
+  // Voting function
+  const handleVote = async (threadId, delta, event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const votingKey = `${threadId}_${delta}`;
+    if (votingStates[votingKey]) return; // Prevent double voting
+    
+    setVotingStates(prev => ({ ...prev, [votingKey]: true }));
+    
     try {
-      const items = await CommunityService.list({ limit: 100 });
-      setLatest(Array.isArray(items) ? items : []);
-      setShowAll(true);
+      const newVotes = await CommunityService.voteThread(threadId, delta);
+      
+      // Update the local state
+      setLatest(prev => prev.map(thread => 
+        (thread._id || thread.id) === threadId 
+          ? { ...thread, votes: newVotes }
+          : thread
+      ));
+      
     } catch (error) {
-      console.error('Error loading threads:', error);
+      console.error('Error voting:', error);
     } finally {
-      setLoadingMore(false);
+      setVotingStates(prev => ({ ...prev, [votingKey]: false }));
     }
   };
 
@@ -491,34 +540,66 @@ export default function Community() {
               </span>
             </div>
 
-            <h3 className="max-w-xl text-[28px] font-extrabold leading-tight sm:text-[32px]">
+            <h3 className="max-w-xl text-[28px] font-extrabold leading-tight sm:text-[32px] bg-gradient-to-r from-white via-white to-white/90 bg-clip-text text-transparent">
               Ask the community — and get a trustworthy answer.
             </h3>
 
-            <p className="mt-3 max-w-xl text-white/80">
-              Post your question with tags (e.g. <em>#visa</em>, <em>#housing</em>, <em>#dorm</em>). 
+            <p className="mt-3 max-w-xl text-white/80 leading-relaxed">
+              Post your question with tags (e.g. <span className="text-blue-400 font-medium">#visa</span>, <span className="text-green-400 font-medium">#housing</span>, <span className="text-purple-400 font-medium">#dorm</span>). 
               Verified students respond quickly, and the accepted answer is pinned on top.
             </p>
 
-            {/* ask bar */}
-            <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.04] p-2">
-              <div className="flex items-center gap-2 rounded-lg bg-[#0f1115]/80 px-3 py-3 ring-1 ring-white/10">
-                <span className="text-white/40">＋</span>
+            {/* Enhanced ask bar */}
+            <div className="mt-6 group">
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2 transition-all duration-300 group-hover:border-white/20 group-hover:bg-white/[0.06]">
+                <div className="flex items-center gap-3 rounded-lg bg-[#0f1115]/80 px-4 py-3 ring-1 ring-white/10 transition-all duration-300 group-hover:ring-white/20">
+                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30">
+                    <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </div>
                 <input
                   readOnly
-                  onClick={openAskModal}
-                  value="Type your question… (AI can help you draft a clear post)"
-                  className="w-full bg-transparent text-sm text-white/70 outline-none cursor-pointer"
-                />
-                <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-white/85">
+                    onClick={openAskModal}
+                    placeholder="Type your question… (AI can help you draft a clear post)"
+                    className="flex-1 bg-transparent text-sm text-white/70 placeholder:text-white/50 outline-none cursor-pointer transition-colors duration-300 hover:text-white/90"
+                  />
+                  <button
+                    onClick={() => {
+                      openAskModal();
+                      // TODO: Implement AI drafting functionality
+                    }}
+                    className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30 px-3 py-1.5 text-xs font-medium text-purple-300 hover:from-purple-500/30 hover:to-blue-500/30 hover:text-purple-200 transition-all duration-300"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
                   Draft with AI
-                </span>
-                <button 
-                  onClick={openAskModal}
-                  className="rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-3 py-1.5 text-xs font-semibold text-black hover:brightness-110"
-                >
+                  </button>
+                  <button 
+                    onClick={openAskModal}
+                    className="rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-1.5 text-xs font-semibold text-black hover:from-amber-400 hover:to-orange-500 transition-all duration-300 shadow-lg hover:shadow-amber-500/25"
+                  >
                   Ask
                 </button>
+                </div>
+              </div>
+              
+              {/* Quick suggestion chips */}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {['🏠 Housing tips', '📋 Visa help', '💰 Budget advice', '🎓 Academic support'].map((suggestion, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      const tag = suggestion.split(' ')[1].toLowerCase();
+                      setSearch(tag);
+                      handleTagClick(tag);
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-white/60 hover:text-white/90 hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -528,18 +609,32 @@ export default function Community() {
 
           {/* Right: three tiles */}
           <div className="flex flex-col gap-5 lg:col-span-5">
-            <Panel className="flex items-start gap-4 p-5 sm:p-6">
+            <ParticleCard 
+              className="nr-panel flex items-start gap-4 p-5 sm:p-6"
+              glowColor="59, 130, 246"
+              particleCount={8}
+              enableTilt={false}
+              enableMagnetism={true}
+              clickEffect={true}
+            >
               <GlowIcon><Svg.Cap /></GlowIcon>
               <div>
                 <p className="text-[12px] font-semibold tracking-wide text-white/60">VERIFIED STUDENTS</p>
                 <h4 className="mt-1 text-[18px] font-semibold">Sign in with .edu</h4>
                 <p className="mt-1 text-white/75">
-                  Buyers and sellers know they’re dealing with real classmates.
+                  Buyers and sellers know they're dealing with real classmates.
                 </p>
               </div>
-            </Panel>
+            </ParticleCard>
 
-            <Panel className="flex items-start gap-4 p-5 sm:p-6">
+            <ParticleCard 
+              className="nr-panel flex items-start gap-4 p-5 sm:p-6"
+              glowColor="16, 185, 129"
+              particleCount={6}
+              enableTilt={false}
+              enableMagnetism={true}
+              clickEffect={true}
+            >
               <GlowIcon><Svg.Clock /></GlowIcon>
               <div>
                 <p className="text-[12px] font-semibold tracking-wide text-white/60">FAST ANSWERS</p>
@@ -548,18 +643,25 @@ export default function Community() {
                   Accepted answers float to the top so you can act quickly.
                 </p>
               </div>
-            </Panel>
+            </ParticleCard>
 
-            <Panel className="flex items-start gap-4 p-5 sm:p-6">
+            <ParticleCard 
+              className="nr-panel flex items-start gap-4 p-5 sm:p-6"
+              glowColor="245, 158, 11"
+              particleCount={5}
+              enableTilt={false}
+              enableMagnetism={true}
+              clickEffect={true}
+            >
               <GlowIcon><Svg.Shield /></GlowIcon>
               <div>
                 <p className="text-[12px] font-semibold tracking-wide text-white/60">SAFE & PRIVATE</p>
-                <h4 className="mt-1 text-[18px] font-semibold">Share only what’s needed</h4>
+                <h4 className="mt-1 text-[18px] font-semibold">Share only what's needed</h4>
                 <p className="mt-1 text-white/75">
                   Post anonymously if you prefer; moderators keep things clean.
                 </p>
               </div>
-            </Panel>
+            </ParticleCard>
           </div>
         </div>
       </section>
@@ -593,15 +695,44 @@ export default function Community() {
               )}
             </p>
           </div>
-          {!showAll && !activeFilter && latest.length >= 6 && (
+          <div className="flex items-center justify-between">
+            {/* Pagination Controls */}
+            {pagination && pagination.totalPages > 1 && (
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => loadThreads(currentPage - 1)}
+                  disabled={!pagination.hasPrevPage || searching}
+                  className="p-2 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                
+                <span className="text-sm text-white/60">
+                  Page {pagination.currentPage} of {pagination.totalPages}
+                </span>
+                
+                <button
+                  onClick={() => loadThreads(currentPage + 1)}
+                  disabled={!pagination.hasNextPage || searching}
+                  className="p-2 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            )}
+            
+            {/* View All Modal Button */}
             <button
-              onClick={loadMoreThreads}
-              disabled={loadingMore}
-              className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-1.5 text-sm text-white/85 hover:bg-white/10 disabled:opacity-50"
+              onClick={() => setShowViewAllModal(true)}
+              className="rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2 text-sm text-white/85 hover:bg-white/10 transition-colors"
             >
-              {loadingMore ? 'Loading...' : 'View all'}
+              View All Questions
             </button>
-          )}
+          </div>
         </div>
 
         {searching ? (
@@ -631,7 +762,7 @@ export default function Community() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {latest.map((q) => (
             <a key={q._id || q.id} href={`/community/thread/${q._id || q.id}`} className="nr-panel hover:bg-white/[0.08] transition block">
               <div className="mb-2 flex items-center gap-2 text-[12px]">
@@ -648,13 +779,59 @@ export default function Community() {
                 {timeAgo(q.createdAt || q.updatedAt)}
               </p>
 
-              <div className="mt-4 flex items-center justify-between text-[12px] text-white/60">
-                <span>▲ {q.votes} votes</span>
-                <span>💬 {q.answers?.length || 0} answers</span>
+              <div className="mt-4 flex items-center justify-between text-[12px]">
+                <div className="flex items-center gap-3">
+                  {/* Voting Controls */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => handleVote(q._id || q.id, 1, e)}
+                      disabled={votingStates[`${q._id || q.id}_1`]}
+                      className="p-1 rounded hover:bg-white/10 transition-colors group disabled:opacity-50"
+                      title="Upvote"
+                    >
+                      <svg 
+                        className="w-4 h-4 text-white/60 group-hover:text-green-400 transition-colors" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                      </svg>
+                    </button>
+                    
+                    <span className="text-white/70 font-medium min-w-[2rem] text-center">
+                      {q.votes || 0}
+                    </span>
+                    
+                    <button
+                      onClick={(e) => handleVote(q._id || q.id, -1, e)}
+                      disabled={votingStates[`${q._id || q.id}_-1`]}
+                      className="p-1 rounded hover:bg-white/10 transition-colors group disabled:opacity-50"
+                      title="Downvote"
+                    >
+                      <svg 
+                        className="w-4 h-4 text-white/60 group-hover:text-red-400 transition-colors" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  {/* Answers Count */}
+                  <div className="flex items-center gap-1 text-white/60">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    <span>{q.answers?.length || 0} answers</span>
+                  </div>
+                </div>
               </div>
             </a>
           ))}
-          </div>
+        </div>
         )}
       </section>
 
@@ -672,7 +849,7 @@ export default function Community() {
                   href="/marketplace?category=furniture&maxPrice=300"
                   className="block"
                 >
-                  Furnish a room under $300 → opens Marketplace: Furniture
+                Furnish a room under $300 → opens Marketplace: Furniture
                 </a>
               </li>
               <li className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
@@ -680,7 +857,7 @@ export default function Community() {
                   href="/marketplace?category=dorm-essentials"
                   className="block"
                 >
-                  Move-in day toolkit → links to Dorm essentials
+                Move-in day toolkit → links to Dorm essentials
                 </a>
               </li>
               <li className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
@@ -688,7 +865,7 @@ export default function Community() {
                   href="/marketplace/sell"
                   className="block"
                 >
-                  Sell everything in 48h → prefilled sell flow
+                Sell everything in 48h → prefilled sell flow
                 </a>
               </li>
               <li 
@@ -824,6 +1001,14 @@ export default function Community() {
           </div>
         </div>
       )}
+
+      {/* View All Modal */}
+      <ViewAllModal
+        isOpen={showViewAllModal}
+        onClose={() => setShowViewAllModal(false)}
+        universityFilter={universityFilter}
+        userInfo={userInfo}
+      />
     </div>
   );
 }

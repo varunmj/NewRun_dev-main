@@ -158,9 +158,16 @@ export default function Thread() {
               <button
                 onClick={() => handleVote(1)}
                 disabled={voting}
-                className="group flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm hover:border-emerald-400/30 hover:bg-emerald-500/10 disabled:opacity-50"
+                className="group flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm hover:border-green-400/30 hover:bg-green-500/10 disabled:opacity-50"
               >
-                <span className="text-[16px] group-hover:text-emerald-400">▲</span>
+                <svg 
+                  className="w-4 h-4 text-white/60 group-hover:text-green-400 transition-colors" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                </svg>
                 <span className="font-semibold text-white/90">{thread.votes}</span>
               </button>
               <button
@@ -168,7 +175,14 @@ export default function Thread() {
                 disabled={voting}
                 className="group flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm hover:border-red-400/30 hover:bg-red-500/10 disabled:opacity-50"
               >
-                <span className="text-[16px] group-hover:text-red-400">▼</span>
+                <svg 
+                  className="w-4 h-4 text-white/60 group-hover:text-red-400 transition-colors" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </button>
             </div>
           </div>

@@ -22,7 +22,10 @@ const CommunityThreadSchema = new mongoose.Schema({
   answers: { type: [AnswerSchema], default: [] },
 }, { timestamps: true });
 
-CommunityThreadSchema.index({ title: 'text', body: 'text', tags: 1 });
+// Create text index for search (excluding tags array to avoid conflicts)
+CommunityThreadSchema.index({ title: 'text', body: 'text' });
+// Create separate index for tags
+CommunityThreadSchema.index({ tags: 1 });
 
 module.exports = mongoose.model('CommunityThread', CommunityThreadSchema);
 

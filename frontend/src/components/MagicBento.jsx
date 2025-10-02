@@ -812,3 +812,4 @@ const MagicBento = ({
 };
 
 export default MagicBento;
+export { ParticleCard };
