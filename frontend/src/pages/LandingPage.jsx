@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, useScroll, useTransform } from "framer-motion";
 import Lenis from "@studio-freight/lenis";
@@ -6,10 +6,11 @@ import Lenis from "@studio-freight/lenis";
 
 import Navbar from "../components/Navbar/Navbar";
 import Footer from "../components/Footer/Footer";
-import SplineGlobe from "../components/Globe/SplineGlobe";
+const LazySplineGlobe = React.lazy(() => import("../components/Globe/SplineGlobe"));
 import ProcessSection from "../components/Sections/ProcessSection";
 import AnimatedFeatureGrid from "../components/Showcase/AnimatedFeatureGrid";
 import NewRunServices from "../components/Process/NewRunServices";
+import UniversityFinder from "../components/UniversityFinder";
 
 
 import meshHero from "../assets/Graphics/mesh-hero.png";
@@ -21,35 +22,62 @@ import imgCommunity from "../assets/Images/landing/community-events.jpg";
 export default function LandingPage() {
   const navigate = useNavigate();
 
-  // Smooth scroll
-  useEffect(() => {
-    const lenis = new Lenis({ lerp: 0.1, smoothWheel: true });
-    const raf = (t) => { lenis.raf(t); requestAnimationFrame(raf); };
-    requestAnimationFrame(raf);
-    return () => lenis.destroy();
+  // Reduced motion preference
+  const prefersReducedMotion = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }, []);
+
+  // Smooth scroll with proper cleanup and reduced-motion guard
+  useEffect(() => {
+    if (prefersReducedMotion) return;
+    const lenis = new Lenis({ lerp: 0.1, smoothWheel: true });
+    let rafId;
+    const raf = (t) => { lenis.raf(t); rafId = requestAnimationFrame(raf); };
+    rafId = requestAnimationFrame(raf);
+    return () => { if (rafId) cancelAnimationFrame(rafId); lenis.destroy(); };
+  }, [prefersReducedMotion]);
 
   // Parallax hero copy
   const heroRef = useRef(null);
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
-  const heroY = useTransform(scrollYProgress, [0, 1], [0, -120]);
-  const heroOpacity = useTransform(scrollYProgress, [0, 1], [1, 0.5]);
+  const heroY = useTransform(scrollYProgress, [0, 1], [0, prefersReducedMotion ? 0 : -120]);
+  const heroOpacity = useTransform(scrollYProgress, [0, 1], [1, prefersReducedMotion ? 1 : 0.5]);
 
   const fadeUp = {
-    hidden: { opacity: 0, y: 28 },
-    show: (i = 0) => ({ opacity: 1, y: 0, transition: { duration: 0.65, ease: "easeOut", delay: i * 0.08 } }),
+    hidden: prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 28 },
+    show: (i = 0) => ({
+      opacity: 1,
+      y: prefersReducedMotion ? 0 : 0,
+      transition: prefersReducedMotion ? { duration: 0 } : { duration: 0.65, ease: "easeOut", delay: i * 0.08 }
+    }),
   };
+
+  // Intersection for globe and services
+  const heroInViewRef = useRef(null);
+  const [heroInView, setHeroInView] = useState(false);
+  useEffect(() => {
+    const el = heroInViewRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([entry]) => setHeroInView(entry.isIntersecting), { rootMargin: "200px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   return (
     <div className="body-obsidian min-h-screen">
       <Navbar />
 
       {/* HERO */}
-      <section ref={heroRef} className="relative min-h-[92vh] w-full overflow-hidden">
+      <section ref={heroRef} className="relative min-h-[92vh] w-full overflow-hidden" style={{ willChange: prefersReducedMotion ? 'auto' : 'transform' }}>
         {/* Texture + globe */}
         <img src={meshHero} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-25" />
-        <div className="absolute inset-0 -z-0 opacity-[0.26]">
-          <SplineGlobe />
+        <div ref={heroInViewRef} className="absolute inset-0 -z-0 opacity-[0.26]" aria-hidden="true">
+          {!prefersReducedMotion && heroInView && (
+            <Suspense fallback={null}>
+              <LazySplineGlobe />
+            </Suspense>
+          )}
         </div>
         {/* subtle vignette */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-black/25 to-transparent" />
@@ -192,8 +220,8 @@ export default function LandingPage() {
             }`}
           >
             <motion.div
-              initial={{ opacity: 0, x: i % 2 === 0 ? -28 : 28 }}
-              whileInView={{ opacity: 1, x: 0 }}
+              initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: i % 2 === 0 ? -28 : 28 }}
+              whileInView={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, x: 0 }}
               viewport={{ once: true, margin: "-10% 0px" }}
               transition={{ duration: 0.6 }}
               className="space-y-5"
@@ -211,54 +239,35 @@ export default function LandingPage() {
             </motion.div>
 
             <motion.div
-              initial={{ opacity: 0, scale: 0.98 }}
-              whileInView={{ opacity: 1, scale: 1 }}
+              initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.98 }}
+              whileInView={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
               viewport={{ once: true, margin: "-10% 0px" }}
               transition={{ duration: 0.6 }}
               className="edge-panel relative bg-[var(--bg-carbon)] p-3"
             >
-              <img src={f.img} alt={f.title} className="rounded-[16px] object-cover" />
+              <img src={f.img} alt={f.title} className="rounded-[16px] object-cover" loading="lazy" decoding="async" />
               <div className="pointer-events-none absolute inset-0 rounded-[18px] ring-1 ring-inset ring-white/10" />
             </motion.div>
           </div>
         ))}
       </section>
 
-      {/* UNIVERSITY FINDER */}
-      <section className="relative mx-auto max-w-5xl px-6 pb-28 pt-10">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="edge-panel p-8 text-center"
-        >
-          <h4 className="text-3xl font-bold">Find Your University</h4>
-          <p className="mt-2 text-[var(--text-mid)]">
-            NewRun is built for campus-specific communities. Start by searching your school.
-          </p>
-          <div className="mx-auto mt-6 flex max-w-2xl gap-3">
-            <input
-              type="text"
-              placeholder="Search university…"
-              className="w-full rounded-xl border border-[var(--glass-border)] bg-[#0E0F12] px-5 py-3 text-white placeholder-[var(--text-mid)] outline-none focus:border-[var(--edge-cyan)]"
-            />
-            <button onClick={() => navigate("/signup")} className="btn-metal">
-              Continue
-            </button>
-          </div>
-        </motion.div>
-      </section>
+      {/* UNIVERSITY FINDER moved into cinematic section */}
 
-      {/* CINEMATIC CTA */}
-      <section className="relative h-[56vh] w-full overflow-hidden">
-        <video
-          className="absolute inset-0 h-full w-full object-cover opacity-60"
-          src={heroVideo}
-          autoPlay muted loop playsInline
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/40 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#111215] via-transparent to-transparent" />
+      {/* CINEMATIC FINDER - video background with University Finder overlay */}
+      <section className="relative h-[68vh] w-full overflow-visible">
+        {prefersReducedMotion ? (
+          <img src={meshHero} alt="NewRun campus life" className="absolute inset-0 h-full w-full object-cover opacity-60" loading="lazy" decoding="async" />
+        ) : (
+          <video
+            className="absolute inset-0 h-full w-full object-cover opacity-60"
+            src={heroVideo}
+            autoPlay muted loop playsInline preload="metadata"
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/35 to-[#0b0c0f]" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0b0c0f] via-transparent to-transparent" />
+
         <motion.div
           initial={{ opacity: 0, y: 18 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -266,16 +275,14 @@ export default function LandingPage() {
           transition={{ duration: 0.65 }}
           className="relative z-10 mx-auto flex h-full max-w-5xl flex-col items-center justify-center px-6 text-center"
         >
-          <h3 className="text-balance text-4xl font-bold md:text-5xl">
+          <h3 className="text-balance text-4xl font-bold md:text-5xl mb-2">
             Start your journey now — it’s free.
           </h3>
-          <p className="mt-3 max-w-2xl text-[var(--text-mid)]">
-            Join a verified, university-only community designed to make your first months in the U.S. effortless.
+          <p className="max-w-2xl text-white/80 mb-6">
+            Join a verified, university-only community. Pick your campus to get a personalized start.
           </p>
-          <div className="mt-8">
-            <button onClick={() => navigate("/onboarding")} className="btn-metal">
-              Get Started
-            </button>
+          <div className="w-full">
+            <UniversityFinder />
           </div>
         </motion.div>
       </section>

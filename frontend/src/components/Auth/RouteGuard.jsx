@@ -59,16 +59,30 @@ const RouteGuard = ({ children }) => {
     }
   };
 
-  // Block history navigation when not authenticated
-  useHistoryBlocker(!isAuthenticated && !loading);
+  // Block history navigation when not authenticated, but never on public legal/help pages
+  const publicAlwaysAccessible = [
+    '/help',
+    '/terms',
+    '/privacy',
+    '/cookies',
+    '/cookies/settings'
+  ];
+  const shouldBlockHistory = !isAuthenticated && !loading && !publicAlwaysAccessible.some(p => location.pathname.startsWith(p));
+  useHistoryBlocker(shouldBlockHistory);
   
   // Additional bulletproof back button blocking
   useEffect(() => {
     if (!isAuthenticated && !loading) {
+      // Never block back navigation on public legal/help pages
+      const publicAlwaysAccessible = [
+        '/help', '/terms', '/privacy', '/cookies', '/cookies/settings'
+      ];
+      if (publicAlwaysAccessible.some(p => location.pathname.startsWith(p))) return;
+
       const cleanup = blockBackNavigation();
       return cleanup;
     }
-  }, [isAuthenticated, loading]);
+  }, [isAuthenticated, loading, location.pathname]);
 
   // Enhanced route protection with smart validation
   useEffect(() => {

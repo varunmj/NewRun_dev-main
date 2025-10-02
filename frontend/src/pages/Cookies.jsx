@@ -1,5 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import LegalLayout from "../components/LegalLayout";
 
 export default function Cookies() {
   const lastUpdated = "October 1, 2025";
@@ -11,15 +12,20 @@ export default function Cookies() {
     </section>
   );
 
+  const sections = [
+    ["what","What cookies are"],
+    ["how","How we use"],
+    ["types","Types we use"],
+    ["third","Third‑party services"],
+    ["controls","Your choices"],
+    ["retention","Retention & expiry"],
+    ["signals","Do Not Track & GPC"],
+    ["changes","Changes"],
+    ["contact","Contact"]
+  ];
+
   return (
-    <main className="min-h-screen bg-black">
-      <div className="mx-auto max-w-3xl px-4 py-12">
-        <div className="rounded-2xl border border-white/10 bg-transparent p-6">
-          {/* Header */}
-          <h1 className="brand-script text-5xl leading-none bg-gradient-to-r from-blue-600 to-teal-500 bg-clip-text text-transparent mb-2">
-            NewRun
-          </h1>
-          <h2 className="text-white text-2xl font-semibold mb-2">Cookies Policy</h2>
+    <LegalLayout title="Cookies Policy" sections={sections.map(([id,label])=>({id,label}))}>
           <p className="text-white/60 text-xs mb-6">Last updated: {lastUpdated}</p>
 
           {/* Intro */}
@@ -39,27 +45,7 @@ export default function Cookies() {
             </div>
           </div>
 
-          {/* Table of Contents */}
-          <nav className="mb-6">
-            <div className="text-white/70 text-xs uppercase tracking-wide mb-2">On this page</div>
-            <ul className="grid sm:grid-cols-2 gap-2 text-sm">
-              {[
-                ["what", "What cookies & similar tech are"],
-                ["how", "How we use them"],
-                ["types", "Types of cookies we use"],
-                ["third", "Third-party services & analytics"],
-                ["controls", "Your choices & controls"],
-                ["retention", "Retention & expiry"],
-                ["signals", "Do Not Track & GPC"],
-                ["changes", "Changes to this policy"],
-                ["contact", "Contact us"],
-              ].map(([id, label]) => (
-                <li key={id}>
-                  <a href={`#${id}`} className="text-sky-400 hover:underline">{label}</a>
-                </li>
-              ))}
-            </ul>
-          </nav>
+          {/* TOC handled by LegalLayout */}
 
           {/* Sections */}
           <Section id="what" title="What cookies & similar technologies are">
@@ -187,8 +173,6 @@ export default function Cookies() {
               This page provides general information and does not constitute legal advice.
             </p>
           </Section>
-        </div>
-      </div>
-    </main>
+    </LegalLayout>
   );
 }

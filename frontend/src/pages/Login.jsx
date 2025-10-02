@@ -12,7 +12,10 @@ const inputClass =
   "h-11 w-full rounded-md border border-white/12 bg-white/[0.03] " +
   "px-3 text-[14px] text-white outline-none transition-all duration-200 " +
   "placeholder:text-white/45 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 " +
-  "hover:border-white/20 hover:bg-white/[0.05]";
+  "hover:border-white/20 hover:bg-white/[0.05] " +
+  // Autofill normalization for dark theme
+  "autofill:bg-black autofill:text-white autofill:shadow-[inset_0_0_0px_1000px_#000] " +
+  "[-webkit-text-fill-color:white] [-webkit-box-shadow:0_0_0px_1000px_#000_inset]";
 
 // --- Left hero with animated brand story ---
 function LeftHero() {

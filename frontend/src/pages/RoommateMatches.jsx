@@ -448,17 +448,18 @@ function HeroIntro({ firstName = "", onSkip }) {
     return () => clearTimeout(timer);
   }, []);
 
-  React.useEffect(() => {
-    const cancel = () => onSkip?.("user");
-    window.addEventListener("wheel", cancel, { passive: true });
-    window.addEventListener("touchstart", cancel, { passive: true });
-    window.addEventListener("keydown", cancel);
-    return () => {
-      window.removeEventListener("wheel", cancel);
-      window.removeEventListener("touchstart", cancel);
-      window.removeEventListener("keydown", cancel);
-    };
-  }, [onSkip]);
+  // REMOVED: Auto-scroll trigger on user interaction - let users scroll naturally
+  // React.useEffect(() => {
+  //   const cancel = () => onSkip?.("user");
+  //   window.addEventListener("wheel", cancel, { passive: true });
+  //   window.addEventListener("touchstart", cancel, { passive: true });
+  //   window.addEventListener("keydown", cancel);
+  //   return () => {
+  //     window.removeEventListener("wheel", cancel);
+  //     window.removeEventListener("touchstart", cancel);
+  //     window.removeEventListener("keydown", cancel);
+  //   };
+  // }, [onSkip]);
 
   const name = String(firstName || "").trim();
   const line1 = name ? `${name}, we've crunched your preferences.` : `We've crunched your preferences.`;
@@ -520,7 +521,7 @@ function HeroIntro({ firstName = "", onSkip }) {
                 <div className="w-1 h-1 bg-white/60 rounded-full animate-bounce delay-100" />
                 <div className="w-1 h-1 bg-white/60 rounded-full animate-bounce delay-200" />
               </div>
-              <span className="text-sm font-medium">Auto scrolling…</span>
+              <span className="text-sm font-medium">Scroll down to explore</span>
             </div>
           </div>
         </div>
@@ -703,13 +704,13 @@ export default function RoommateMatches() {
     smoothScrollToMatches();
   }, [smoothScrollToMatches]);
 
-  // Auto-scroll ~4s after load (unless user interacts)
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (!autoScrollDoneRef.current) smoothScrollToMatches();
-    }, 4000);
-    return () => clearTimeout(t);
-  }, [smoothScrollToMatches]);
+  // Auto-scroll DISABLED - let users scroll naturally
+  // useEffect(() => {
+  //   const t = setTimeout(() => {
+  //     if (!autoScrollDoneRef.current) smoothScrollToMatches();
+  //   }, 4000);
+  //   return () => clearTimeout(t);
+  // }, [smoothScrollToMatches]);
 
   // Derived list (query + sort)
   const visibleMatches = useMemo(() => {
@@ -1026,15 +1027,33 @@ function MatchDrawer({ match, prefs, onClose, onStartChat, onSaveToggle, isSaved
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // Prevent body scroll when drawer is open
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [open]);
+
   return (
     <div aria-hidden={!open} className={cn("fixed inset-0 z-50 transition", open ? "pointer-events-auto" : "pointer-events-none")}>
       <div onClick={onClose} className={cn("absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity", open ? "opacity-100" : "opacity-0")} />
       <aside
         ref={panelRef}
         className={cn(
-          "absolute right-0 top-0 h-full w-full max-w-[700px] overflow-y-auto border-l border-white/10 bg-[#0d1017] shadow-2xl transition-transform will-change-transform",
+          "fixed right-0 top-0 bottom-0 w-full max-w-[700px] overflow-y-auto border-l border-white/10 bg-[#0d1017] shadow-2xl transition-transform will-change-transform",
           open ? "translate-x-0" : "translate-x-full"
         )}
+        style={{ 
+          height: "100vh",
+          maxHeight: "100vh", 
+          overflowY: "auto",
+          WebkitOverflowScrolling: "touch"
+        }}
         role="dialog"
         aria-modal="true"
         aria-label="Match details"
@@ -1167,9 +1186,9 @@ function DrawerBody({ profile, prefs, onStartChat, onSaveToggle, isSaved, hasPre
         </Collapsible>
       </div>
 
-      {/* CTAs (sticky on mobile) */}
-      <div className="mt-8" />
-      <div className="sticky bottom-0 left-0 right-0 z-10 border-t border-white/10 bg-[#0d1017]/90 backdrop-blur supports-[backdrop-filter]:bg-[#0d1017]/60">
+      {/* CTAs (at bottom, not sticky to allow scrolling) */}
+      <div className="mt-8">
+      <div className="border-t border-white/10 bg-[#0d1017] pt-4 pb-6">
         <div className="px-5 pt-3 pb-2 flex items-center justify-between">
           <button
             disabled={!hasPrev}
@@ -1198,6 +1217,7 @@ function DrawerBody({ profile, prefs, onStartChat, onSaveToggle, isSaved, hasPre
           <button onClick={()=>onStartChat(profile.userId)} className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium hover:bg-white/10">Start chat</button>
           <button onClick={()=>onSaveToggle(profile.userId)} className={cn("rounded-xl border border-white/10 px-4 py-3 text-sm font-medium", saved?"bg-pink-500/10 text-pink-300":"bg-white/5 hover:bg-white/10")}>{saved?"Saved":"Save match"}</button>
         </div>
+      </div>
       </div>
     </div>
   );

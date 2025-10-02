@@ -20,6 +20,7 @@ import StudentPage from './pages/Student';
 import ChatbotPage from './pages/Chatbot';
 import Blogs from './pages/Blogs';
 import Community from './pages/Community';
+import Thread from './pages/Thread';
 import Marketplace from './pages/Marketplace';
 import MarketplaceItemDetails from './pages/MarketplaceItemDetails';
 import AddEditItem from './pages/AddEditItem';
@@ -74,6 +75,7 @@ const App = () => {
           <Route path="/marketplace" element={<Marketplace />} />
           <Route path="/blogs" element={<Blogs />} />
           <Route path="/community" element={<Community />} />
+          <Route path="/community/thread/:id" element={<Thread />} />
           <Route path="/university" element={<UniversityPage />} />
           <Route path="/students" element={<StudentPage />} />
           <Route path="/welcome" element={<ChatbotPage />} />

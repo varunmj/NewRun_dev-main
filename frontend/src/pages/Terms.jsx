@@ -1,5 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import LegalLayout from "../components/LegalLayout";
 
 export default function Terms() {
   // Pick a stable date (don’t surprise users by changing per locale)
@@ -12,15 +13,30 @@ export default function Terms() {
     </section>
   );
 
+  const sections = [
+    ["acceptance", "1. Acceptance of Terms"],
+    ["eligibility", "2. Eligibility & Accounts"],
+    ["use", "3. Permitted Use & Community Rules"],
+    ["content", "4. Your Content & IP"],
+    ["listings", "5. Listings, Housing & Marketplace"],
+    ["payments", "6. Payments, Fees & Taxes"],
+    ["safety", "7. Safety, Prohibited Items & Reporting"],
+    ["comm", "8. Messaging & Notifications"],
+    ["thirdparty", "9. Third-Party Services"],
+    ["termination", "10. Suspension & Termination"],
+    ["warranty", "11. Disclaimers"],
+    ["liability", "12. Limitation of Liability"],
+    ["indemnity", "13. Indemnification"],
+    ["law", "14. Governing Law & Disputes"],
+    ["changes", "15. Changes to the Service & Terms"],
+    ["consent", "16. Consent & Versioning"],
+    ["misc", "17. Miscellaneous"],
+    ["dmca", "18. Copyright/DMCA"],
+    ["contact", "19. Contact"],
+  ];
+
   return (
-    <main className="min-h-screen bg-black">
-      <div className="mx-auto max-w-3xl px-4 py-12">
-        <div className="rounded-2xl border border-white/10 bg-transparent p-6">
-          {/* Header */}
-          <h1 className="brand-script text-5xl leading-none bg-gradient-to-r from-blue-600 to-teal-500 bg-clip-text text-transparent mb-2">
-            NewRun
-          </h1>
-          <h2 className="text-white text-2xl font-semibold mb-2">Terms of Service</h2>
+    <LegalLayout title="Terms of Service" sections={sections.map(([id,label])=>({id,label}))}>
           <p className="text-white/60 text-xs mb-6">Last updated: {lastUpdated}</p>
 
           {/* Intro */}
@@ -39,36 +55,7 @@ export default function Terms() {
             </div>
           </div>
 
-          {/* Table of Contents */}
-          <nav className="mb-6">
-            <div className="text-white/70 text-xs uppercase tracking-wide mb-2">On this page</div>
-            <ul className="grid sm:grid-cols-2 gap-2 text-sm">
-              {[
-                ["acceptance", "1. Acceptance of Terms"],
-                ["eligibility", "2. Eligibility & Accounts"],
-                ["use", "3. Permitted Use & Community Rules"],
-                ["content", "4. Your Content & IP"],
-                ["listings", "5. Listings, Housing & Marketplace"],
-                ["payments", "6. Payments, Fees & Taxes"],
-                ["safety", "7. Safety, Prohibited Items & Reporting"],
-                ["comm", "8. Messaging & Notifications"],
-                ["thirdparty", "9. Third-Party Services"],
-                ["termination", "10. Suspension & Termination"],
-                ["warranty", "11. Disclaimers"],
-                ["liability", "12. Limitation of Liability"],
-                ["indemnity", "13. Indemnification"],
-                ["law", "14. Governing Law & Disputes"],
-                ["changes", "15. Changes to the Service & Terms"],
-                ["misc", "16. Miscellaneous"],
-                ["dmca", "17. Copyright/DMCA"],
-                ["contact", "18. Contact"],
-              ].map(([id, label]) => (
-                <li key={id}>
-                  <a href={`#${id}`} className="text-sky-400 hover:underline">{label}</a>
-                </li>
-              ))}
-            </ul>
-          </nav>
+          {/* TOC moved into sidebar via LegalLayout */}
 
           {/* Sections */}
           <Section id="acceptance" title="1. Acceptance of Terms">
@@ -281,8 +268,6 @@ export default function Terms() {
               for requirements applicable to your organization and jurisdiction.
             </p>
           </Section>
-        </div>
-      </div>
-    </main>
+    </LegalLayout>
   );
 }

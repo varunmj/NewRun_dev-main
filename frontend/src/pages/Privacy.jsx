@@ -1,5 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import LegalLayout from "../components/LegalLayout";
 
 export default function Privacy() {
   const lastUpdated = "October 1, 2025";
@@ -13,15 +14,25 @@ export default function Privacy() {
     </section>
   );
 
+  const sections = [
+    ["what-we-collect","Information we collect"],
+    ["how-we-use","How we use information"],
+    ["sharing","How we share"],
+    ["legal-bases","Legal bases"],
+    ["retention","Retention"],
+    ["your-choices","Your choices"],
+    ["safety","Safety"],
+    ["cookies","Cookies"],
+    ["ai","AI"],
+    ["children","Children"],
+    ["security","Security"],
+    ["intl","International transfers"],
+    ["changes","Changes"],
+    ["contact","Contact"]
+  ];
+
   return (
-    <main className="min-h-screen bg-black">
-      <div className="mx-auto max-w-3xl px-4 py-12">
-        <div className="rounded-2xl border border-white/10 bg-transparent p-6">
-          {/* Header */}
-          <h1 className="brand-script text-5xl leading-none bg-gradient-to-r from-blue-600 to-teal-500 bg-clip-text text-transparent mb-2">
-            NewRun
-          </h1>
-          <h2 className="text-white text-2xl font-semibold mb-2">Privacy Policy</h2>
+    <LegalLayout title="Privacy Policy" sections={sections.map(([id,label])=>({id,label}))}>
           <p className="text-white/60 text-xs mb-6">Last updated: {lastUpdated}</p>
 
           {/* Intro / Promise */}
@@ -42,37 +53,7 @@ export default function Privacy() {
             </div>
           </div>
 
-          {/* Table of Contents */}
-          <nav className="mb-6">
-            <div className="text-white/70 text-xs uppercase tracking-wide mb-2">On this page</div>
-            <ul className="grid sm:grid-cols-2 gap-2 text-sm">
-              {[
-                ["what-we-collect", "Information we collect"],
-                ["how-we-use", "How we use information"],
-                ["sharing", "How we share information"],
-                ["legal-bases", "Legal bases (EEA/UK)"],
-                ["retention", "Retention"],
-                ["your-choices", "Your choices & rights"],
-                ["safety", "Safety & moderation"],
-                ["cookies", "Cookies & analytics"],
-                ["ai", "AI features"],
-                ["children", "Children"],
-                ["security", "Security"],
-                ["intl", "International transfers"],
-                ["changes", "Changes to this policy"],
-                ["contact", "Contact us"],
-              ].map(([id, label]) => (
-                <li key={id}>
-                  <a
-                    href={`#${id}`}
-                    className="text-sky-400 hover:underline"
-                  >
-                    {label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
+          {/* TOC moved to LegalLayout sidebar */}
 
           {/* Sections */}
           <Section id="what-we-collect" title="Information we collect">
@@ -270,8 +251,6 @@ export default function Privacy() {
               for requirements applicable to your organization and jurisdiction.
             </p>
           </Section>
-        </div>
-      </div>
-    </main>
+    </LegalLayout>
   );
 }

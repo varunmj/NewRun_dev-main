@@ -21,6 +21,17 @@ const useHistoryBlocker = (shouldBlock = false) => {
 
     // Block forward button navigation to protected routes
     const handleNavigation = (event) => {
+      // Never block hash navigation on public legal/help pages
+      const publicAlwaysAccessible = [
+        '/help',
+        '/terms',
+        '/privacy',
+        '/cookies',
+        '/cookies/settings'
+      ];
+      if (publicAlwaysAccessible.some(p => window.location.pathname.startsWith(p))) {
+        return;
+      }
       const protectedRoutes = [
         '/dashboard',
         '/profile',
@@ -50,6 +61,16 @@ const useHistoryBlocker = (shouldBlock = false) => {
 
     // Block all navigation attempts to protected routes
     const handleBeforeUnload = (event) => {
+      const publicAlwaysAccessible = [
+        '/help',
+        '/terms',
+        '/privacy',
+        '/cookies',
+        '/cookies/settings'
+      ];
+      if (publicAlwaysAccessible.some(p => window.location.pathname.startsWith(p))) {
+        return;
+      }
       const protectedRoutes = [
         '/dashboard',
         '/profile',

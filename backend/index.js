@@ -52,6 +52,9 @@ const Conversation = require('./models/conversation.model');
 const ContactAccessRequest = require('./models/contactAccessRequest.model');
 const UserActivity = require('./models/UserActivity.model');
 const UserInteraction = require('./models/UserInteraction.model');
+const CommunityThread = require('./models/communityThread.model');
+const UniversityBranding = require('./models/universityBranding.model');
+const Newsletter = require('./models/newsletter.model');
 const RoommateRequest = require('./models/RoommateRequest.model');
 const { extractHousingCriteria } = require('./services/newrun-llm/newrunLLM');
 const emailService = require('./services/emailService');
@@ -191,6 +194,332 @@ const upload = multer({
 app.get('/', (req, res) => {
   res.json({ data: 'hello' });
 });
+// ---------------- Community API ----------------
+// List threads (simple text search by q)
+app.get('/community/threads', async (req, res) => {
+  try {
+    const { q = '', limit = 20, school = '' } = req.query;
+    // Auto-seed if the collection is empty (first run)
+    const total = await CommunityThread.countDocuments();
+    if (total === 0) {
+      const now = Date.now();
+      await CommunityThread.insertMany([
+        {
+          title: 'I just got accepted! How do I apply for an I-20?',
+          body: 'I received my admission letter. What docs and timeline are typical for issuing the I-20? Any pitfalls to avoid?',
+          tags: ['visa','I-20','international'],
+          school: 'NIU', author: '@aryarox', authorName: '@aryarox', votes: 18, solved: true,
+          answers: [
+            { author: '@admitcoach', authorName: '@admitcoach', body: 'Pay any processing fee, upload passport, bank statement (first year funds), affidavit of support. Issuance usually 1–2 weeks. Avoid name/order mismatches vs passport.' , votes: 12, accepted: true },
+            { author: '@intloffice', authorName: '@intloffice', body: 'See the portal immigration checklist. Non‑English bank docs need notarized translations. Prefer PDF to prevent delays.', votes: 7 }
+          ]
+        },
+        {
+          title: 'How does my tourist visa affect F-1?',
+          body: 'I have a B1/B2 visa. Any impact when applying for F‑1 at the consulate?',
+          tags: ['visa','F-1'], school: 'UIC', author: '@hesen', authorName: '@hesen', votes: 12, solved: false,
+          answers: [ { author: '@alumni', authorName: '@alumni', body: 'No conflict. Officer checks non‑immigrant intent. Bring ties to home country, admission letter, I‑20, SEVIS fee receipt, funding proofs.', votes: 5 } ]
+        },
+        {
+          title: 'Tips for finding affordable housing near campus?',
+          body: 'Looking for <$900 near campus. What neighborhoods and filters do you recommend?',
+          tags: ['housing','budget'], school: 'NIU', author: '@yuechen', authorName: '@yuechen', votes: 25, solved: true,
+          answers: [ { author: '@campusrealty', authorName: '@campusrealty', body: 'Sort by walking distance (<1.5 mi), use furnished if not buying furniture, set price alerts, and consider roommate boards to split 2BRs.', votes: 11, accepted: true } ]
+        }
+      ]);
+    }
+
+    // Build query with school filter
+    const conditions = [];
+    
+    // Add school filter if specified
+    if (school) {
+      conditions.push({ school: new RegExp(school, 'i') });
+    }
+    
+    // Add search query if specified
+    if (q) {
+      conditions.push({
+        $or: [
+          { title: new RegExp(q, 'i') },
+          { body: new RegExp(q, 'i') },
+          { tags: { $in: [new RegExp(q, 'i')] } }
+        ]
+      });
+    }
+
+    const query = conditions.length > 0 ? { $and: conditions } : {};
+    const items = await CommunityThread.find(query).sort({ createdAt: -1 }).limit(Number(limit));
+    res.json({ success: true, items });
+  } catch (e) {
+    console.error('List threads error', e);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// Get thread
+app.get('/community/threads/:id', async (req, res) => {
+  try {
+    const t = await CommunityThread.findById(req.params.id);
+    if (!t) return res.status(404).json({ success: false, message: 'Not found' });
+    res.json({ success: true, item: t });
+  } catch (e) {
+    console.error('Get thread error:', e.message, '| ID:', req.params.id);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Create thread
+app.post('/community/threads', async (req, res) => {
+  try {
+    const { title, body = '', tags = [], school = '', author = '', authorName = '', authorId = null } = req.body || {};
+    if (!title || title.trim().length < 6) {
+      return res.status(400).json({ success: false, message: 'Title too short' });
+    }
+    const t = await CommunityThread.create({ 
+      title: title.trim(), 
+      body, 
+      tags, 
+      school, 
+      author: authorName || author || '@anonymous',
+      authorName: authorName || author || '@anonymous',
+      authorId 
+    });
+    res.json({ success: true, item: t });
+  } catch (e) {
+    console.error('Create thread error', e);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// Add answer
+app.post('/community/threads/:id/answers', async (req, res) => {
+  try {
+    const { body = '', author = '', authorName = '', authorId = null } = req.body || {};
+    const t = await CommunityThread.findById(req.params.id);
+    if (!t) return res.status(404).json({ success: false, message: 'Not found' });
+    t.answers.push({ 
+      body, 
+      author: authorName || author || '@anonymous',
+      authorName: authorName || author || '@anonymous',
+      authorId 
+    });
+    t.answersCount = t.answers.length;
+    await t.save();
+    res.json({ success: true, item: t });
+  } catch (e) {
+    console.error('Add answer error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Vote thread
+app.post('/community/threads/:id/vote', async (req, res) => {
+  try {
+    const { delta = 1 } = req.body || {};
+    const t = await CommunityThread.findById(req.params.id);
+    if (!t) return res.status(404).json({ success: false, message: 'Not found' });
+    t.votes += Number(delta);
+    await t.save();
+    res.json({ success: true, votes: t.votes });
+  } catch (e) {
+    console.error('Vote thread error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Accept answer
+app.post('/community/threads/:id/answers/:answerId/accept', async (req, res) => {
+  try {
+    const t = await CommunityThread.findById(req.params.id);
+    if (!t) return res.status(404).json({ success: false, message: 'Not found' });
+    t.answers = t.answers.map(a => ({ ...a.toObject(), accepted: a.id === req.params.answerId }));
+    t.solved = true;
+    await t.save();
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Accept answer error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+// ---------------- University Branding API ----------------
+// Get or create university branding (with caching)
+app.get('/university-branding/:universityName', async (req, res) => {
+  try {
+    const { universityName } = req.params;
+    
+    if (!universityName) {
+      return res.status(400).json({ error: true, message: 'University name required' });
+    }
+
+    // Check if branding exists in cache
+    let branding = await UniversityBranding.findOne({ 
+      universityName: new RegExp(`^${universityName}$`, 'i') 
+    });
+
+    if (branding) {
+      // Found in cache - increment fetch count and return
+      branding.fetchCount += 1;
+      branding.lastUpdated = Date.now();
+      await branding.save();
+      
+      return res.json({
+        success: true,
+        cached: true,
+        branding: {
+          name: branding.displayName,
+          primary: branding.primaryColor,
+          secondary: branding.secondaryColor,
+          textColor: branding.textColor,
+          logoUrl: branding.logoUrl,
+          domain: branding.domain
+        }
+      });
+    }
+
+    // Not in cache - create new entry with smart defaults
+    const domain = getDomainFromUniversityName(universityName);
+    const logoUrl = domain ? `https://logo.clearbit.com/${domain}?size=128` : '';
+    
+    // Use full university name as display name
+    const displayName = universityName;
+    
+    // Get color from official university color schemes
+    const colors = getOfficialUniversityColors(universityName);
+
+    // Create new branding entry
+    const newBranding = await UniversityBranding.create({
+      universityName,
+      displayName,
+      domain: domain || '',
+      logoUrl,
+      primaryColor: colors.primary,
+      secondaryColor: colors.secondary,
+      textColor: colors.textColor,
+      fetchCount: 1
+    });
+
+    return res.json({
+      success: true,
+      cached: false,
+      branding: {
+        name: newBranding.displayName,
+        primary: newBranding.primaryColor,
+        secondary: newBranding.secondaryColor,
+        textColor: newBranding.textColor,
+        logoUrl: newBranding.logoUrl,
+        domain: newBranding.domain
+      }
+    });
+
+  } catch (error) {
+    console.error('University branding error:', error);
+    res.status(500).json({ error: true, message: 'Server error' });
+  }
+});
+
+// Helper: Get domain from university name
+function getDomainFromUniversityName(name) {
+  const normalized = name.toLowerCase().trim();
+  
+  const domainMap = {
+    'northern illinois university': 'niu.edu',
+    'niu': 'niu.edu',
+    'university of illinois chicago': 'uic.edu',
+    'uic': 'uic.edu',
+    'university of illinois at chicago': 'uic.edu',
+    'university of illinois': 'illinois.edu',
+    'uiuc': 'illinois.edu',
+    'northwestern university': 'northwestern.edu',
+    'northwestern': 'northwestern.edu',
+    'depaul university': 'depaul.edu',
+    'depaul': 'depaul.edu',
+    'loyola university chicago': 'luc.edu',
+    'loyola': 'luc.edu',
+    'illinois institute of technology': 'iit.edu',
+    'iit': 'iit.edu',
+    'university of chicago': 'uchicago.edu',
+    'uchicago': 'uchicago.edu',
+  };
+
+  if (domainMap[normalized]) {
+    return domainMap[normalized];
+  }
+
+  // Try to construct domain
+  const cleaned = normalized.replace(/university|college|of|the|at/g, '').trim();
+  return cleaned.replace(/\s+/g, '') + '.edu';
+}
+
+// Helper: Get official university colors
+function getOfficialUniversityColors(name) {
+  const normalized = name.toLowerCase().trim();
+  
+  const colorMap = {
+    'northern illinois university': { primary: '#BA0C2F', secondary: '#000000', textColor: '#FFFFFF' },
+    'niu': { primary: '#BA0C2F', secondary: '#000000', textColor: '#FFFFFF' },
+    'university of illinois chicago': { primary: '#001E62', secondary: '#D50032', textColor: '#FFFFFF' },
+    'uic': { primary: '#001E62', secondary: '#D50032', textColor: '#FFFFFF' },
+    'university of illinois': { primary: '#13294B', secondary: '#E84A27', textColor: '#FFFFFF' },
+    'uiuc': { primary: '#13294B', secondary: '#E84A27', textColor: '#FFFFFF' },
+    'northwestern university': { primary: '#4E2A84', secondary: '#FFFFFF', textColor: '#FFFFFF' },
+    'northwestern': { primary: '#4E2A84', secondary: '#FFFFFF', textColor: '#FFFFFF' },
+    'university of chicago': { primary: '#800000', secondary: '#767676', textColor: '#FFFFFF' },
+    'uchicago': { primary: '#800000', secondary: '#767676', textColor: '#FFFFFF' },
+    'depaul university': { primary: '#004B87', secondary: '#D40000', textColor: '#FFFFFF' },
+    'depaul': { primary: '#004B87', secondary: '#D40000', textColor: '#FFFFFF' },
+    'loyola university chicago': { primary: '#8B2332', secondary: '#F1BE48', textColor: '#FFFFFF' },
+    'loyola': { primary: '#8B2332', secondary: '#F1BE48', textColor: '#FFFFFF' },
+    'illinois institute of technology': { primary: '#CC0000', secondary: '#5E6A71', textColor: '#FFFFFF' },
+    'iit': { primary: '#CC0000', secondary: '#5E6A71', textColor: '#FFFFFF' },
+  };
+
+  // Check for exact match
+  if (colorMap[normalized]) {
+    return colorMap[normalized];
+  }
+
+  // Check for partial match
+  for (const [key, value] of Object.entries(colorMap)) {
+    if (normalized.includes(key) || key.includes(normalized)) {
+      return value;
+    }
+  }
+
+  // Default fallback
+  return { primary: '#2F64FF', secondary: '#FFA500', textColor: '#FFFFFF' };
+}
+
+// Newsletter subscription
+app.post('/newsletter', async (req, res) => {
+  try {
+    let { email, source } = req.body || {};
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ error: true, message: 'Email is required' });
+    }
+    email = String(email).trim().toLowerCase();
+    const emailRegex = /[^@\s]+@[^@\s]+\.[^@\s]+/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: true, message: 'Invalid email address' });
+    }
+    const exists = await Newsletter.findOne({ email }).lean();
+    if (exists) {
+      return res.json({ success: true, message: 'Already subscribed' });
+    }
+    const sub = new Newsletter({
+      email,
+      source: source || 'footer',
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] || ''
+    });
+    await sub.save();
+    return res.json({ success: true, message: 'Subscribed' });
+  } catch (err) {
+    console.error('Newsletter error:', err);
+    return res.status(500).json({ error: true, message: 'Server error' });
+  }
+});
+
 
 // =====================
 // Socket.IO Integration

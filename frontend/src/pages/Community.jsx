@@ -5,6 +5,9 @@ import axiosInstance from "../utils/axiosInstance";
 import Navbar from "../components/Navbar/Navbar";
 import Footer from "../components/Footer/Footer";
 import "../styles/newrun-hero.css";
+import CommunityService from "../services/CommunityService";
+import { timeAgo } from "../utils/timeUtils";
+import { getUniversityBranding, getContrastTextColor } from "../utils/universityBranding";
 
 /* ------------------------------------------------------------------ */
 /* Tiny UI atoms that match your Marketplace look                      */
@@ -62,12 +65,29 @@ export default function Community() {
   const [search, setSearch] = useState("");
   const navigate = useNavigate();
   const askRef = useRef(null);
+  
+  // Ask Question Modal State
+  const [showAskModal, setShowAskModal] = useState(false);
+  const [askForm, setAskForm] = useState({
+    title: '',
+    body: '',
+    tags: '',
+    school: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
         const r = await axiosInstance.get("/get-user");
-        if (r?.data?.user) setUserInfo(r.data.user);
+        if (r?.data?.user) {
+          setUserInfo(r.data.user);
+          // Get university branding from backend (cached)
+          if (r.data.user.university) {
+            const branding = await getUniversityBranding(r.data.user.university, axiosInstance);
+            setUniversityBranding(branding);
+          }
+        }
       } catch (err) {
         if (err?.response?.status === 401) {
           localStorage.clear();
@@ -82,41 +102,192 @@ export default function Community() {
     "F-1 visa", "I-20", "Affordable housing", "Dorm essentials",
     "Buy/sell textbooks", "Part-time jobs", "Phone plans", "Banking"
   ];
-  const latest = [
-    {
-      title: "I just got accepted! How do I apply for an I-20?",
-      author: "@aryarox", school: "NIU", answers: 6, votes: 18, solved: true,
-    },
-    {
-      title: "How does my tourist visa affect F-1?",
-      author: "@hesen", school: "UIC", answers: 4, votes: 12, solved: false,
-    },
-    {
-      title: "Tips for finding affordable housing near campus?",
-      author: "@yuechen", school: "NIU", answers: 7, votes: 25, solved: true,
-    },
-    {
-      title: "Best places to buy used desks?",
-      author: "@sam", school: "NIU", answers: 3, votes: 8, solved: false,
-    },
-    {
-      title: "Selling everything after graduation — advice?",
-      author: "@nora", school: "UIC", answers: 5, votes: 15, solved: true,
-    },
-    {
-      title: "How to ship stuff cheaply within the US?",
-      author: "@anil", school: "NIU", answers: 2, votes: 6, solved: false,
-    },
-  ];
+  const [latest, setLatest] = useState([]);
+  const [showAll, setShowAll] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [activeFilter, setActiveFilter] = useState('');
+  const [universityFilter, setUniversityFilter] = useState('my'); // 'my' or 'all'
+  const [universityBranding, setUniversityBranding] = useState(null);
 
   const scrollToAsk = () => askRef.current?.scrollIntoView({ behavior: "smooth" });
 
-  const onSearch = (e) => {
+  const onSearch = async (e) => {
     e.preventDefault();
-    if (!search.trim()) return;
-    // placeholder: route to /community?q=... if you add a route
-    // navigate(`/community?q=${encodeURIComponent(search.trim())}`);
-    window.alert(`Search coming soon: "${search.trim()}"`);
+    const q = search.trim();
+    setSearching(true);
+    try {
+      const params = {};
+      if (universityFilter === 'my' && userInfo?.university) {
+        params.school = userInfo.university;
+      }
+      if (!q) {
+        const items = await CommunityService.list(params);
+        setLatest(Array.isArray(items) ? items : []);
+        setShowAll(false);
+        setActiveFilter('');
+        return;
+      }
+      params.q = q;
+      const items = await CommunityService.list(params);
+      console.log('Search results for:', q, items);
+      setLatest(Array.isArray(items) ? items : []);
+      setShowAll(true); // Show all results when searching
+      setActiveFilter(q);
+    } catch (error) {
+      console.error('Search error:', error);
+      setLatest([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const clearSearch = async () => {
+    setSearch('');
+    setActiveFilter('');
+    setSearching(true);
+    try {
+      const params = {};
+      if (universityFilter === 'my' && userInfo?.university) {
+        params.school = userInfo.university;
+      }
+      const items = await CommunityService.list(params);
+      setLatest(Array.isArray(items) ? items : []);
+      setShowAll(false);
+    } catch (error) {
+      console.error('Error clearing search:', error);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  useEffect(() => {
+    loadThreads();
+  }, []);
+
+  useEffect(() => {
+    // Reload when university filter changes
+    loadThreads();
+  }, [universityFilter]);
+
+  const loadThreads = async () => {
+    setSearching(true);
+    try {
+      const params = {};
+      if (universityFilter === 'my' && userInfo?.university) {
+        params.school = userInfo.university;
+      }
+      const items = await CommunityService.list(params);
+      setLatest(Array.isArray(items) ? items : []);
+    } catch (error) {
+      console.error('Error loading threads:', error);
+      setLatest([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const openAskModal = () => {
+    setShowAskModal(true);
+    setAskForm({
+      title: '',
+      body: '',
+      tags: '',
+      school: userInfo?.university || ''
+    });
+  };
+
+  const handleAskSubmit = async (e) => {
+    e.preventDefault();
+    if (!askForm.title.trim() || askForm.title.trim().length < 6) {
+      alert('Title must be at least 6 characters');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const tagsArray = askForm.tags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+      const newThread = await CommunityService.addThread({
+        title: askForm.title.trim(),
+        body: askForm.body.trim(),
+        tags: tagsArray,
+        school: askForm.school.trim() || userInfo?.university || 'Unknown',
+        author: userInfo?.username || '@anonymous'
+      });
+      setShowAskModal(false);
+      // Refresh the list
+      const items = await CommunityService.list();
+      setLatest(Array.isArray(items) ? items : []);
+      // Navigate to the new thread
+      if (newThread?._id || newThread?.id) {
+        navigate(`/community/thread/${newThread._id || newThread.id}`);
+      }
+    } catch (error) {
+      console.error('Error posting question:', error);
+      alert('Failed to post question. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleTagClick = async (tag) => {
+    setSearch(tag);
+    setSearching(true);
+    setActiveFilter(tag);
+    try {
+      const params = { q: tag };
+      if (universityFilter === 'my' && userInfo?.university) {
+        params.school = userInfo.university;
+      }
+      const items = await CommunityService.list(params);
+      console.log('Tag filter results for:', tag, items);
+      setLatest(Array.isArray(items) ? items : []);
+      setShowAll(true);
+      // Scroll to results
+      setTimeout(() => {
+        const resultsSection = document.querySelector('.grid.gap-5');
+        if (resultsSection) {
+          const offset = resultsSection.getBoundingClientRect().top + window.pageYOffset - 100;
+          window.scrollTo({ top: offset, behavior: 'smooth' });
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Tag filter error:', error);
+      setLatest([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const [newsEmail, setNewsEmail] = useState('');
+  const [newsStatus, setNewsStatus] = useState('');
+
+  const handleNewsletterSubmit = async (e) => {
+    e.preventDefault();
+    if (!newsEmail.trim()) return;
+    try {
+      const res = await axiosInstance.post('/newsletter', { email: newsEmail, source: 'community' });
+      if (res.data.success) {
+        setNewsStatus('success');
+        setNewsEmail('');
+        setTimeout(() => setNewsStatus(''), 3000);
+      }
+    } catch (err) {
+      setNewsStatus('error');
+      setTimeout(() => setNewsStatus(''), 3000);
+    }
+  };
+
+  const loadMoreThreads = async () => {
+    setLoadingMore(true);
+    try {
+      const items = await CommunityService.list({ limit: 100 });
+      setLatest(Array.isArray(items) ? items : []);
+      setShowAll(true);
+    } catch (error) {
+      console.error('Error loading threads:', error);
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   return (
@@ -126,6 +297,46 @@ export default function Community() {
       {/* ---------------- Hero ---------------- */}
       <section className="nr-hero-bg">
         <div className="mx-auto max-w-6xl px-4 pt-16 md:pt-20 pb-10">
+          {/* University Filter Toggle */}
+          {userInfo?.university && universityBranding && (
+            <div className="mb-6 flex justify-center">
+              <div className="inline-flex items-center rounded-full border border-white/15 bg-white/[0.04] p-1 backdrop-blur-sm">
+                <button
+                  onClick={() => setUniversityFilter('my')}
+                  className={`rounded-full px-4 py-2 text-sm font-bold transition-all flex items-center gap-2 ${
+                    universityFilter === 'my'
+                      ? 'shadow-lg'
+                      : 'text-white/70 hover:text-white'
+                  }`}
+                  style={universityFilter === 'my' ? {
+                    backgroundColor: universityBranding.primary,
+                    color: universityBranding.textColor || getContrastTextColor(universityBranding.primary)
+                  } : {}}
+                >
+                  {universityBranding.logoUrl && (
+                    <img 
+                      src={universityBranding.logoUrl} 
+                      alt={universityBranding.name}
+                      className="w-8 h-8 rounded-full object-cover border-2 border-white/30 shadow-md -ml-1"
+                      onError={(e) => e.target.style.display = 'none'}
+                    />
+                  )}
+                  {universityBranding.name}
+                </button>
+                <button
+                  onClick={() => setUniversityFilter('all')}
+                  className={`rounded-full px-4 py-2 text-sm font-bold transition-all ${
+                    universityFilter === 'all'
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-black shadow-lg'
+                      : 'text-white/70 hover:text-white'
+                  }`}
+                >
+                  All Universities
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* tiny badges */}
           <div className="mb-5 flex items-center justify-center gap-2 text-[11px]">
             <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/70">
@@ -134,6 +345,18 @@ export default function Community() {
             <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/70">
               Verified .edu accounts
             </span>
+            {universityFilter === 'my' && userInfo?.university && universityBranding && (
+              <span 
+                className="rounded-full border px-2.5 py-1 font-semibold text-xs"
+                style={{
+                  borderColor: `${universityBranding.primary}50`,
+                  backgroundColor: `${universityBranding.primary}20`,
+                  color: universityBranding.primary
+                }}
+              >
+                Filtered: {universityBranding.name}
+              </span>
+            )}
           </div>
 
           <h1 className="mx-auto max-w-5xl text-center text-4xl font-black tracking-tight md:text-6xl">
@@ -154,11 +377,22 @@ export default function Community() {
                   placeholder='Try: "I-20", "cheap desk", "sublet near campus"'
                   className="flex-1 bg-transparent text-sm text-white/80 placeholder:text-white/40 focus:outline-none"
                 />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={clearSearch}
+                    className="text-white/50 hover:text-white/80 text-lg leading-none"
+                    title="Clear search"
+                  >
+                    ×
+                  </button>
+                )}
                 <button
                   type="submit"
-                  className="rounded-full bg-white/10 px-3 py-1.5 text-xs text-white/90 hover:bg-white/15"
+                  disabled={searching}
+                  className="rounded-full bg-white/10 px-3 py-1.5 text-xs text-white/90 hover:bg-white/15 disabled:opacity-50"
                 >
-                  Search
+                  {searching ? 'Searching...' : 'Search'}
                 </button>
               </div>
             </div>
@@ -185,10 +419,10 @@ export default function Community() {
             <div className="nr-marquee" style={{ "--nr-gap": "10px", "--nr-marquee-dur": "26s" }}>
               <div className="nr-marquee-track">
                 {trending.map((t, i) => (
-                  <span key={`t1-${i}`} className="nr-chip">#{t}</span>
+                  <span key={`t1-${i}`} className="nr-chip cursor-pointer hover:bg-white/15" onClick={() => handleTagClick(t)}>#{t}</span>
                 ))}
                 {trending.map((t, i) => (
-                  <span key={`t2-${i}`} className="nr-chip" aria-hidden>#{t}</span>
+                  <span key={`t2-${i}`} className="nr-chip cursor-pointer hover:bg-white/15" aria-hidden onClick={() => handleTagClick(t)}>#{t}</span>
                 ))}
               </div>
             </div>
@@ -229,13 +463,17 @@ export default function Community() {
                 <span className="text-white/40">＋</span>
                 <input
                   readOnly
+                  onClick={openAskModal}
                   value="Type your question… (AI can help you draft a clear post)"
-                  className="w-full bg-transparent text-sm text-white/70 outline-none"
+                  className="w-full bg-transparent text-sm text-white/70 outline-none cursor-pointer"
                 />
                 <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-white/85">
                   Draft with AI
                 </span>
-                <button className="rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-3 py-1.5 text-xs font-semibold text-black hover:brightness-110">
+                <button 
+                  onClick={openAskModal}
+                  className="rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-3 py-1.5 text-xs font-semibold text-black hover:brightness-110"
+                >
                   Ask
                 </button>
               </div>
@@ -287,20 +525,72 @@ export default function Community() {
       <section className="mx-auto max-w-7xl px-4 pb-12">
         <div className="mb-4 flex items-end justify-between">
           <div>
-            <h3 className="text-2xl font-bold tracking-tight">Latest questions</h3>
-            <p className="text-white/60">Fresh threads from your campus and nearby schools.</p>
+            <h3 className="text-2xl font-bold tracking-tight">
+              {activeFilter ? (
+                <>
+                  Search results for <span className="text-amber-400">"{activeFilter}"</span>
+                </>
+              ) : (
+                'Latest questions'
+              )}
+            </h3>
+            <p className="text-white/60">
+              {activeFilter ? (
+                <>
+                  {latest.length} {latest.length === 1 ? 'result' : 'results'} found
+                  <button 
+                    onClick={clearSearch}
+                    className="ml-2 text-amber-400 hover:text-amber-300 underline"
+                  >
+                    Clear search
+                  </button>
+                </>
+              ) : (
+                'Fresh threads from your campus and nearby schools.'
+              )}
+            </p>
           </div>
-          <a
-            href="#"
-            className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-1.5 text-sm text-white/85 hover:bg-white/10"
-          >
-            View all
-          </a>
+          {!showAll && !activeFilter && latest.length >= 6 && (
+            <button
+              onClick={loadMoreThreads}
+              disabled={loadingMore}
+              className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-1.5 text-sm text-white/85 hover:bg-white/10 disabled:opacity-50"
+            >
+              {loadingMore ? 'Loading...' : 'View all'}
+            </button>
+          )}
         </div>
 
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {latest.map((q, i) => (
-            <article key={i} className="nr-panel hover:bg-white/[0.08] transition">
+        {searching ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-white/20 border-t-amber-400"></div>
+              <p className="mt-3 text-white/60">Searching...</p>
+            </div>
+          </div>
+        ) : latest.length === 0 ? (
+          <div className="nr-panel text-center py-12">
+            <p className="text-white/60">
+              {activeFilter ? (
+                <>
+                  No questions found matching <span className="text-amber-400">"{activeFilter}"</span>
+                  <br />
+                  <button 
+                    onClick={clearSearch}
+                    className="mt-3 text-amber-400 hover:text-amber-300 underline"
+                  >
+                    Clear search and show all questions
+                  </button>
+                </>
+              ) : (
+                'No questions yet. Be the first to ask!'
+              )}
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {latest.map((q) => (
+            <a key={q._id || q.id} href={`/community/thread/${q._id || q.id}`} className="nr-panel hover:bg-white/[0.08] transition block">
               <div className="mb-2 flex items-center gap-2 text-[12px]">
                 <span className={`rounded-full px-2 py-0.5 ${q.solved ? "bg-emerald-500/15 text-emerald-300" : "bg-white/10 text-white/75"}`}>
                   {q.solved ? "Solved" : "Open"}
@@ -309,15 +599,20 @@ export default function Community() {
                 <span className="text-white/70">{q.school}</span>
               </div>
               <h4 className="text-[17px] font-semibold leading-snug">{q.title}</h4>
-              <p className="mt-1 text-sm text-white/60">Asked by {q.author}</p>
+              <p className="mt-1 text-sm text-white/60">
+                Asked by {q.authorName || q.author}
+                <span className="mx-1.5">·</span>
+                {timeAgo(q.createdAt || q.updatedAt)}
+              </p>
 
               <div className="mt-4 flex items-center justify-between text-[12px] text-white/60">
                 <span>▲ {q.votes} votes</span>
-                <span>💬 {q.answers} answers</span>
+                <span>💬 {q.answers?.length || 0} answers</span>
               </div>
-            </article>
+            </a>
           ))}
-        </div>
+          </div>
+        )}
       </section>
 
       {/* ---------------- Guides / Newsletter ---------------- */}
@@ -330,15 +625,36 @@ export default function Community() {
             <h3 className="text-xl font-semibold">Quick guides to save time & money</h3>
             <ul className="mt-3 grid gap-2 text-white/80 sm:grid-cols-2">
               <li className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
-                Furnish a room under $300 → opens Marketplace: Furniture
+                <a 
+                  href="/marketplace?category=furniture&maxPrice=300"
+                  className="block"
+                >
+                  Furnish a room under $300 → opens Marketplace: Furniture
+                </a>
               </li>
               <li className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
-                Move-in day toolkit → links to Dorm essentials
+                <a 
+                  href="/marketplace?category=dorm-essentials"
+                  className="block"
+                >
+                  Move-in day toolkit → links to Dorm essentials
+                </a>
               </li>
               <li className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
-                Sell everything in 48h → prefilled sell flow
+                <a 
+                  href="/marketplace/sell"
+                  className="block"
+                >
+                  Sell everything in 48h → prefilled sell flow
+                </a>
               </li>
-              <li className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+              <li 
+                onClick={() => {
+                  setSearch('visa I-20');
+                  handleTagClick('visa');
+                }}
+                className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 cursor-pointer"
+              >
                 Visa docs checklist (I-20 / F-1) → community thread template
               </li>
             </ul>
@@ -349,21 +665,122 @@ export default function Community() {
             <p className="text-white/70">
               5 solved threads + 3 hot listings — straight to your inbox.
             </p>
-            <div className="flex gap-2">
+            <form onSubmit={handleNewsletterSubmit} className="flex gap-2">
               <input
                 type="email"
+                value={newsEmail}
+                onChange={(e) => setNewsEmail(e.target.value)}
                 placeholder="Email address"
+                required
                 className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white placeholder:text-white/40 outline-none focus:border-amber-400"
               />
-              <button className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-2 text-sm font-semibold text-black hover:brightness-110">
-                Subscribe
+              <button 
+                type="submit"
+                className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-2 text-sm font-semibold text-black hover:brightness-110"
+              >
+                {newsStatus === 'success' ? '✓ Subscribed' : 'Subscribe'}
               </button>
-            </div>
+            </form>
+            {newsStatus === 'error' && (
+              <p className="text-xs text-red-400">Failed to subscribe. Please try again.</p>
+            )}
           </Panel>
         </div>
       </section>
 
       <Footer />
+
+      {/* Ask Question Modal */}
+      {showAskModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="nr-panel max-w-2xl w-full max-h-[90vh] overflow-auto">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-2xl font-bold">Ask the Community</h2>
+              <button 
+                onClick={() => setShowAskModal(false)}
+                className="text-white/60 hover:text-white text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleAskSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Question Title <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={askForm.title}
+                  onChange={(e) => setAskForm({ ...askForm, title: e.target.value })}
+                  placeholder="e.g., How do I apply for an I-20 at NIU?"
+                  required
+                  minLength={6}
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-white placeholder:text-white/40 outline-none focus:border-amber-400"
+                />
+                <p className="mt-1 text-xs text-white/50">Minimum 6 characters</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Details (optional)
+                </label>
+                <textarea
+                  value={askForm.body}
+                  onChange={(e) => setAskForm({ ...askForm, body: e.target.value })}
+                  placeholder="Add more context, what you've tried, specific requirements, etc."
+                  rows={5}
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-white placeholder:text-white/40 outline-none focus:border-amber-400 resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Tags
+                </label>
+                <input
+                  type="text"
+                  value={askForm.tags}
+                  onChange={(e) => setAskForm({ ...askForm, tags: e.target.value })}
+                  placeholder="visa, I-20, housing (comma-separated)"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-white placeholder:text-white/40 outline-none focus:border-amber-400"
+                />
+                <p className="mt-1 text-xs text-white/50">Separate tags with commas</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  School
+                </label>
+                <input
+                  type="text"
+                  value={askForm.school}
+                  onChange={(e) => setAskForm({ ...askForm, school: e.target.value })}
+                  placeholder="e.g., NIU, UIC"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-white placeholder:text-white/40 outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowAskModal(false)}
+                  className="flex-1 rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-sm font-semibold text-white hover:bg-white/10"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-3 text-sm font-semibold text-black hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? 'Posting...' : 'Post Question'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

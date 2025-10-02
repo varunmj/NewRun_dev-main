@@ -1,49 +1,31 @@
 import React from "react";
+import axiosInstance from "../../utils/axiosInstance";
 import { Link } from "react-router-dom";
 
 export default function Footer() {
   return (
-    <footer className="relative mt-24 text-white">
+    <footer className="relative mt-24 text-white" role="contentinfo">
       {/* subtle crimson/teal glow band behind the footer */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 -top-28 h-64 w-full"
         style={{
           background:
-            "radial-gradient(60% 80% at 50% 0%, rgba(0,212,255,0.18) 0%, rgba(0,0,0,0) 70%), radial-gradient(60% 80% at 50% 0%, rgba(0,255,163,0.10) 0%, rgba(0,0,0,0) 80%)",
+            "radial-gradient(60% 80% at 50% 0%, rgba(47,100,255,0.20) 0%, rgba(0,0,0,0) 70%), radial-gradient(60% 80% at 50% 0%, rgba(0,212,255,0.12) 0%, rgba(0,0,0,0) 80%)",
         }}
       />
 
       <div className="mx-auto max-w-7xl px-6">
         {/* Newsletter panel */}
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
+        <div className="rounded-2xl border border-white/10 bg-transparent p-6 backdrop-blur-xl">
           <div className="grid gap-6 md:grid-cols-3 md:items-center">
             <div className="md:col-span-2">
-              <h3 className="text-xl font-semibold">Join our newsletter</h3>
+              <h3 className="text-xl font-semibold bg-gradient-to-r from-[#2F64FF] to-[#00D4FF] bg-clip-text text-transparent">Join our newsletter</h3>
               <p className="mt-1 text-white/70">
                 Get exclusive content and become a part of the NewRun community.
               </p>
             </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                // TODO: wire to your backend /newsletter endpoint
-              }}
-              className="flex w-full items-center gap-3"
-            >
-              <input
-                type="email"
-                required
-                placeholder="Email address"
-                className="w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white placeholder-white/50 outline-none focus:border-[#00D4FF]"
-              />
-              <button
-                type="submit"
-                className="whitespace-nowrap rounded-xl bg-gradient-to-r from-[#00D4FF] to-[#00FFA3] px-5 py-3 font-semibold text-[#041018] shadow-[0_0_18px_rgba(0,212,255,0.25)] transition hover:scale-[1.02] active:scale-[0.99]"
-              >
-                Subscribe
-              </button>
-            </form>
+            <NewsletterForm />
           </div>
         </div>
 
@@ -51,14 +33,13 @@ export default function Footer() {
         <div className="mt-14 grid gap-10 md:grid-cols-4">
           {/* Brand blurb */}
           <div>
-            <div className="text-2xl font-extrabold">
-              <span className="text-white">New</span>
-              <span className="bg-gradient-to-r from-[#00D4FF] to-[#00FFA3] bg-clip-text text-transparent">
-                Run
-              </span>
-            </div>
+            <h2
+              className="brand-script text-5xl leading-none bg-gradient-to-r from-[#2F64FF] to-[#00D4FF] bg-clip-text text-transparent"
+            >
+              NewRun
+            </h2>
             <p className="mt-3 max-w-sm text-white/70">
-              Housing, essentials, and community — curated for yourself.
+              Housing, essentials, and community — curated by your university.
             </p>
           </div>
 
@@ -89,15 +70,16 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Resources */}
+          {/* Legal / Resources */}
           <div>
             <h4 className="text-sm font-semibold uppercase tracking-wider text-white/70">
-              Resources
+              Legal
             </h4>
             <ul className="mt-4 space-y-3 text-white/85">
               <li><Link to="/privacy" className="hover:text-white">Privacy Policy</Link></li>
               <li><Link to="/terms" className="hover:text-white">Terms of Service</Link></li>
-              <li><Link to="/security" className="hover:text-white">Security</Link></li>
+              <li><Link to="/cookies" className="hover:text-white">Cookies Policy</Link></li>
+              <li><Link to="/cookies/settings" className="hover:text-white">Cookie Settings</Link></li>
               <li><Link to="/help" className="hover:text-white">Help Center</Link></li>
             </ul>
           </div>
@@ -145,5 +127,52 @@ export default function Footer() {
         </div>
       </div>
     </footer>
+  );
+}
+
+function NewsletterForm() {
+  const [status, setStatus] = React.useState("idle"); // idle | loading | success | error
+  const [value, setValue] = React.useState("");
+  const [hp, setHp] = React.useState(""); // honeypot
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    if (hp) return; // bot
+    try {
+      setStatus("loading");
+      await axiosInstance.post('/newsletter', { email: value, source: 'footer' });
+      setStatus("success");
+      setValue("");
+    } catch (err) {
+      setStatus("error");
+    }
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="flex w-full flex-col gap-3 md:flex-row md:items-center" aria-live="polite">
+      <input type="text" value={hp} onChange={(e)=>setHp(e.target.value)} className="hidden" tabIndex={-1} aria-hidden="true" />
+      <input
+        type="email"
+        required
+        placeholder="Email address"
+        value={value}
+        onChange={(e)=>setValue(e.target.value)}
+        className="w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white placeholder-white/50 outline-none focus:border-[#00D4FF]"
+        aria-label="Email address"
+      />
+      <button
+        type="submit"
+        className="whitespace-nowrap rounded-xl bg-gradient-to-r from-[#2F64FF] to-[#00D4FF] px-5 py-3 font-semibold text-white shadow-[0_0_18px_rgba(47,100,255,0.35)] transition hover:scale-[1.02] active:scale-[0.99]"
+        disabled={status === 'loading'}
+      >
+        {status === 'loading' ? 'Subscribing…' : 'Subscribe'}
+      </button>
+      {status === 'success' && (
+        <span className="text-sm text-emerald-400">Thanks! You’re on the list.</span>
+      )}
+      {status === 'error' && (
+        <span className="text-sm text-red-400">Something went wrong. Please try again.</span>
+      )}
+    </form>
   );
 }

@@ -1,5 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import LegalLayout from "../components/LegalLayout";
 
 export default function PersonalizationLearnMore() {
   const lastUpdated = "October 1, 2025";
@@ -15,57 +16,40 @@ export default function PersonalizationLearnMore() {
     <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">{children}</div>
   );
 
+  const sections = [
+    { id: "what", label: "What we use" },
+    { id: "where", label: "Where it’s used" },
+    { id: "why", label: "Why we personalize" },
+    { id: "dont", label: "What we don’t use" },
+    { id: "controls", label: "Your controls" },
+    { id: "examples", label: "Examples" },
+    { id: "handling", label: "Data handling & retention" },
+    { id: "fairness", label: "Fairness, safety & reporting" },
+    { id: "contact", label: "Questions? Contact us" }
+  ];
+
   return (
-    <main className="min-h-screen bg-black">
-      <div className="mx-auto max-w-3xl px-4 py-12">
-        <div className="rounded-2xl border border-white/10 bg-transparent p-6">
-          {/* Header */}
-          <h1 className="brand-script text-5xl leading-none bg-gradient-to-r from-blue-600 to-teal-500 bg-clip-text text-transparent mb-2">
-            NewRun
-          </h1>
-          <h2 className="text-white text-2xl font-semibold mb-2">How personalization works</h2>
-          <p className="text-white/60 text-xs mb-6">Last updated: {lastUpdated}</p>
+    <LegalLayout title="How personalization works" sections={sections}>
+      <p className="text-white/60 text-xs mb-6">Last updated: {lastUpdated}</p>
 
-          {/* Intro */}
-          <div className="text-white/85 text-sm leading-6 space-y-3 mb-6">
-            <p>
-              We use a few basic details to make NewRun more useful for you—showing housing, marketplace items,
-              and community posts that fit your campus context. This page explains exactly what we use, why,
-              and how to control it.
-            </p>
-            <Callout>
-              <ul className="list-disc list-inside space-y-1">
-                <li>We do <span className="text-white font-medium">not</span> sell your personal information.</li>
-                <li>You can adjust personalization and analytics in Settings at any time.</li>
-                <li>For broader data practices, see our{" "}
-                  <Link to="/privacy" className="text-sky-400 hover:underline">Privacy Policy</Link>.
-                </li>
-              </ul>
-            </Callout>
-          </div>
+      <div className="text-white/85 text-sm leading-6 space-y-3 mb-6">
+        <p>
+          We use a few basic details to make NewRun more useful for you—showing housing, marketplace items,
+          and community posts that fit your campus context. This page explains exactly what we use, why,
+          and how to control it.
+        </p>
+        <Callout>
+          <ul className="list-disc list-inside space-y-1">
+            <li>We do <span className="text-white font-medium">not</span> sell your personal information.</li>
+            <li>You can adjust personalization and analytics in Settings at any time.</li>
+            <li>For broader data practices, see our{" "}
+              <Link to="/privacy" className="text-sky-400 hover:underline">Privacy Policy</Link>.
+            </li>
+          </ul>
+        </Callout>
+      </div>
 
-          {/* TOC */}
-          <nav className="mb-6">
-            <div className="text-white/70 text-xs uppercase tracking-wide mb-2">On this page</div>
-            <ul className="grid sm:grid-cols-2 gap-2 text-sm">
-              {[
-                ["what", "What we use"],
-                ["where", "Where it’s used"],
-                ["why", "Why we personalize"],
-                ["dont", "What we don’t use"],
-                ["controls", "Your controls"],
-                ["examples", "Examples"],
-                ["handling", "Data handling & retention"],
-                ["fairness", "Fairness, safety & reporting"],
-                ["contact", "Questions? Contact us"],
-              ].map(([id, label]) => (
-                <li key={id}><a href={`#${id}`} className="text-sky-400 hover:underline">{label}</a></li>
-              ))}
-            </ul>
-          </nav>
-
-          {/* Sections */}
-          <Section id="what" title="What “basic details” we use">
+      <Section id="what" title="What “basic details” we use">
             <p>Only what’s needed to tailor content to your university context:</p>
             <ul className="list-disc list-inside space-y-2">
               <li><span className="text-white">Account & campus:</span> email domain (e.g., .edu), selected campus, class year, and program/major if you provide it.</li>
@@ -73,7 +57,7 @@ export default function PersonalizationLearnMore() {
               <li><span className="text-white">Simple activity:</span> saves/likes, hides, basic search terms, and listing categories you view—used to rank relevance.</li>
               <li><span className="text-white">Device basics:</span> locale/timezone and app version to help us render the right content and fix issues.</li>
             </ul>
-          </Section>
+      </Section>
 
           <Section id="where" title="Where personalization is used">
             <ul className="list-disc list-inside space-y-2">
@@ -149,8 +133,6 @@ export default function PersonalizationLearnMore() {
               <p><span className="text-white">Safety issues:</span> Report in‑app or email <a href="mailto:safety@newrun.club" className="text-sky-400 hover:underline">safety@newrun.club</a>.</p>
             </div>
           </Section>
-        </div>
-      </div>
-    </main>
+    </LegalLayout>
   );
 }

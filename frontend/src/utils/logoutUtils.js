@@ -29,11 +29,14 @@ export const blockBackNavigation = () => {
   window.history.pushState(null, '', window.location.href);
   
   const handlePopState = (event) => {
+    // If on public legal/help pages, do not redirect
+    const publicAlwaysAccessible = ['/help','/terms','/privacy','/cookies','/cookies/settings'];
+    if (publicAlwaysAccessible.some(p => window.location.pathname.startsWith(p))) {
+      return;
+    }
     console.log('🚫 BACK BUTTON BLOCKED: Redirecting to login');
-    // Clear everything
     localStorage.clear();
     sessionStorage.clear();
-    // Force redirect
     window.location.href = '/login';
   };
   
