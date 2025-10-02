@@ -378,14 +378,14 @@ app.get('/university-branding/:universityName', async (req, res) => {
     }
 
     // Not in cache - create new entry with smart defaults
-    const domain = getDomainFromUniversityName(universityName);
+    const domain = await getDomainFromUniversityName(universityName);
     const logoUrl = domain ? `https://logo.clearbit.com/${domain}?size=128` : '';
     
     // Use full university name as display name
     const displayName = universityName;
     
     // Get color from official university color schemes
-    const colors = getOfficialUniversityColors(universityName);
+    const colors = await getOfficialUniversityColors(universityName);
 
     // Create new branding entry
     const newBranding = await UniversityBranding.create({
@@ -418,75 +418,116 @@ app.get('/university-branding/:universityName', async (req, res) => {
   }
 });
 
-// Helper: Get domain from university name
-function getDomainFromUniversityName(name) {
+// Helper: Clear university branding cache (for testing/fixing)
+app.delete('/university-branding/:universityName', async (req, res) => {
+  try {
+    const { universityName } = req.params;
+    const result = await UniversityBranding.findOneAndDelete({
+      universityName: new RegExp(`^${universityName}$`, 'i')
+    });
+    
+    if (result) {
+      res.json({ success: true, message: 'Cache cleared', deletedEntry: result });
+    } else {
+      res.json({ success: false, message: 'No cached entry found' });
+    }
+  } catch (error) {
+    console.error('Error clearing cache:', error);
+    res.status(500).json({ error: true, message: 'Server error' });
+  }
+});
+
+// Helper: Smart domain lookup using database first, then fallback
+async function getDomainFromUniversityName(name) {
+  if (!name) return null;
+  
   const normalized = name.toLowerCase().trim();
   
-  const domainMap = {
-    'northern illinois university': 'niu.edu',
-    'niu': 'niu.edu',
-    'university of illinois chicago': 'uic.edu',
-    'uic': 'uic.edu',
-    'university of illinois at chicago': 'uic.edu',
-    'university of illinois': 'illinois.edu',
-    'uiuc': 'illinois.edu',
-    'northwestern university': 'northwestern.edu',
-    'northwestern': 'northwestern.edu',
-    'depaul university': 'depaul.edu',
-    'depaul': 'depaul.edu',
-    'loyola university chicago': 'luc.edu',
-    'loyola': 'luc.edu',
-    'illinois institute of technology': 'iit.edu',
-    'iit': 'iit.edu',
-    'university of chicago': 'uchicago.edu',
-    'uchicago': 'uchicago.edu',
-  };
-
-  if (domainMap[normalized]) {
-    return domainMap[normalized];
+  try {
+    // 1. Check database for exact match or alias
+    const dbEntry = await UniversityBranding.findOne({
+      $or: [
+        { universityName: new RegExp(`^${name}$`, 'i') },
+        { displayName: new RegExp(`^${name}$`, 'i') }
+      ]
+    });
+    
+    if (dbEntry && dbEntry.domain) {
+      console.log(`🎯 DB lookup found: ${name} -> ${dbEntry.domain}`);
+      return dbEntry.domain;
+    }
+    
+    // 2. Try fuzzy matching for common aliases (more specific)
+    const words = normalized.split(' ');
+    if (words.length >= 2) {
+      const fuzzyMatch = await UniversityBranding.findOne({
+        $or: [
+          { universityName: new RegExp(`${words[0]}.*${words[1]}`, 'i') },
+          { displayName: new RegExp(`${words[0]}.*${words[1]}`, 'i') }
+        ]
+      });
+      
+      if (fuzzyMatch && fuzzyMatch.domain) {
+        console.log(`🔍 Fuzzy match found: ${name} -> ${fuzzyMatch.domain}`);
+        return fuzzyMatch.domain;
+      }
+    }
+    
+  } catch (error) {
+    console.error('Database lookup error:', error);
   }
-
+  
+  // 3. Fallback to algorithmic approach
+  console.log(`🤖 Using fallback algorithm for: ${name}`);
+  
+  // Handle special cases
+  if (normalized.includes('texas') && normalized.includes('dallas')) {
+    return 'utdallas.edu';
+  }
+  
+  if (normalized.includes('penn') && normalized.includes('state')) {
+    return 'psu.edu';
+  }
+  
   // Try to construct domain
-  const cleaned = normalized.replace(/university|college|of|the|at/g, '').trim();
+  const cleaned = normalized.replace(/university|college|of|the|at/g, ' ').replace(/\s+/g, ' ').trim();
+  const firstWord = cleaned.split(' ')[0];
+  
+  if (firstWord && firstWord.length > 2) {
+    return firstWord + '.edu';
+  }
+  
   return cleaned.replace(/\s+/g, '') + '.edu';
 }
 
-// Helper: Get official university colors
-function getOfficialUniversityColors(name) {
-  const normalized = name.toLowerCase().trim();
+// Helper: Get official university colors from database first, then fallback
+async function getOfficialUniversityColors(name) {
+  if (!name) return { primary: '#2F64FF', secondary: '#FFA500', textColor: '#FFFFFF' };
   
-  const colorMap = {
-    'northern illinois university': { primary: '#BA0C2F', secondary: '#000000', textColor: '#FFFFFF' },
-    'niu': { primary: '#BA0C2F', secondary: '#000000', textColor: '#FFFFFF' },
-    'university of illinois chicago': { primary: '#001E62', secondary: '#D50032', textColor: '#FFFFFF' },
-    'uic': { primary: '#001E62', secondary: '#D50032', textColor: '#FFFFFF' },
-    'university of illinois': { primary: '#13294B', secondary: '#E84A27', textColor: '#FFFFFF' },
-    'uiuc': { primary: '#13294B', secondary: '#E84A27', textColor: '#FFFFFF' },
-    'northwestern university': { primary: '#4E2A84', secondary: '#FFFFFF', textColor: '#FFFFFF' },
-    'northwestern': { primary: '#4E2A84', secondary: '#FFFFFF', textColor: '#FFFFFF' },
-    'university of chicago': { primary: '#800000', secondary: '#767676', textColor: '#FFFFFF' },
-    'uchicago': { primary: '#800000', secondary: '#767676', textColor: '#FFFFFF' },
-    'depaul university': { primary: '#004B87', secondary: '#D40000', textColor: '#FFFFFF' },
-    'depaul': { primary: '#004B87', secondary: '#D40000', textColor: '#FFFFFF' },
-    'loyola university chicago': { primary: '#8B2332', secondary: '#F1BE48', textColor: '#FFFFFF' },
-    'loyola': { primary: '#8B2332', secondary: '#F1BE48', textColor: '#FFFFFF' },
-    'illinois institute of technology': { primary: '#CC0000', secondary: '#5E6A71', textColor: '#FFFFFF' },
-    'iit': { primary: '#CC0000', secondary: '#5E6A71', textColor: '#FFFFFF' },
-  };
-
-  // Check for exact match
-  if (colorMap[normalized]) {
-    return colorMap[normalized];
-  }
-
-  // Check for partial match
-  for (const [key, value] of Object.entries(colorMap)) {
-    if (normalized.includes(key) || key.includes(normalized)) {
-      return value;
+  try {
+    // 1. Check database for colors
+    const dbEntry = await UniversityBranding.findOne({
+      $or: [
+        { universityName: new RegExp(`^${name}$`, 'i') },
+        { displayName: new RegExp(`^${name}$`, 'i') }
+      ]
+    });
+    
+    if (dbEntry && dbEntry.primaryColor) {
+      console.log(`🎨 DB colors found: ${name} -> ${dbEntry.primaryColor}`);
+      return {
+        primary: dbEntry.primaryColor,
+        secondary: dbEntry.secondaryColor || '#FFFFFF',
+        textColor: dbEntry.textColor || '#FFFFFF'
+      };
     }
+    
+  } catch (error) {
+    console.error('Database color lookup error:', error);
   }
-
-  // Default fallback
+  
+  // 2. Default fallback (NewRun brand colors)
+  console.log(`🎨 Using default colors for: ${name}`);
   return { primary: '#2F64FF', secondary: '#FFA500', textColor: '#FFFFFF' };
 }
 

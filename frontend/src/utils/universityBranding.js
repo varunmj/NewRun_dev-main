@@ -12,19 +12,71 @@ export function getUniversityDomain(universityName) {
   
   // Common university domain mappings
   const domainMap = {
+    // Illinois
     'niu': 'niu.edu',
     'northern illinois university': 'niu.edu',
     'uic': 'uic.edu',
     'university of illinois chicago': 'uic.edu',
     'uiuc': 'illinois.edu',
     'university of illinois': 'illinois.edu',
+    'university of illinois at urbana-champaign': 'illinois.edu',
     'northwestern': 'northwestern.edu',
+    'northwestern university': 'northwestern.edu',
     'depaul': 'depaul.edu',
+    'depaul university': 'depaul.edu',
     'loyola': 'luc.edu',
+    'loyola university chicago': 'luc.edu',
     'iit': 'iit.edu',
     'illinois tech': 'iit.edu',
+    'illinois institute of technology': 'iit.edu',
     'uchicago': 'uchicago.edu',
     'university of chicago': 'uchicago.edu',
+    
+    // California
+    'stanford': 'stanford.edu',
+    'stanford university': 'stanford.edu',
+    'berkeley': 'berkeley.edu',
+    'uc berkeley': 'berkeley.edu',
+    'university of california berkeley': 'berkeley.edu',
+    'ucla': 'ucla.edu',
+    'usc': 'usc.edu',
+    'university of southern california': 'usc.edu',
+    'caltech': 'caltech.edu',
+    'california institute of technology': 'caltech.edu',
+    
+    // Massachusetts
+    'mit': 'mit.edu',
+    'harvard': 'harvard.edu',
+    'harvard university': 'harvard.edu',
+    'boston university': 'bu.edu',
+    'bu': 'bu.edu',
+    'northeastern': 'northeastern.edu',
+    'northeastern university': 'northeastern.edu',
+    
+    // Texas
+    'ut austin': 'utexas.edu',
+    'university of texas': 'utexas.edu',
+    'university of texas at austin': 'utexas.edu',
+    'ut dallas': 'utdallas.edu',
+    'university of texas at dallas': 'utdallas.edu',
+    'texas a&m': 'tamu.edu',
+    
+    // New York
+    'nyu': 'nyu.edu',
+    'columbia': 'columbia.edu',
+    'columbia university': 'columbia.edu',
+    'cornell': 'cornell.edu',
+    'cornell university': 'cornell.edu',
+    
+    // Pennsylvania
+    'penn state university': 'psu.edu',
+    'penn state': 'psu.edu',
+    'psu': 'psu.edu',
+    'pennsylvania state university': 'psu.edu',
+    'university of pennsylvania': 'upenn.edu',
+    'upenn': 'upenn.edu',
+    'penn': 'upenn.edu',
+    
     // Add more as needed
   };
   
@@ -35,10 +87,23 @@ export function getUniversityDomain(universityName) {
   
   // Try to construct domain from name
   // Example: "Stanford University" -> "stanford.edu"
-  const cleaned = name.replace(/university|college|of|the/g, '').trim();
-  const domain = cleaned.replace(/\s+/g, '') + '.edu';
+  let cleaned = name
+    .replace(/university|college|of|the|at/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   
-  return domain;
+  // Handle special cases
+  if (cleaned.includes('texas') && cleaned.includes('dallas')) {
+    return 'utdallas.edu';
+  }
+  
+  // Take first significant word
+  const firstWord = cleaned.split(' ')[0];
+  if (firstWord && firstWord.length > 2) {
+    return firstWord + '.edu';
+  }
+  
+  return cleaned.replace(/\s+/g, '') + '.edu';
 }
 
 /**
@@ -55,14 +120,21 @@ export function getUniversityLogoUrl(universityName, size = 128) {
  * Get university branding from backend cache or fetch new
  */
 export async function getUniversityBranding(universityName, axiosInstance) {
-  if (!universityName) return null;
+  if (!universityName) {
+    return null;
+  }
   
   try {
     // Check backend cache first
     const response = await axiosInstance.get(`/university-branding/${encodeURIComponent(universityName)}`);
     
     if (response.data && response.data.branding) {
-      return response.data.branding;
+      const branding = response.data.branding;
+      // Ensure logoUrl is present
+      if (!branding.logoUrl) {
+        branding.logoUrl = getUniversityLogoUrl(universityName);
+      }
+      return branding;
     }
   } catch (error) {
     console.error('Error fetching university branding:', error);
@@ -72,6 +144,7 @@ export async function getUniversityBranding(universityName, axiosInstance) {
   return {
     primary: '#2F64FF', // NewRun blue
     secondary: '#FFA500',
+    textColor: '#FFFFFF',
     name: universityName, // Use full name from user profile
     logoUrl: getUniversityLogoUrl(universityName),
     domain: getUniversityDomain(universityName)

@@ -84,11 +84,27 @@ export default function Community() {
           setUserInfo(r.data.user);
           // Get university branding from backend (cached)
           if (r.data.user.university) {
+            console.log('Fetching branding for:', r.data.user.university);
             const branding = await getUniversityBranding(r.data.user.university, axiosInstance);
-            setUniversityBranding(branding);
+            console.log('Branding received:', branding);
+            console.log('Logo URL:', branding?.logoUrl);
+            if (branding) {
+              setUniversityBranding(branding);
+              setLogoError(false); // Reset logo error when new branding loads
+            } else {
+              // Set default branding if fetch fails
+              setUniversityBranding({
+                name: r.data.user.university,
+                primary: '#2F64FF',
+                secondary: '#FFA500',
+                textColor: '#FFFFFF',
+                logoUrl: null
+              });
+            }
           }
         }
       } catch (err) {
+        console.error('Error loading user or branding:', err);
         if (err?.response?.status === 401) {
           localStorage.clear();
           navigate("/login");
@@ -109,6 +125,7 @@ export default function Community() {
   const [activeFilter, setActiveFilter] = useState('');
   const [universityFilter, setUniversityFilter] = useState('my'); // 'my' or 'all'
   const [universityBranding, setUniversityBranding] = useState(null);
+  const [logoError, setLogoError] = useState(false); // Track if logo failed to load
 
   const scrollToAsk = () => askRef.current?.scrollIntoView({ behavior: "smooth" });
 
@@ -303,32 +320,50 @@ export default function Community() {
               <div className="inline-flex items-center rounded-full border border-white/15 bg-white/[0.04] p-1 backdrop-blur-sm">
                 <button
                   onClick={() => setUniversityFilter('my')}
-                  className={`rounded-full px-4 py-2 text-sm font-bold transition-all flex items-center gap-2 ${
+                  className={`rounded-full px-4 py-2 text-sm font-bold transition-all flex items-center gap-2.5 ${
                     universityFilter === 'my'
                       ? 'shadow-lg'
-                      : 'text-white/70 hover:text-white'
+                      : 'text-white/70 hover:text-white hover:bg-white/5'
                   }`}
                   style={universityFilter === 'my' ? {
-                    backgroundColor: universityBranding.primary,
-                    color: universityBranding.textColor || getContrastTextColor(universityBranding.primary)
+                    backgroundColor: universityBranding.primary || '#2F64FF',
+                    color: universityBranding.textColor || getContrastTextColor(universityBranding.primary || '#2F64FF')
                   } : {}}
                 >
-                  {universityBranding.logoUrl && (
-                    <img 
-                      src={universityBranding.logoUrl} 
-                      alt={universityBranding.name}
-                      className="w-8 h-8 rounded-full object-cover border-2 border-white/30 shadow-md -ml-1"
-                      onError={(e) => e.target.style.display = 'none'}
-                    />
+                  {universityBranding?.logoUrl && !logoError ? (
+                    <>
+                      <img 
+                        src={universityBranding.logoUrl} 
+                        alt={universityBranding.name}
+                        className="w-7 h-7 rounded-full object-cover border-2 border-white/30 shadow-md bg-white -ml-1"
+                        style={{ display: 'block' }}
+                        crossOrigin="anonymous"
+                        onError={(e) => {
+                          console.error('❌ Logo failed to load:', universityBranding.logoUrl);
+                          console.error('Error event:', e);
+                          setLogoError(true);
+                        }}
+                        onLoad={(e) => {
+                          console.log('✅ Logo loaded successfully:', universityBranding.logoUrl);
+                          console.log('Image dimensions:', e.target.naturalWidth, 'x', e.target.naturalHeight);
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-white/10 border-2 border-white/30 flex items-center justify-center text-[10px] font-bold -ml-1">
+                      {(universityBranding?.name || userInfo?.university || 'U').charAt(0).toUpperCase()}
+                    </div>
                   )}
-                  {universityBranding.name}
+                  <span className="whitespace-nowrap">
+                    {universityBranding?.name || userInfo?.university || 'My University'}
+                  </span>
                 </button>
                 <button
                   onClick={() => setUniversityFilter('all')}
                   className={`rounded-full px-4 py-2 text-sm font-bold transition-all ${
                     universityFilter === 'all'
                       ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-black shadow-lg'
-                      : 'text-white/70 hover:text-white'
+                      : 'text-white/70 hover:text-white hover:bg-white/5'
                   }`}
                 >
                   All Universities
@@ -347,13 +382,21 @@ export default function Community() {
             </span>
             {universityFilter === 'my' && userInfo?.university && universityBranding && (
               <span 
-                className="rounded-full border px-2.5 py-1 font-semibold text-xs"
+                className="rounded-full border px-2.5 py-1 font-semibold text-xs flex items-center gap-1.5"
                 style={{
-                  borderColor: `${universityBranding.primary}50`,
-                  backgroundColor: `${universityBranding.primary}20`,
-                  color: universityBranding.primary
+                  borderColor: `${universityBranding.primary}80`,
+                  backgroundColor: `${universityBranding.primary}15`,
+                  color: universityBranding.textColor || '#fff'
                 }}
               >
+                {universityBranding?.logoUrl && !logoError && (
+                  <img 
+                    src={universityBranding.logoUrl} 
+                    alt=""
+                    className="w-3.5 h-3.5 rounded-full object-cover bg-white"
+                    onError={(e) => e.target.style.display = 'none'}
+                  />
+                )}
                 Filtered: {universityBranding.name}
               </span>
             )}
