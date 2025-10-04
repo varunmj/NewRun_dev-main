@@ -148,17 +148,113 @@ async function addAnswer(threadId, { body, author = '@you' }) {
   return a;
 }
 
-async function voteThread(threadId, delta) {
+async function voteThread(threadId, type) {
   try {
-    const r = await axiosInstance.post(`/community/threads/${threadId}/vote`, { delta });
-    if (r?.data?.votes !== undefined) return r.data.votes;
-  } catch {}
+    const r = await axiosInstance.post(`/community/threads/${threadId}/vote`, { type });
+    if (r?.data) return r.data;
+  } catch (err) {
+    console.error('Vote error:', err);
+  }
+  
+  // Fallback to local storage
   const all = seed();
   const t = all.find(tt => tt.id === threadId);
   if (!t) return null;
-  t.votes += delta;
+  
+  if (type === 'upvote') {
+    t.upvotes = (t.upvotes || 0) + 1;
+  } else if (type === 'downvote') {
+    t.downvotes = (t.downvotes || 0) + 1;
+  }
+  t.votes = (t.upvotes || 0) - (t.downvotes || 0);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
-  return t.votes;
+  return { upvotes: t.upvotes || 0, downvotes: t.downvotes || 0, votes: t.votes };
+}
+
+async function bookmarkThread(threadId) {
+  try {
+    console.log('🔍 Bookmarking thread:', threadId);
+    const r = await axiosInstance.post(`/community/threads/${threadId}/bookmark`);
+    console.log('✅ Bookmark success:', r.data);
+    return r.data;
+  } catch (err) {
+    console.error('❌ Bookmark error:', err);
+    console.error('❌ Error response:', err.response?.data);
+    throw err;
+  }
+}
+
+async function removeBookmark(threadId) {
+  try {
+    console.log('🔍 Removing bookmark for thread:', threadId);
+    const r = await axiosInstance.delete(`/community/threads/${threadId}/bookmark`);
+    console.log('✅ Remove bookmark success:', r.data);
+    return r.data;
+  } catch (err) {
+    console.error('❌ Remove bookmark error:', err);
+    console.error('❌ Error response:', err.response?.data);
+    throw err;
+  }
+}
+
+async function getBookmarks(page = 1, limit = 20) {
+  try {
+    const r = await axiosInstance.get(`/community/bookmarks?page=${page}&limit=${limit}`);
+    return r.data;
+  } catch (err) {
+    console.error('Get bookmarks error:', err);
+    throw err;
+  }
+}
+
+async function checkBookmarkStatus(threadId) {
+  try {
+    const r = await axiosInstance.get(`/community/threads/${threadId}/bookmark-status`);
+    return r.data;
+  } catch (err) {
+    console.error('Check bookmark status error:', err);
+    return { isBookmarked: false };
+  }
+}
+
+async function checkVoteStatus(threadId) {
+  try {
+    const r = await axiosInstance.get(`/community/threads/${threadId}/vote-status`);
+    return r.data;
+  } catch (err) {
+    console.error('Check vote status error:', err);
+    return { userVote: null, upvotes: 0, downvotes: 0, votes: 0 };
+  }
+}
+
+async function voteAnswer(threadId, answerId, type) {
+  try {
+    const r = await axiosInstance.post(`/community/threads/${threadId}/answers/${answerId}/vote`, { type });
+    return r.data;
+  } catch (err) {
+    console.error('Vote answer error:', err);
+    throw err;
+  }
+}
+
+async function addReply(threadId, answerId, body) {
+  try {
+    const r = await axiosInstance.post(`/community/threads/${threadId}/answers/${answerId}/reply`, { body });
+    return r.data;
+  } catch (err) {
+    console.error('Add reply error:', err);
+    throw err;
+  }
+}
+
+async function checkAnswerVoteStatus(threadId, answerId) {
+  try {
+    const r = await axiosInstance.get(`/community/threads/${threadId}/answers/${answerId}/vote-status`);
+    return r.data;
+  } catch (err) {
+    console.error('Check answer vote status error:', err);
+    return { userVote: null, upvotes: 0, downvotes: 0, votes: 0 };
+  }
 }
 
 async function acceptAnswer(threadId, answerId) {
@@ -181,6 +277,14 @@ export default {
   addThread,
   addAnswer,
   voteThread,
+  bookmarkThread,
+  removeBookmark,
+  getBookmarks,
+  checkBookmarkStatus,
+  checkVoteStatus,
+  voteAnswer,
+  addReply,
+  checkAnswerVoteStatus,
   acceptAnswer
 };
 

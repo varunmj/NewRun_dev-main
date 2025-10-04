@@ -7,9 +7,10 @@ import Footer from "../components/Footer/Footer";
 import "../styles/newrun-hero.css";
 import CommunityService from "../services/CommunityService";
 import { timeAgo } from "../utils/timeUtils";
+import BookmarkIcon from '../assets/icons/bookmark.svg';
 import { getUniversityBranding, getContrastTextColor } from "../utils/universityBranding";
 import ViewAllModal from "../components/Community/ViewAllModal";
-import MagicBento, { ParticleCard } from "../components/MagicBento";
+import MagicBento, { ParticleCard, GlobalSpotlight } from "../components/MagicBento";
 
 /* ------------------------------------------------------------------ */
 /* Tiny UI atoms that match your Marketplace look                      */
@@ -136,10 +137,148 @@ export default function Community() {
   
   // Voting states
   const [votingStates, setVotingStates] = useState({}); // Track voting for each thread
+  const [userVotes, setUserVotes] = useState({}); // Track user's vote for each thread
+  
+  // Bookmark states - single source of truth
+  const [bookmarkedIds, setBookmarkedIds] = useState(() => new Set()); // Set<string>
+  const [bookmarkInFlight, setBookmarkInFlight] = useState({}); // { [id]: boolean }
+  const [showBookmarks, setShowBookmarks] = useState(false); // Show bookmarked questions
+  const gridRef = useRef(null);
+  
+  // AI Question Assistant states
+  const [aiDraft, setAiDraft] = useState('');
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
+  const [draftStep, setDraftStep] = useState('idle'); // 'idle', 'generating', 'review', 'ready'
+  const [questionContext, setQuestionContext] = useState({
+    topic: '',
+    urgency: 'medium',
+    details: ''
+  });
+  const [suggestedTags, setSuggestedTags] = useState([]);
+  const [selectedTags, setSelectedTags] = useState([]);
   
   const QUESTIONS_PER_PAGE = 6;
 
+  // Normalize thread IDs to prevent ObjectId/string mismatches
+  const normId = (t) => String(t?._id || t?.id);
+
   const scrollToAsk = () => askRef.current?.scrollIntoView({ behavior: "smooth" });
+
+  // AI Question Assistant functions
+  const generateSuggestedTags = (topic, question) => {
+    const topicLower = topic.toLowerCase();
+    const questionLower = question.toLowerCase();
+    
+    // Base tags based on topic
+    const topicTags = {
+      'housing': ['housing', 'apartment', 'rent', 'dorm', 'off-campus'],
+      'visa': ['visa', 'immigration', 'f1', 'h1b', 'opt', 'cpt'],
+      'budget': ['budget', 'money', 'finance', 'expenses', 'savings'],
+      'academic': ['academic', 'courses', 'gpa', 'study', 'grades'],
+      'job': ['job', 'career', 'internship', 'employment', 'interview'],
+      'social': ['social', 'friends', 'activities', 'events', 'community'],
+      'health': ['health', 'insurance', 'medical', 'wellness', 'mental-health'],
+      'transportation': ['transportation', 'car', 'bus', 'uber', 'commute']
+    };
+
+    // Find matching tags based on topic
+    let suggested = [];
+    for (const [key, tags] of Object.entries(topicTags)) {
+      if (topicLower.includes(key) || questionLower.includes(key)) {
+        suggested = [...suggested, ...tags];
+      }
+    }
+
+    // Add common tags based on question content
+    if (questionLower.includes('help') || questionLower.includes('advice')) {
+      suggested.push('help', 'advice');
+    }
+    if (questionLower.includes('experience') || questionLower.includes('story')) {
+      suggested.push('experience', 'story');
+    }
+    if (questionLower.includes('urgent') || questionLower.includes('asap')) {
+      suggested.push('urgent');
+    }
+
+    // Remove duplicates and limit to 5 tags
+    return [...new Set(suggested)].slice(0, 5);
+  };
+
+  const generateAIDraft = async () => {
+    if (!questionContext.topic.trim()) {
+      alert('Please enter a topic or question to get AI help!');
+      return;
+    }
+
+    setIsGeneratingDraft(true);
+    setDraftStep('generating');
+
+    try {
+      // Simulate AI generation (replace with actual API call)
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      const sampleDrafts = [
+        `I'm looking for advice on ${questionContext.topic}. Can anyone share their experience or recommendations?`,
+        `Quick question about ${questionContext.topic} - what worked best for you?`,
+        `Need help with ${questionContext.topic}. Any tips or resources you'd recommend?`,
+        `Has anyone dealt with ${questionContext.topic}? Looking for guidance on the best approach.`
+      ];
+      
+      const randomDraft = sampleDrafts[Math.floor(Math.random() * sampleDrafts.length)];
+      setAiDraft(randomDraft);
+      
+      // Generate suggested tags
+      const tags = generateSuggestedTags(questionContext.topic, randomDraft);
+      setSuggestedTags(tags);
+      setSelectedTags(tags); // Auto-select all suggested tags
+      
+      setDraftStep('review');
+    } catch (error) {
+      console.error('AI generation error:', error);
+      setDraftStep('idle');
+    } finally {
+      setIsGeneratingDraft(false);
+    }
+  };
+
+  const acceptDraft = () => {
+    setAskForm(prev => ({ ...prev, title: aiDraft }));
+    setDraftStep('ready');
+  };
+
+  const regenerateDraft = () => {
+    generateAIDraft();
+  };
+
+  const useDraftAndAsk = () => {
+    setAskForm(prev => ({ ...prev, title: aiDraft }));
+    openAskModal();
+  };
+
+  const resetAIAssistant = () => {
+    setDraftStep('idle');
+    setAiDraft('');
+    setQuestionContext({ topic: '', urgency: 'medium', details: '' });
+    setSuggestedTags([]);
+    setSelectedTags([]);
+  };
+
+  const addTag = (tag) => {
+    if (!selectedTags.includes(tag)) {
+      setSelectedTags(prev => [...prev, tag]);
+    }
+  };
+
+  const removeTag = (tagToRemove) => {
+    setSelectedTags(prev => prev.filter(tag => tag !== tagToRemove));
+  };
+
+  const addCustomTag = (tag) => {
+    const cleanTag = tag.trim().toLowerCase();
+    if (cleanTag && !selectedTags.includes(cleanTag)) {
+      setSelectedTags(prev => [...prev, cleanTag]);
+    }
+  };
 
   const onSearch = async (e) => {
     e.preventDefault();
@@ -207,6 +346,24 @@ export default function Community() {
     loadThreads();
   }, [universityFilter]);
 
+  // Load bookmarks once when user changes
+  useEffect(() => {
+    if (!userInfo?.userId) return;
+    
+    (async () => {
+      try {
+        console.log('🔄 Loading bookmarks for user:', userInfo.userId);
+        const res = await CommunityService.getBookmarks();
+        const ids = (res.bookmarks || []).map(b => normId(b.thread || b));
+        console.log('📌 Loaded bookmark IDs:', ids);
+        setBookmarkedIds(new Set(ids));
+      } catch (e) {
+        console.error('❌ Load bookmarks error:', e);
+        setBookmarkedIds(new Set());
+      }
+    })();
+  }, [userInfo?.userId]);
+
   const loadThreads = async (page = 1) => {
     setSearching(true);
     try {
@@ -225,6 +382,11 @@ export default function Community() {
         setLatest(result.items);
         setPagination(result.pagination);
         setCurrentPage(page);
+        
+        // Load vote statuses for all threads
+        if (userInfo?.userId) {
+          loadVoteStatuses(result.items);
+        }
       } else {
         // Fallback for old API response format
         console.log('📋 Loaded threads (fallback):', Array.isArray(result) ? result.length : 0);
@@ -243,9 +405,9 @@ export default function Community() {
   const openAskModal = () => {
     setShowAskModal(true);
     setAskForm({
-      title: '',
+      title: aiDraft || '',
       body: '',
-      tags: '',
+      tags: selectedTags.join(', '),
       school: userInfo?.university || ''
     });
   };
@@ -258,7 +420,7 @@ export default function Community() {
     }
     setIsSubmitting(true);
     try {
-      const tagsArray = askForm.tags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+      const tagsArray = selectedTags.length > 0 ? selectedTags : askForm.tags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
       const newThread = await CommunityService.addThread({
         title: askForm.title.trim(),
         body: askForm.body.trim(),
@@ -329,35 +491,153 @@ export default function Community() {
     }
   };
 
+  const loadVoteStatuses = async (threads) => {
+    try {
+      const votePromises = threads.map(async (thread) => {
+        const threadId = thread._id || thread.id;
+        const voteStatus = await CommunityService.checkVoteStatus(threadId);
+        return { threadId, userVote: voteStatus.userVote };
+      });
+      
+      const voteResults = await Promise.all(votePromises);
+      const newUserVotes = {};
+      voteResults.forEach(({ threadId, userVote }) => {
+        if (userVote) {
+          newUserVotes[threadId] = userVote;
+        }
+      });
+      
+      setUserVotes(prev => ({ ...prev, ...newUserVotes }));
+    } catch (error) {
+      console.error('Load vote statuses error:', error);
+    }
+  };
+
   // Voting function
-  const handleVote = async (threadId, delta, event) => {
+  const handleVote = async (threadId, type, event) => {
     event.preventDefault();
     event.stopPropagation();
     
-    const votingKey = `${threadId}_${delta}`;
+    const votingKey = `${threadId}_${type}`;
     if (votingStates[votingKey]) return; // Prevent double voting
+    
+    // Check if user already voted on this thread
+    const currentUserVote = userVotes[threadId];
+    if (currentUserVote === type) {
+      // User is trying to vote the same way again
+      alert('You have already voted on this question!');
+      return;
+    }
     
     setVotingStates(prev => ({ ...prev, [votingKey]: true }));
     
     try {
-      const newVotes = await CommunityService.voteThread(threadId, delta);
+      const result = await CommunityService.voteThread(threadId, type);
       
-      // Update the local state
+      // Update user vote state
+      setUserVotes(prev => ({ ...prev, [threadId]: type }));
+      
+      // Update the local state with separate counters
       setLatest(prev => prev.map(thread => 
         (thread._id || thread.id) === threadId 
-          ? { ...thread, votes: newVotes }
+          ? { 
+              ...thread, 
+              upvotes: result.upvotes || 0, 
+              downvotes: result.downvotes || 0, 
+              votes: result.votes || 0 
+            }
           : thread
       ));
       
     } catch (error) {
       console.error('Error voting:', error);
+      if (error.response?.status === 400) {
+        alert(error.response.data.message || 'You have already voted on this question!');
+      }
     } finally {
       setVotingStates(prev => ({ ...prev, [votingKey]: false }));
     }
   };
 
+  // Robust bookmark handler with optimistic updates
+  const handleBookmark = async (threadIdRaw, e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+
+    // threadIdRaw is already a normalized string from the UI
+    const threadId = String(threadIdRaw);
+    
+    if (!threadId || threadId === 'undefined' || threadId === 'null') {
+      console.error('❌ Invalid threadId:', threadId);
+      alert('Invalid thread ID. Please refresh the page and try again.');
+      return;
+    }
+    
+    if (bookmarkInFlight[threadId]) return;
+
+    setBookmarkInFlight((s) => ({ ...s, [threadId]: true }));
+
+    const wasBookmarked = bookmarkedIds.has(threadId);
+
+    // Optimistic update
+    setBookmarkedIds((prev) => {
+      const next = new Set(prev);
+      if (wasBookmarked) next.delete(threadId);
+      else next.add(threadId);
+      return next;
+    });
+
+    try {
+      if (wasBookmarked) {
+        await CommunityService.removeBookmark(threadId);
+        console.log('✅ Bookmark removed successfully');
+      } else {
+        await CommunityService.bookmarkThread(threadId);
+        console.log('✅ Bookmark added successfully');
+      }
+    } catch (err) {
+      console.error('❌ Bookmark toggle failed:', err);
+      // Revert on failure
+      setBookmarkedIds((prev) => {
+        const next = new Set(prev);
+        if (wasBookmarked) next.add(threadId);
+        else next.delete(threadId);
+        return next;
+      });
+      alert('Failed to update bookmark. Please try again.');
+    } finally {
+      setBookmarkInFlight((s) => ({ ...s, [threadId]: false }));
+    }
+  };
+
+  const toggleBookmarks = () => {
+    setShowBookmarks(!showBookmarks);
+  };
+
   return (
     <div className="nr-dots-page min-h-screen text-white">
+      <style>
+        {`
+          .particle {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 100;
+          }
+          
+          .particle::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: rgba(132, 0, 255, 0.2);
+            border-radius: 50%;
+            z-index: -1;
+          }
+        `}
+      </style>
       <Navbar userInfo={userInfo} />
 
       {/* ---------------- Hero ---------------- */}
@@ -531,9 +811,17 @@ export default function Community() {
           </h2>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-12">
+        <div className="grid gap-5 lg:grid-cols-12" ref={gridRef}>
           {/* Left: Ask panel */}
-          <Panel className="relative overflow-hidden lg:col-span-7">
+          <ParticleCard 
+            className="nr-panel relative overflow-hidden lg:col-span-7"
+            glowColor="47, 100, 255"
+            particleCount={12}
+            enableTilt={false}
+            enableMagnetism={false}
+            clickEffect={true}
+            disableAnimations={false}
+          >
             <div className="mb-4">
               <span className="rounded-full border border-white/15 bg-white/[0.03] px-3 py-1 text-[11px] text-white/70">
                 Get help fast
@@ -549,40 +837,133 @@ export default function Community() {
               Verified students respond quickly, and the accepted answer is pinned on top.
             </p>
 
-            {/* Enhanced ask bar */}
+            {/* Smart Question Builder */}
             <div className="mt-6 group">
               <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2 transition-all duration-300 group-hover:border-white/20 group-hover:bg-white/[0.06]">
-                <div className="flex items-center gap-3 rounded-lg bg-[#0f1115]/80 px-4 py-3 ring-1 ring-white/10 transition-all duration-300 group-hover:ring-white/20">
-                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30">
-                    <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                  </div>
+                {/* Step 1: Topic Input */}
+                {draftStep === 'idle' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 rounded-lg bg-[#0f1115]/80 px-4 py-3 ring-1 ring-white/10">
+                      <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30">
+                        <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </div>
                 <input
-                  readOnly
-                    onClick={openAskModal}
-                    placeholder="Type your question… (AI can help you draft a clear post)"
-                    className="flex-1 bg-transparent text-sm text-white/70 placeholder:text-white/50 outline-none cursor-pointer transition-colors duration-300 hover:text-white/90"
-                  />
-                  <button
-                    onClick={() => {
-                      openAskModal();
-                      // TODO: Implement AI drafting functionality
-                    }}
-                    className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30 px-3 py-1.5 text-xs font-medium text-purple-300 hover:from-purple-500/30 hover:to-blue-500/30 hover:text-purple-200 transition-all duration-300"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
+                        value={questionContext.topic}
+                        onChange={(e) => setQuestionContext(prev => ({ ...prev, topic: e.target.value }))}
+                        placeholder="What do you need help with? (e.g., housing, visa, budget)"
+                        className="flex-1 bg-transparent text-sm text-white/70 placeholder:text-white/50 outline-none transition-colors duration-300 focus:text-white/90"
+                      />
+                      <button
+                        onClick={generateAIDraft}
+                        disabled={!questionContext.topic.trim()}
+                        className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30 px-3 py-1.5 text-xs font-medium text-purple-300 hover:from-purple-500/30 hover:to-blue-500/30 hover:text-purple-200 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
                   Draft with AI
-                  </button>
-                  <button 
-                    onClick={openAskModal}
-                    className="rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-1.5 text-xs font-semibold text-black hover:from-amber-400 hover:to-orange-500 transition-all duration-300 shadow-lg hover:shadow-amber-500/25"
-                  >
-                  Ask
                 </button>
-                </div>
+              </div>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={openAskModal}
+                        className="rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-1.5 text-xs font-semibold text-black hover:from-amber-400 hover:to-orange-500 transition-all duration-300 shadow-lg hover:shadow-amber-500/25"
+                      >
+                        Ask Manually
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 2: AI Generating */}
+                {draftStep === 'generating' && (
+                  <div className="flex items-center gap-3 rounded-lg bg-[#0f1115]/80 px-4 py-3 ring-1 ring-white/10">
+                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30">
+                      <div className="w-3 h-3 border border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                    <span className="text-sm text-white/70">AI is crafting your question...</span>
+                  </div>
+                )}
+
+                {/* Step 3: Review Draft */}
+                {draftStep === 'review' && (
+                  <div className="space-y-3">
+                    <div className="rounded-lg bg-[#0f1115]/80 px-4 py-3 ring-1 ring-white/10">
+                      <div className="flex items-start gap-3">
+                        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 mt-0.5">
+                          <svg className="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs text-white/60 mb-1">AI Generated Question:</p>
+                          <p className="text-sm text-white/90">{aiDraft}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={acceptDraft}
+                        className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:from-green-400 hover:to-emerald-500 transition-all duration-300 shadow-lg hover:shadow-green-500/25"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Use This
+                      </button>
+                      <button
+                        onClick={regenerateDraft}
+                        className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30 px-3 py-1.5 text-xs font-medium text-purple-300 hover:from-purple-500/30 hover:to-blue-500/30 hover:text-purple-200 transition-all duration-300"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Regenerate
+                      </button>
+                      <button
+                        onClick={useDraftAndAsk}
+                        className="rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-1.5 text-xs font-semibold text-black hover:from-amber-400 hover:to-orange-500 transition-all duration-300 shadow-lg hover:shadow-amber-500/25"
+                      >
+                        Ask Now
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 4: Ready to Ask */}
+                {draftStep === 'ready' && (
+                  <div className="space-y-3">
+                    <div className="rounded-lg bg-[#0f1115]/80 px-4 py-3 ring-1 ring-green-500/30">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30">
+                          <svg className="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                        <span className="text-sm text-white/90">Question ready! Click "Ask Now" to post.</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setAskForm(prev => ({ ...prev, title: aiDraft }));
+                          openAskModal();
+                        }}
+                        className="rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-1.5 text-xs font-semibold text-black hover:from-amber-400 hover:to-orange-500 transition-all duration-300 shadow-lg hover:shadow-amber-500/25"
+                      >
+                        Ask Now
+                      </button>
+                      <button
+                        onClick={resetAIAssistant}
+                        className="rounded-full bg-white/10 border border-white/20 px-4 py-1.5 text-xs font-medium text-white/70 hover:bg-white/20 hover:text-white/90 transition-all duration-300"
+                      >
+                        Start Over
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               
               {/* Quick suggestion chips */}
@@ -598,24 +979,25 @@ export default function Community() {
                     className="text-xs px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-white/60 hover:text-white/90 hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300"
                   >
                     {suggestion}
-                  </button>
+                </button>
                 ))}
               </div>
             </div>
 
             {/* soft corner glow */}
             <div className="nr-ramp" aria-hidden />
-          </Panel>
+          </ParticleCard>
 
           {/* Right: three tiles */}
           <div className="flex flex-col gap-5 lg:col-span-5">
             <ParticleCard 
               className="nr-panel flex items-start gap-4 p-5 sm:p-6"
-              glowColor="59, 130, 246"
-              particleCount={8}
+              glowColor="47, 100, 255"
+              particleCount={12}
               enableTilt={false}
-              enableMagnetism={true}
+              enableMagnetism={false}
               clickEffect={true}
+              disableAnimations={false}
             >
               <GlowIcon><Svg.Cap /></GlowIcon>
               <div>
@@ -629,11 +1011,12 @@ export default function Community() {
 
             <ParticleCard 
               className="nr-panel flex items-start gap-4 p-5 sm:p-6"
-              glowColor="16, 185, 129"
-              particleCount={6}
+              glowColor="47, 100, 255"
+              particleCount={12}
               enableTilt={false}
-              enableMagnetism={true}
+              enableMagnetism={false}
               clickEffect={true}
+              disableAnimations={false}
             >
               <GlowIcon><Svg.Clock /></GlowIcon>
               <div>
@@ -647,11 +1030,12 @@ export default function Community() {
 
             <ParticleCard 
               className="nr-panel flex items-start gap-4 p-5 sm:p-6"
-              glowColor="245, 158, 11"
-              particleCount={5}
+              glowColor="47, 100, 255"
+              particleCount={12}
               enableTilt={false}
-              enableMagnetism={true}
+              enableMagnetism={false}
               clickEffect={true}
+              disableAnimations={false}
             >
               <GlowIcon><Svg.Shield /></GlowIcon>
               <div>
@@ -664,6 +1048,15 @@ export default function Community() {
             </ParticleCard>
           </div>
         </div>
+        
+        {/* Global Spotlight for glow between boxes */}
+        <GlobalSpotlight
+          gridRef={gridRef}
+          disableAnimations={false}
+          enabled={true}
+          spotlightRadius={300}
+          glowColor="47, 100, 255"
+        />
       </section>
 
       {/* ---------------- Latest questions ---------------- */}
@@ -671,7 +1064,11 @@ export default function Community() {
         <div className="mb-4 flex items-end justify-between">
           <div>
             <h3 className="text-2xl font-bold tracking-tight">
-              {activeFilter ? (
+              {showBookmarks ? (
+                <>
+                  <span className="text-amber-400">My Bookmarks</span>
+                </>
+              ) : activeFilter ? (
                 <>
                   Search results for <span className="text-amber-400">"{activeFilter}"</span>
                 </>
@@ -680,7 +1077,11 @@ export default function Community() {
               )}
             </h3>
             <p className="text-white/60">
-              {activeFilter ? (
+              {showBookmarks ? (
+                <>
+                  {bookmarkedThreads.length} {bookmarkedThreads.length === 1 ? 'bookmark' : 'bookmarks'} saved
+                </>
+              ) : activeFilter ? (
                 <>
                   {latest.length} {latest.length === 1 ? 'result' : 'results'} found
                   <button 
@@ -695,9 +1096,34 @@ export default function Community() {
               )}
             </p>
           </div>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            {/* Bookmark Toggle Button */}
+            <button
+              onClick={toggleBookmarks}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                showBookmarks
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                  : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-white/10'
+              }`}
+            >
+              <svg 
+                className="w-4 h-4" 
+                fill={showBookmarks ? 'currentColor' : 'none'} 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  strokeWidth={2} 
+                  d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" 
+                />
+              </svg>
+              {showBookmarks ? 'All Questions' : 'My Bookmarks'}
+            </button>
+            
             {/* Pagination Controls */}
-            {pagination && pagination.totalPages > 1 && (
+            {pagination && pagination.totalPages > 1 && !showBookmarks && (
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => loadThreads(currentPage - 1)}
@@ -722,7 +1148,7 @@ export default function Community() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
-              </div>
+        </div>
             )}
             
             {/* View All Modal Button */}
@@ -742,7 +1168,7 @@ export default function Community() {
               <p className="mt-3 text-white/60">Searching...</p>
             </div>
           </div>
-        ) : latest.length === 0 ? (
+        ) : (showBookmarks ? bookmarkedThreads.length === 0 : latest.length === 0) ? (
           <div className="nr-panel text-center py-12">
             <p className="text-white/60">
               {activeFilter ? (
@@ -763,8 +1189,38 @@ export default function Community() {
           </div>
         ) : (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {latest.map((q) => (
-            <a key={q._id || q.id} href={`/community/thread/${q._id || q.id}`} className="nr-panel hover:bg-white/[0.08] transition block">
+          {(showBookmarks ? latest.filter(q => bookmarkedIds.has(normId(q))) : latest).map((q) => {
+            const threadId = normId(q);
+            const isBookmarked = bookmarkedIds.has(threadId);
+            const isBusy = !!bookmarkInFlight[threadId];
+            
+            return (
+            <div key={threadId} className="relative">
+              {/* Bookmark Button - Top Right Corner */}
+              <button
+                onClick={(e) => handleBookmark(threadId, e)}
+                disabled={isBusy}
+                className={`absolute top-3 right-3 p-2 rounded-lg transition-all duration-300 disabled:opacity-50 z-10 ${
+                  isBookmarked
+                    ? 'bg-red-500/20 text-red-500 hover:bg-red-500/30 scale-110'
+                    : 'bg-transparent text-red-500 hover:bg-red-500/10 hover:scale-105'
+                }`}
+                title={isBookmarked ? 'Remove bookmark' : 'Bookmark question'}
+              >
+                <img 
+                  src={BookmarkIcon} 
+                  alt="Bookmark" 
+                  className={`w-6 h-6 transition-all duration-300 ${isBusy ? 'opacity-60' : ''}`}
+                  style={{ 
+                    filter: isBookmarked
+                      ? 'drop-shadow(0 0 8px rgba(239, 68, 68, 0.6))' 
+                      : 'drop-shadow(0 0 4px rgba(239, 68, 68, 0.3))'
+                  }}
+                />
+              </button>
+
+              <a href={`/community/thread/${q._id || q.id}`} className="nr-panel hover:bg-white/[0.08] transition block">
+                <div className="pr-12">
               <div className="mb-2 flex items-center gap-2 text-[12px]">
                 <span className={`rounded-full px-2 py-0.5 ${q.solved ? "bg-emerald-500/15 text-emerald-300" : "bg-white/10 text-white/75"}`}>
                   {q.solved ? "Solved" : "Open"}
@@ -773,51 +1229,74 @@ export default function Community() {
                 <span className="text-white/70">{q.school}</span>
               </div>
               <h4 className="text-[17px] font-semibold leading-snug">{q.title}</h4>
-              <p className="mt-1 text-sm text-white/60">
-                Asked by {q.authorName || q.author}
-                <span className="mx-1.5">·</span>
-                {timeAgo(q.createdAt || q.updatedAt)}
-              </p>
+                <p className="mt-1 text-sm text-white/60">
+                  Asked by {q.authorName || q.author}
+                  <span className="mx-1.5">·</span>
+                  {timeAgo(q.createdAt || q.updatedAt)}
+                </p>
+              </div>
 
               <div className="mt-4 flex items-center justify-between text-[12px]">
                 <div className="flex items-center gap-3">
                   {/* Voting Controls */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={(e) => handleVote(q._id || q.id, 1, e)}
-                      disabled={votingStates[`${q._id || q.id}_1`]}
-                      className="p-1 rounded hover:bg-white/10 transition-colors group disabled:opacity-50"
-                      title="Upvote"
-                    >
-                      <svg 
-                        className="w-4 h-4 text-white/60 group-hover:text-green-400 transition-colors" 
-                        fill="none" 
-                        stroke="currentColor" 
-                        viewBox="0 0 24 24"
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => handleVote(q._id || q.id, 'upvote', e)}
+                        disabled={votingStates[`${q._id || q.id}_upvote`] || userVotes[q._id || q.id] === 'downvote'}
+                        className={`p-1 rounded transition-colors group disabled:opacity-50 ${
+                          userVotes[q._id || q.id] === 'upvote' 
+                            ? 'bg-green-500/20 text-green-400' 
+                            : 'hover:bg-white/10'
+                        }`}
+                        title={userVotes[q._id || q.id] === 'upvote' ? 'You upvoted this' : 'Upvote'}
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                      </svg>
-                    </button>
+                        <svg 
+                          className={`w-4 h-4 transition-colors ${
+                            userVotes[q._id || q.id] === 'upvote'
+                              ? 'text-green-400'
+                              : 'text-white/60 group-hover:text-green-400'
+                          }`}
+                          fill={userVotes[q._id || q.id] === 'upvote' ? 'currentColor' : 'none'}
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                        </svg>
+                      </button>
+                      <span className="text-green-400 font-medium text-xs min-w-[1.5rem] text-center">
+                        {q.upvotes || 0}
+                      </span>
+              </div>
                     
-                    <span className="text-white/70 font-medium min-w-[2rem] text-center">
-                      {q.votes || 0}
-                    </span>
-                    
-                    <button
-                      onClick={(e) => handleVote(q._id || q.id, -1, e)}
-                      disabled={votingStates[`${q._id || q.id}_-1`]}
-                      className="p-1 rounded hover:bg-white/10 transition-colors group disabled:opacity-50"
-                      title="Downvote"
-                    >
-                      <svg 
-                        className="w-4 h-4 text-white/60 group-hover:text-red-400 transition-colors" 
-                        fill="none" 
-                        stroke="currentColor" 
-                        viewBox="0 0 24 24"
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => handleVote(q._id || q.id, 'downvote', e)}
+                        disabled={votingStates[`${q._id || q.id}_downvote`] || userVotes[q._id || q.id] === 'upvote'}
+                        className={`p-1 rounded transition-colors group disabled:opacity-50 ${
+                          userVotes[q._id || q.id] === 'downvote' 
+                            ? 'bg-red-500/20 text-red-400' 
+                            : 'hover:bg-white/10'
+                        }`}
+                        title={userVotes[q._id || q.id] === 'downvote' ? 'You downvoted this' : 'Downvote'}
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
+                        <svg 
+                          className={`w-4 h-4 transition-colors ${
+                            userVotes[q._id || q.id] === 'downvote'
+                              ? 'text-red-400'
+                              : 'text-white/60 group-hover:text-red-400'
+                          }`}
+                          fill={userVotes[q._id || q.id] === 'downvote' ? 'currentColor' : 'none'}
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      <span className="text-red-400 font-medium text-xs min-w-[1.5rem] text-center">
+                        {q.downvotes || 0}
+                      </span>
+        </div>
                   </div>
                   
                   {/* Answers Count */}
@@ -829,8 +1308,10 @@ export default function Community() {
                   </div>
                 </div>
               </div>
-            </a>
-          ))}
+              </a>
+            </div>
+            );
+          })}
         </div>
         )}
       </section>
@@ -958,14 +1439,69 @@ export default function Community() {
                 <label className="block text-sm font-medium text-white/80 mb-2">
                   Tags
                 </label>
-                <input
-                  type="text"
-                  value={askForm.tags}
-                  onChange={(e) => setAskForm({ ...askForm, tags: e.target.value })}
-                  placeholder="visa, I-20, housing (comma-separated)"
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-white placeholder:text-white/40 outline-none focus:border-amber-400"
-                />
-                <p className="mt-1 text-xs text-white/50">Separate tags with commas</p>
+                
+                {/* Selected Tags Chips */}
+                {selectedTags.length > 0 && (
+                  <div className="mb-3">
+                    <div className="flex flex-wrap gap-2">
+                      {selectedTags.map((tag, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 text-sm text-blue-300"
+                        >
+                          #{tag}
+                          <button
+                            type="button"
+                            onClick={() => removeTag(tag)}
+                            className="ml-1 hover:bg-white/10 rounded-full p-0.5 transition-colors"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Suggested Tags */}
+                {suggestedTags.length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-xs text-white/60 mb-2">Suggested tags:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {suggestedTags
+                        .filter(tag => !selectedTags.includes(tag))
+                        .map((tag, index) => (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => addTag(tag)}
+                            className="px-3 py-1.5 rounded-full bg-white/5 border border-white/20 text-sm text-white/70 hover:bg-white/10 hover:text-white/90 transition-colors"
+                          >
+                            + #{tag}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Add Custom Tag Input */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Add custom tag..."
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-white placeholder:text-white/40 outline-none focus:border-amber-400"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addCustomTag(e.target.value);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                  <p className="mt-1 text-xs text-white/50">Press Enter to add custom tags</p>
+                </div>
               </div>
 
               <div>

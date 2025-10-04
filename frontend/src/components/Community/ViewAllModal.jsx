@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { X, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import CommunityService from '../../services/CommunityService';
 import { timeAgo } from '../../utils/timeUtils';
+import BookmarkIcon from '../../assets/icons/bookmark.svg';
 
 const ViewAllModal = ({ isOpen, onClose, universityFilter, userInfo }) => {
   const [allThreads, setAllThreads] = useState([]);

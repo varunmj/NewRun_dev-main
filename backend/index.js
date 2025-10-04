@@ -55,6 +55,7 @@ const UserInteraction = require('./models/UserInteraction.model');
 const CommunityThread = require('./models/communityThread.model');
 const UniversityBranding = require('./models/universityBranding.model');
 const Newsletter = require('./models/newsletter.model');
+const UserBookmark = require('./models/userBookmark.model');
 const RoommateRequest = require('./models/RoommateRequest.model');
 const { extractHousingCriteria } = require('./services/newrun-llm/newrunLLM');
 const emailService = require('./services/emailService');
@@ -325,11 +326,16 @@ app.post('/community/threads/:id/answers', async (req, res) => {
     const { body = '', author = '', authorName = '', authorId = null } = req.body || {};
     const t = await CommunityThread.findById(req.params.id);
     if (!t) return res.status(404).json({ success: false, message: 'Not found' });
+    
+    // Check if user is the original poster
+    const isOP = t.authorId && authorId && t.authorId.toString() === authorId.toString();
+    
     t.answers.push({ 
       body, 
       author: authorName || author || '@anonymous',
       authorName: authorName || author || '@anonymous',
-      authorId 
+      authorId,
+      isOP: isOP
     });
     t.answersCount = t.answers.length;
     await t.save();
@@ -340,20 +346,396 @@ app.post('/community/threads/:id/answers', async (req, res) => {
   }
 });
 
-// Vote thread
-app.post('/community/threads/:id/vote', async (req, res) => {
+// Vote thread (upvote/downvote)
+app.post('/community/threads/:id/vote', authenticateToken, async (req, res) => {
   try {
-    const { delta = 1 } = req.body || {};
-    const t = await CommunityThread.findById(req.params.id);
-    if (!t) return res.status(404).json({ success: false, message: 'Not found' });
-    t.votes += Number(delta);
+    const { type = 'upvote' } = req.body || {}; // 'upvote' or 'downvote'
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    
+    const t = await CommunityThread.findById(threadId);
+    if (!t) return res.status(404).json({ success: false, message: 'Thread not found' });
+    
+    // Check if user already voted
+    const existingVote = t.userVotes.find(vote => vote.userId.toString() === userId);
+    
+    if (existingVote) {
+      // User already voted - check if it's the same vote type
+      if (existingVote.voteType === type) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'You have already voted on this question',
+          currentVote: existingVote.voteType
+        });
+      } else {
+        // User is changing their vote - remove old vote and add new one
+        if (existingVote.voteType === 'upvote') {
+          t.upvotes = Math.max(0, t.upvotes - 1);
+        } else {
+          t.downvotes = Math.max(0, t.downvotes - 1);
+        }
+        
+        // Remove old vote
+        t.userVotes = t.userVotes.filter(vote => vote.userId.toString() !== userId);
+      }
+    }
+    
+    // Add new vote
+    if (type === 'upvote') {
+      t.upvotes += 1;
+    } else if (type === 'downvote') {
+      t.downvotes += 1;
+    }
+    
+    // Add user vote record
+    t.userVotes.push({
+      userId: userId,
+      voteType: type,
+      votedAt: new Date()
+    });
+    
+    // Update net votes for backward compatibility
+    t.votes = t.upvotes - t.downvotes;
     await t.save();
-    res.json({ success: true, votes: t.votes });
+    
+    res.json({ 
+      success: true, 
+      upvotes: t.upvotes, 
+      downvotes: t.downvotes, 
+      votes: t.votes,
+      userVote: type
+    });
   } catch (e) {
     console.error('Vote thread error:', e.message);
     res.status(500).json({ success: false, message: 'Server error', error: e.message });
   }
 });
+
+// Bookmark thread
+app.post('/community/threads/:id/bookmark', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    
+    console.log('Bookmark request - userId:', userId, 'threadId:', threadId);
+    
+    // Validate ObjectIds
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ success: false, message: 'Invalid user ID' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(threadId)) {
+      return res.status(400).json({ success: false, message: 'Invalid thread ID' });
+    }
+    
+    // Check if thread exists
+    const thread = await CommunityThread.findById(threadId);
+    if (!thread) {
+      return res.status(404).json({ success: false, message: 'Thread not found' });
+    }
+    
+    // Check if already bookmarked
+    const existingBookmark = await UserBookmark.findOne({ userId, threadId });
+    if (existingBookmark) {
+      return res.status(400).json({ success: false, message: 'Already bookmarked' });
+    }
+    
+    // Create bookmark
+    const bookmark = await UserBookmark.create({ userId, threadId });
+    
+    res.json({ 
+      success: true, 
+      message: 'Thread bookmarked successfully',
+      bookmarkId: bookmark._id 
+    });
+  } catch (e) {
+    console.error('Bookmark thread error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Remove bookmark
+app.delete('/community/threads/:id/bookmark', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    
+    // Validate ObjectIds
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ success: false, message: 'Invalid user ID' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(threadId)) {
+      return res.status(400).json({ success: false, message: 'Invalid thread ID' });
+    }
+    
+    const result = await UserBookmark.findOneAndDelete({ userId, threadId });
+    if (!result) {
+      return res.status(404).json({ success: false, message: 'Bookmark not found' });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Bookmark removed successfully' 
+    });
+  } catch (e) {
+    console.error('Remove bookmark error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Get user's bookmarked threads
+app.get('/community/bookmarks', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.user?._id || req.user._id;
+    const { page = 1, limit = 20 } = req.query;
+    
+    const skip = (page - 1) * limit;
+    
+    const bookmarks = await UserBookmark.find({ userId })
+      .populate('threadId')
+      .sort({ bookmarkedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+    
+    // Filter out null threads (in case thread was deleted)
+    const validBookmarks = bookmarks.filter(b => b.threadId);
+    
+    const totalBookmarks = await UserBookmark.countDocuments({ userId });
+    
+    res.json({
+      success: true,
+      bookmarks: validBookmarks.map(b => ({
+        _id: b._id,
+        thread: b.threadId,
+        bookmarkedAt: b.bookmarkedAt
+      })),
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalBookmarks / limit),
+        totalBookmarks,
+        hasNextPage: skip + validBookmarks.length < totalBookmarks
+      }
+    });
+  } catch (e) {
+    console.error('Get bookmarks error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Check if thread is bookmarked by user
+app.get('/community/threads/:id/bookmark-status', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    
+    const bookmark = await UserBookmark.findOne({ userId, threadId });
+    
+    res.json({
+      success: true,
+      isBookmarked: !!bookmark,
+      bookmarkId: bookmark?._id
+    });
+  } catch (e) {
+    console.error('Check bookmark status error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Get user's vote status for a thread
+app.get('/community/threads/:id/vote-status', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    
+    const thread = await CommunityThread.findById(threadId);
+    if (!thread) {
+      return res.status(404).json({ success: false, message: 'Thread not found' });
+    }
+    
+    const userVote = thread.userVotes.find(vote => vote.userId.toString() === userId);
+    
+    res.json({
+      success: true,
+      userVote: userVote ? userVote.voteType : null,
+      upvotes: thread.upvotes,
+      downvotes: thread.downvotes,
+      votes: thread.votes
+    });
+  } catch (e) {
+    console.error('Check vote status error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Vote on answer
+app.post('/community/threads/:id/answers/:answerId/vote', authenticateToken, async (req, res) => {
+  try {
+    const { type = 'upvote' } = req.body || {};
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    const answerId = req.params.answerId;
+    
+    const thread = await CommunityThread.findById(threadId);
+    if (!thread) return res.status(404).json({ success: false, message: 'Thread not found' });
+    
+    const answer = thread.answers.id(answerId);
+    if (!answer) return res.status(404).json({ success: false, message: 'Answer not found' });
+    
+    // Check if user already voted on this answer
+    const existingVote = answer.userVotes.find(vote => vote.userId.toString() === userId);
+    
+    if (existingVote) {
+      if (existingVote.voteType === type) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'You have already voted on this answer',
+          currentVote: existingVote.voteType
+        });
+      } else {
+        // User is changing their vote
+        if (existingVote.voteType === 'upvote') {
+          answer.upvotes = Math.max(0, answer.upvotes - 1);
+        } else {
+          answer.downvotes = Math.max(0, answer.downvotes - 1);
+        }
+        answer.userVotes = answer.userVotes.filter(vote => vote.userId.toString() !== userId);
+      }
+    }
+    
+    // Add new vote
+    if (type === 'upvote') {
+      answer.upvotes += 1;
+    } else if (type === 'downvote') {
+      answer.downvotes += 1;
+    }
+    
+    // Add user vote record
+    answer.userVotes.push({
+      userId: userId,
+      voteType: type,
+      votedAt: new Date()
+    });
+    
+    // Update net votes
+    answer.votes = answer.upvotes - answer.downvotes;
+    
+    // Auto-mark best answer based on upvotes
+    await updateBestAnswer(thread);
+    
+    await thread.save();
+    
+    res.json({ 
+      success: true, 
+      upvotes: answer.upvotes, 
+      downvotes: answer.downvotes, 
+      votes: answer.votes,
+      userVote: type
+    });
+  } catch (e) {
+    console.error('Vote answer error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Add reply to answer
+app.post('/community/threads/:id/answers/:answerId/reply', authenticateToken, async (req, res) => {
+  try {
+    const { body } = req.body;
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    const answerId = req.params.answerId;
+    
+    if (!body || !body.trim()) {
+      return res.status(400).json({ success: false, message: 'Reply body is required' });
+    }
+    
+    const thread = await CommunityThread.findById(threadId);
+    if (!thread) return res.status(404).json({ success: false, message: 'Thread not found' });
+    
+    const answer = thread.answers.id(answerId);
+    if (!answer) return res.status(404).json({ success: false, message: 'Answer not found' });
+    
+    // Check if user is the original poster
+    const isOP = thread.authorId && thread.authorId.toString() === userId;
+    
+    const reply = {
+      authorId: userId,
+      authorName: req.user.username || '@anonymous',
+      author: req.user.username || '@anonymous',
+      body: body.trim(),
+      isOP: isOP
+    };
+    
+    answer.replies.push(reply);
+    await thread.save();
+    
+    res.json({ 
+      success: true, 
+      message: 'Reply added successfully',
+      reply: answer.replies[answer.replies.length - 1]
+    });
+  } catch (e) {
+    console.error('Add reply error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Get answer vote status
+app.get('/community/threads/:id/answers/:answerId/vote-status', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    const answerId = req.params.answerId;
+    
+    const thread = await CommunityThread.findById(threadId);
+    if (!thread) {
+      return res.status(404).json({ success: false, message: 'Thread not found' });
+    }
+    
+    const answer = thread.answers.id(answerId);
+    if (!answer) {
+      return res.status(404).json({ success: false, message: 'Answer not found' });
+    }
+    
+    const userVote = answer.userVotes.find(vote => vote.userId.toString() === userId);
+    
+    res.json({
+      success: true,
+      userVote: userVote ? userVote.voteType : null,
+      upvotes: answer.upvotes,
+      downvotes: answer.downvotes,
+      votes: answer.votes
+    });
+  } catch (e) {
+    console.error('Check answer vote status error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Helper function to update best answer
+async function updateBestAnswer(thread) {
+  if (!thread.answers || thread.answers.length === 0) return;
+  
+  // Find answer with highest upvotes
+  let bestAnswer = null;
+  let maxUpvotes = 0;
+  
+  thread.answers.forEach(answer => {
+    if (answer.upvotes > maxUpvotes) {
+      maxUpvotes = answer.upvotes;
+      bestAnswer = answer;
+    }
+  });
+  
+  // Reset all best answer flags
+  thread.answers.forEach(answer => {
+    answer.isBestAnswer = false;
+  });
+  
+  // Mark the best answer (only if it has at least 1 upvote)
+  if (bestAnswer && maxUpvotes > 0) {
+    bestAnswer.isBestAnswer = true;
+  }
+}
 
 // Accept answer
 app.post('/community/threads/:id/answers/:answerId/accept', async (req, res) => {
