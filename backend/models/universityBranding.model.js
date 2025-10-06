@@ -47,3 +47,5 @@ UniversityBrandingSchema.index({ universityName: 1 });
 
 module.exports = mongoose.model('UniversityBranding', UniversityBrandingSchema);
 
+
+

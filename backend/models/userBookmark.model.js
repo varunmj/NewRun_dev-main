@@ -24,3 +24,5 @@ UserBookmarkSchema.index({ userId: 1, threadId: 1 }, { unique: true });
 UserBookmarkSchema.index({ userId: 1, bookmarkedAt: -1 });
 
 module.exports = mongoose.model('UserBookmark', UserBookmarkSchema);
+
+
