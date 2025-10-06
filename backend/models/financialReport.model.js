@@ -323,3 +323,5 @@ financialReportSchema.statics.generateReport = async function(userId, reportType
 
 module.exports = mongoose.model('FinancialReport', financialReportSchema);
 
+
+

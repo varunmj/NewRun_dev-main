@@ -7,7 +7,28 @@ import Footer from "../components/Footer/Footer";
 import "../styles/newrun-hero.css";
 import CommunityService from "../services/CommunityService";
 import { timeAgo } from "../utils/timeUtils";
-import BookmarkIcon from '../assets/icons/bookmark.svg';
+import PlaybookSpotlight from "../components/ThisWeekCard";
+import { MdChecklist, MdTimeline } from "react-icons/md";
+// Exact geometry from /assets/icons/bookmark.svg
+const BookmarkSvg = ({ active, className = "" }) => (
+  <svg
+    viewBox="0 0 120 120"
+    className={className}
+    aria-hidden="true"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <polygon
+      points="98,109 60,88 22,109 22,12 98,12"
+      // solid red when active, otherwise transparent with red outline
+      fill={active ? "#ff1200" : "transparent"}
+      stroke="#ff1200"
+      strokeWidth={active ? 0 : 8}          // ~1.6px when rendered at 24px
+      strokeLinejoin="round"
+      strokeLinecap="round"
+      shapeRendering="geometricPrecision"
+    />
+  </svg>
+);
 import { getUniversityBranding, getContrastTextColor } from "../utils/universityBranding";
 import ViewAllModal from "../components/Community/ViewAllModal";
 import MagicBento, { ParticleCard, GlobalSpotlight } from "../components/MagicBento";
@@ -162,7 +183,43 @@ export default function Community() {
   // Normalize thread IDs to prevent ObjectId/string mismatches
   const normId = (t) => String(t?._id || t?.id);
 
+  // Robust pagination normalizer to handle both API and fallback responses
+  const normalizePagination = ({ page, limit, total, itemsLen, raw }) => {
+    // Prefer backend values if present and complete
+    if (raw?.totalPages != null) {
+      return {
+        currentPage: raw.currentPage ?? page,
+        totalPages: raw.totalPages,
+        hasPrevPage: raw.hasPrevPage ?? page > 1,
+        hasNextPage: raw.hasNextPage ?? (raw.currentPage ?? page) < raw.totalPages,
+      };
+    }
+
+    // Client-side best effort (array or missing pagination)
+    const totalPages = total
+      ? Math.max(1, Math.ceil(total / (limit || QUESTIONS_PER_PAGE)))
+      : Math.max(1, Math.ceil((itemsLen || 0) / (limit || QUESTIONS_PER_PAGE)));
+
+    return {
+      currentPage: page,
+      totalPages,
+      hasPrevPage: page > 1,
+      // If server didn't tell us, assume "maybe next" when we filled the page
+      hasNextPage: (itemsLen || 0) >= (limit || QUESTIONS_PER_PAGE) && page < totalPages,
+    };
+  };
+
+  // Computed values
+  const bookmarkedCount = latest.filter(q => bookmarkedIds.has(normId(q))).length;
+
   const scrollToAsk = () => askRef.current?.scrollIntoView({ behavior: "smooth" });
+
+  // Safe page changer to prevent out-of-range page requests
+  const changePage = (next) => {
+    if (!pagination) return;
+    const p = Math.min(Math.max(1, next), pagination.totalPages);
+    if (p !== currentPage) loadThreads(p);
+  };
 
   // AI Question Assistant functions
   const generateSuggestedTags = (topic, question) => {
@@ -292,6 +349,8 @@ export default function Community() {
       if (!q) {
         await loadThreads(1); // Reset to first page
         setActiveFilter('');
+        setCurrentPage(1);
+        setPagination(prev => prev ? { ...prev, currentPage: 1 } : prev);
         return;
       }
       params.q = q;
@@ -329,6 +388,8 @@ export default function Community() {
       }
       const items = await CommunityService.list(params);
       setLatest(Array.isArray(items) ? items : []);
+      setCurrentPage(1);
+      setPagination(prev => prev ? { ...prev, currentPage: 1 } : prev);
       setShowAll(false);
     } catch (error) {
       console.error('Error clearing search:', error);
@@ -342,8 +403,10 @@ export default function Community() {
   }, []);
 
   useEffect(() => {
-    // Reload when university filter changes
-    loadThreads();
+    // Reload when university filter changes - reset pagination to prevent stale state
+    setCurrentPage(1);
+    setPagination(null);   // prevents showing stale pager from previous filter
+    loadThreads(1);
   }, [universityFilter]);
 
   // Load bookmarks once when user changes
@@ -354,11 +417,22 @@ export default function Community() {
       try {
         console.log('🔄 Loading bookmarks for user:', userInfo.userId);
         const res = await CommunityService.getBookmarks();
-        const ids = (res.bookmarks || []).map(b => normId(b.thread || b));
+        console.log('📌 Raw bookmark response:', res);
+        
+        // Robust ID normalization for any backend response format
+        const toId = (x) => {
+          if (!x) return null;
+          if (typeof x === 'string') return x;
+          return String(x._id || x.id || x.threadId || (x.thread && (x.thread._id || x.thread.id)));
+        };
+        
+        const ids = (res?.bookmarks || []).map(toId).filter(Boolean);
         console.log('📌 Loaded bookmark IDs:', ids);
+        console.log('📌 Setting bookmarkedIds to:', new Set(ids));
         setBookmarkedIds(new Set(ids));
       } catch (e) {
-        console.error('❌ Load bookmarks error:', e);
+        console.error('❌ Load bookmarks error:', e?.response?.data || e.message);
+        console.log('📌 Setting bookmarkedIds to empty Set due to error');
         setBookmarkedIds(new Set());
       }
     })();
@@ -380,18 +454,34 @@ export default function Community() {
       if (result && result.items) {
         console.log('📋 Loaded threads:', result.items.length, 'Pagination:', result.pagination);
         setLatest(result.items);
-        setPagination(result.pagination);
+        setPagination(
+          normalizePagination({
+            page,
+            limit: params.limit,
+            total: result.total ?? result.count,   // use if backend provides
+            itemsLen: result.items.length,
+            raw: result.pagination,
+          })
+        );
         setCurrentPage(page);
-        
-        // Load vote statuses for all threads
-        if (userInfo?.userId) {
-          loadVoteStatuses(result.items);
-        }
+        if (userInfo?.userId) loadVoteStatuses(result.items);
       } else {
-        // Fallback for old API response format
-        console.log('📋 Loaded threads (fallback):', Array.isArray(result) ? result.length : 0);
-        setLatest(Array.isArray(result) ? result.slice(0, QUESTIONS_PER_PAGE) : []);
-        setPagination(null);
+        // Plain array: client-side paginate
+        const arr = Array.isArray(result) ? result : [];
+        const start = (page - 1) * QUESTIONS_PER_PAGE;
+        const slice = arr.slice(start, start + QUESTIONS_PER_PAGE);
+        console.log('📋 Loaded threads (fallback):', arr.length, 'page:', page, 'start:', start, 'slice:', slice.length);
+        setLatest(slice);
+        setPagination(
+          normalizePagination({
+            page,
+            limit: QUESTIONS_PER_PAGE,
+            total: arr.length,
+            itemsLen: slice.length,
+          })
+        );
+        setCurrentPage(page);
+        if (userInfo?.userId) loadVoteStatuses(slice);
       }
     } catch (error) {
       console.error('Error loading threads:', error);
@@ -596,15 +686,27 @@ export default function Community() {
         console.log('✅ Bookmark added successfully');
       }
     } catch (err) {
-      console.error('❌ Bookmark toggle failed:', err);
-      // Revert on failure
-      setBookmarkedIds((prev) => {
-        const next = new Set(prev);
-        if (wasBookmarked) next.add(threadId);
-        else next.delete(threadId);
-        return next;
-      });
-      alert('Failed to update bookmark. Please try again.');
+      const status = err?.response?.status;
+      const msg = err?.response?.data?.message || '';
+
+      // ✅ Accept common idempotent failures as success
+      const isIdempotentOk =
+        (wasBookmarked && (status === 404 || /not\s*bookmarked/i.test(msg))) ||
+        (!wasBookmarked && (status === 409 || /already\s*bookmarked/i.test(msg)));
+
+      if (!isIdempotentOk) {
+        // Revert only on real failures
+        setBookmarkedIds((prev) => {
+          const next = new Set(prev);
+          if (wasBookmarked) next.add(threadId);
+          else next.delete(threadId);
+          return next;
+        });
+        console.error('❌ Bookmark toggle failed:', status, msg);
+        alert('Failed to update bookmark. Please try again.');
+      } else {
+        console.log('✅ Idempotent success - server already in desired state');
+      }
     } finally {
       setBookmarkInFlight((s) => ({ ...s, [threadId]: false }));
     }
@@ -1079,7 +1181,7 @@ export default function Community() {
             <p className="text-white/60">
               {showBookmarks ? (
                 <>
-                  {bookmarkedThreads.length} {bookmarkedThreads.length === 1 ? 'bookmark' : 'bookmarks'} saved
+                  {bookmarkedCount} {bookmarkedCount === 1 ? 'bookmark' : 'bookmarks'} saved
                 </>
               ) : activeFilter ? (
                 <>
@@ -1126,7 +1228,7 @@ export default function Community() {
             {pagination && pagination.totalPages > 1 && !showBookmarks && (
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => loadThreads(currentPage - 1)}
+                  onClick={() => changePage(currentPage - 1)}
                   disabled={!pagination.hasPrevPage || searching}
                   className="p-2 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
@@ -1140,7 +1242,7 @@ export default function Community() {
                 </span>
                 
                 <button
-                  onClick={() => loadThreads(currentPage + 1)}
+                  onClick={() => changePage(currentPage + 1)}
                   disabled={!pagination.hasNextPage || searching}
                   className="p-2 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
@@ -1168,7 +1270,7 @@ export default function Community() {
               <p className="mt-3 text-white/60">Searching...</p>
             </div>
           </div>
-        ) : (showBookmarks ? bookmarkedThreads.length === 0 : latest.length === 0) ? (
+        ) : (showBookmarks ? bookmarkedCount === 0 : latest.length === 0) ? (
           <div className="nr-panel text-center py-12">
             <p className="text-white/60">
               {activeFilter ? (
@@ -1200,22 +1302,17 @@ export default function Community() {
               <button
                 onClick={(e) => handleBookmark(threadId, e)}
                 disabled={isBusy}
-                className={`absolute top-3 right-3 p-2 rounded-lg transition-all duration-300 disabled:opacity-50 z-10 ${
+                className={`absolute top-3 right-3 p-2 rounded-lg transition-colors duration-200 disabled:opacity-50 z-10 ${
                   isBookmarked
-                    ? 'bg-red-500/20 text-red-500 hover:bg-red-500/30 scale-110'
-                    : 'bg-transparent text-red-500 hover:bg-red-500/10 hover:scale-105'
+                    ? 'bg-transparent text-red-500 ring-1 ring-red-500/25 hover:ring-red-500/35'
+                    : 'bg-transparent text-red-500 hover:bg-red-500/5'
                 }`}
                 title={isBookmarked ? 'Remove bookmark' : 'Bookmark question'}
               >
-                <img 
-                  src={BookmarkIcon} 
-                  alt="Bookmark" 
-                  className={`w-6 h-6 transition-all duration-300 ${isBusy ? 'opacity-60' : ''}`}
-                  style={{ 
-                    filter: isBookmarked
-                      ? 'drop-shadow(0 0 8px rgba(239, 68, 68, 0.6))' 
-                      : 'drop-shadow(0 0 4px rgba(239, 68, 68, 0.3))'
-                  }}
+                <BookmarkSvg
+                  active={isBookmarked}
+                  className={`w-6 h-6 ${isBusy ? 'opacity-60' : ''}`}
+                  style={{ filter: isBookmarked ? 'drop-shadow(0 0 3px rgba(239,68,68,.25))' : 'none' }}
                 />
               </button>
 
@@ -1361,31 +1458,30 @@ export default function Community() {
             </ul>
           </Panel>
 
-          <Panel className="flex flex-col justify-center gap-3 lg:col-span-5">
-            <h3 className="text-xl font-semibold">Get the weekly campus digest</h3>
-            <p className="text-white/70">
-              5 solved threads + 3 hot listings — straight to your inbox.
-            </p>
-            <form onSubmit={handleNewsletterSubmit} className="flex gap-2">
-              <input
-                type="email"
-                value={newsEmail}
-                onChange={(e) => setNewsEmail(e.target.value)}
-                placeholder="Email address"
-                required
-                className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white placeholder:text-white/40 outline-none focus:border-amber-400"
-              />
-              <button 
-                type="submit"
-                className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-2 text-sm font-semibold text-black hover:brightness-110"
-              >
-                {newsStatus === 'success' ? '✓ Subscribed' : 'Subscribe'}
-              </button>
-            </form>
-            {newsStatus === 'error' && (
-              <p className="text-xs text-red-400">Failed to subscribe. Please try again.</p>
-            )}
-          </Panel>
+          <div className="lg:col-span-5">
+            <PlaybookSpotlight
+              university={universityBranding?.name || "Northern Illinois University"}
+              playbooks={[
+                {
+                  id: "movein",
+                  title: "Move-in week checklist",
+                  description: "Complete your setup in 3 days with our proven step-by-step guide",
+                  successRate: 89,
+                  icon: MdChecklist,
+                  href: "/playbooks/move-in"
+                },
+                {
+                  id: "visa",
+                  title: "Visa timeline tracker",
+                  description: "Never miss a deadline with automated reminders and document checklists",
+                  successRate: 94,
+                  icon: MdTimeline,
+                  href: "/playbooks/visa-timeline"
+                }
+              ]}
+              onViewAll={() => navigate("/playbooks")}
+            />
+          </div>
         </div>
       </section>
 

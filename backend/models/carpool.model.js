@@ -193,3 +193,5 @@ carpoolSchema.statics.findNearby = function(from, to, maxDistance = 5) {
 
 module.exports = mongoose.model('Carpool', carpoolSchema);
 
+
+
