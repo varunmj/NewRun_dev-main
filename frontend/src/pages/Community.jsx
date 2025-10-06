@@ -1481,7 +1481,7 @@ export default function Community() {
               ]}
               onViewAll={() => navigate("/playbooks")}
             />
-          </div>
+            </div>
         </div>
       </section>
 
@@ -1538,7 +1538,7 @@ export default function Community() {
                 
                 {/* Selected Tags Chips */}
                 {selectedTags.length > 0 && (
-                  <div className="mb-3">
+            <div className="mb-3">
                     <div className="flex flex-wrap gap-2">
                       {selectedTags.map((tag, index) => (
                         <span
@@ -1557,7 +1557,7 @@ export default function Community() {
                           </button>
                         </span>
                       ))}
-                    </div>
+            </div>
                   </div>
                 )}
 
@@ -1584,7 +1584,7 @@ export default function Community() {
 
                 {/* Add Custom Tag Input */}
                 <div className="relative">
-                  <input
+              <input
                     type="text"
                     placeholder="Add custom tag..."
                     className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-white placeholder:text-white/40 outline-none focus:border-amber-400"
@@ -1627,10 +1627,10 @@ export default function Community() {
                   className="flex-1 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-3 text-sm font-semibold text-black hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? 'Posting...' : 'Post Question'}
-                </button>
-              </div>
+              </button>
+            </div>
             </form>
-          </div>
+        </div>
         </div>
       )}
 

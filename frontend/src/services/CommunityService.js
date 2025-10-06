@@ -285,7 +285,38 @@ export default {
   voteAnswer,
   addReply,
   checkAnswerVoteStatus,
-  acceptAnswer
+  acceptAnswer,
+  
+  // Comment methods
+  voteComment: async (threadId, commentId, type) => {
+    try {
+      const response = await axiosInstance.post(`/community/threads/${threadId}/comments/${commentId}/vote`, { type });
+      return response.data;
+    } catch (error) {
+      console.error('Vote comment error:', error);
+      throw error;
+    }
+  },
+
+  addAnswerComment: async (threadId, answerId, body) => {
+    try {
+      const response = await axiosInstance.post(`/community/threads/${threadId}/answers/${answerId}/comments`, { body });
+      return response.data;
+    } catch (error) {
+      console.error('Add answer comment error:', error);
+      throw error;
+    }
+  },
+
+  addCommentReply: async (threadId, commentId, body) => {
+    try {
+      const response = await axiosInstance.post(`/community/threads/${threadId}/comments/${commentId}/replies`, { body });
+      return response.data;
+    } catch (error) {
+      console.error('Add comment reply error:', error);
+      throw error;
+    }
+  }
 };
 
 

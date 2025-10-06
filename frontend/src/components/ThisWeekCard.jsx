@@ -1,5 +1,5 @@
 import React from 'react';
-import { MdChevronRight, MdChecklist, MdTimeline, MdBook, MdTrendingUp } from "react-icons/md";
+import { MdChevronRight, MdChecklist, MdTimeline, MdBook, MdTrendingUp, MdHome, MdSell, MdSchool, MdWork, MdMoving, MdPeople } from "react-icons/md";
 
 /**
  * props:
@@ -14,6 +14,7 @@ export default function PlaybookSpotlight({
   onViewAll,
   loading = false,
 }) {
+  
   return (
     <section className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.06] to-white/[0.03] p-5">
       {/* Header */}
