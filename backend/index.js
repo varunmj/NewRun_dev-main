@@ -82,7 +82,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: `${process.env.BACKEND_URL || 'http://localhost:8000'}/api/auth/google/callback`
+    callbackURL: `${process.env.BACKEND_URL || 'http://www.newrun.club'}/api/auth/google/callback`
   }, async (accessToken, refreshToken, profile, done) => {
   try {
     // Check if user already exists
@@ -1478,7 +1478,7 @@ app.post('/send-email-verification', authenticateToken, async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`;
+    const verificationLink = `${process.env.FRONTEND_URL || 'http://www.newrun.club'}/verify-email?token=${verificationToken}`;
 
     // Update user with verification token
     user.emailVerificationToken = verificationToken;
@@ -1605,7 +1605,7 @@ app.post('/forgot-password', async (req, res) => {
     
     // Create secure reset link with token ID, not the actual token
     const tokenId = crypto.randomBytes(16).toString('hex');
-    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?tokenId=${tokenId}`;
+    const resetLink = `${process.env.FRONTEND_URL || 'http://www.newrun.club'}/reset-password?tokenId=${tokenId}`;
 
     // Update user with secure token data
     user.passwordResetToken = resetToken;
