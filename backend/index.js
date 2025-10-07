@@ -175,29 +175,56 @@ const s3Client = new S3Client({
 
 const s3 = new AWS.S3();
 
-// Multer storage for S3
-const upload = multer({
-  storage: multerS3({
-    s3: s3Client,
-    bucket: process.env.AWS_S3_BUCKET,
-    // Adjust based on the access level you need
-    key: function (req, file, cb) {
-      const filename = Date.now().toString() + "-" + file.originalname;
-      cb(null, filename); // File name format
+// Multer storage - use S3 if configured, otherwise local storage
+let upload;
+
+if (process.env.AWS_S3_BUCKET && process.env.AWS_ACCESS_KEY && process.env.AWS_SECRET_KEY) {
+  // S3 storage
+  upload = multer({
+    storage: multerS3({
+      s3: s3Client,
+      bucket: process.env.AWS_S3_BUCKET,
+      key: function (req, file, cb) {
+        const filename = Date.now().toString() + "-" + file.originalname;
+        cb(null, filename);
+      },
+    }),
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed!'), false);
+      }
     },
-  }),
-  fileFilter: (req, file, cb) => {
-    // Accept only image files
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed!'), false);
-    }
-  },
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
-  }
-});
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB limit
+    },
+  });
+} else {
+  // Local storage fallback
+  console.log('⚠️  AWS S3 not configured, using local storage fallback');
+  upload = multer({
+    storage: multer.diskStorage({
+      destination: function (req, file, cb) {
+        cb(null, 'uploads/');
+      },
+      filename: function (req, file, cb) {
+        const filename = Date.now().toString() + "-" + file.originalname;
+        cb(null, filename);
+      }
+    }),
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed!'), false);
+      }
+    },
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB limit
+    },
+  });
+}
 
 app.get('/', (req, res) => {
   res.json({ data: 'hello' });

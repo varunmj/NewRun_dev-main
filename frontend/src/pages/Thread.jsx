@@ -7,6 +7,7 @@ import axiosInstance from '../utils/axiosInstance';
 import { timeAgo } from '../utils/timeUtils';
 import useBookmarks from '../hooks/useBookmarks';
 import BookmarkSvg from '../components/BookmarkSvg.jsx';
+import Toast from '../components/ToastMessage/Toast';
 
 // Depth-capped comment system (Answer → Comment → Reply, max depth 2)
 function CommentTree({ comments, thread, timeAgo, depth = 0, maxDepth = 2, onVote, onReply, showCommentForm, commentText, setCommentText, onDeleteComment, onDeleteReply, userInfo }) {
@@ -100,13 +101,24 @@ function CommentTree({ comments, thread, timeAgo, depth = 0, maxDepth = 2, onVot
                 )}
                 
                 {/* Delete button - only show to comment author */}
-                {userInfo && comment.authorId && String(comment.authorId) === String(userInfo._id || userInfo.userId) && (
+                {(() => {
+                  const isAuthor = userInfo && comment.authorId && String(comment.authorId) === String(userInfo._id || userInfo.userId);
+                  console.log('🔍 Comment delete button check:', {
+                    userInfo: userInfo ? { _id: userInfo._id, userId: userInfo.userId } : null,
+                    commentAuthorId: comment.authorId,
+                    isAuthor,
+                    commentId: comment._id || comment.id
+                  });
+                  return isAuthor;
+                })() && (
                   <button 
                     onClick={() => onDeleteComment && onDeleteComment(comment._id || comment.id)}
-                    className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                    className="text-red-400 hover:text-red-300 transition-colors p-1 rounded hover:bg-red-500/10"
                     title="Delete this comment"
                   >
-                    Delete
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
                   </button>
                 )}
                 
@@ -192,6 +204,21 @@ export default function Thread() {
   const [commentVotes, setCommentVotes] = useState({});
   const [relatedQuestions, setRelatedQuestions] = useState([]);
   const [loadingRelated, setLoadingRelated] = useState(false);
+  
+  // Toast state
+  const [showToastMsg, setShowToastMsg] = useState({
+    isShown: false,
+    type: 'success',
+    message: '',
+  });
+
+  // Confirmation modal state
+  const [showConfirmModal, setShowConfirmModal] = useState({
+    isShown: false,
+    title: '',
+    message: '',
+    onConfirm: null,
+  });
 
   // Load user info first
   useEffect(() => {
@@ -206,6 +233,20 @@ export default function Thread() {
       }
     })();
   }, []);
+
+  // Handle escape key to close modal
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && showConfirmModal.isShown) {
+        handleCancel();
+      }
+    };
+
+    if (showConfirmModal.isShown) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [showConfirmModal.isShown]);
 
   useEffect(() => {
     async function fetchThread() {
@@ -523,83 +564,139 @@ export default function Thread() {
 
   const handleBookmark = toggleBookmark;
 
+  // Toast functions
+  const showToastMessage = (message, type = 'success') => {
+    setShowToastMsg({
+      isShown: true,
+      message: message,
+      type: type,
+    });
+  };
+
+  const handleCloseToast = () => {
+    setShowToastMsg({
+      isShown: false,
+      message: '',
+    });
+  };
+
+  // Confirmation modal functions
+  const showConfirmDialog = (title, message, onConfirm) => {
+    setShowConfirmModal({
+      isShown: true,
+      title,
+      message,
+      onConfirm,
+    });
+  };
+
+  const handleConfirm = () => {
+    if (showConfirmModal.onConfirm) {
+      showConfirmModal.onConfirm();
+    }
+    setShowConfirmModal({
+      isShown: false,
+      title: '',
+      message: '',
+      onConfirm: null,
+    });
+  };
+
+  const handleCancel = () => {
+    setShowConfirmModal({
+      isShown: false,
+      title: '',
+      message: '',
+      onConfirm: null,
+    });
+  };
+
   // Delete handlers
   const handleDeleteAnswer = async (answerId) => {
-    if (!window.confirm('Are you sure you want to delete this answer? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      const tid = thread._canonicalId || String(thread._id || thread.id);
-      const result = await CommunityService.deleteAnswer(tid, answerId);
-      
-      if (result.success) {
-        // Refresh thread to get updated answers
-        const updated = await CommunityService.get(id);
-        setThread({ ...updated, _canonicalId: tid });
-      } else {
-        alert('Failed to delete answer. Please try again.');
+    showConfirmDialog(
+      'Delete Answer',
+      'Are you sure you want to delete this answer? This action cannot be undone.',
+      async () => {
+        try {
+          const tid = thread._canonicalId || String(thread._id || thread.id);
+          const result = await CommunityService.deleteAnswer(tid, answerId);
+          
+          if (result.success) {
+            // Refresh thread to get updated answers
+            const updated = await CommunityService.get(id);
+            setThread({ ...updated, _canonicalId: tid });
+            showToastMessage('Answer deleted successfully', 'delete');
+          } else {
+            showToastMessage('Failed to delete answer. Please try again.', 'delete');
+          }
+        } catch (error) {
+          console.error('Delete answer error:', error);
+          if (error.response?.status === 403) {
+            showToastMessage('You can only delete your own answers.', 'delete');
+          } else {
+            showToastMessage('Failed to delete answer. Please try again.', 'delete');
+          }
+        }
       }
-    } catch (error) {
-      console.error('Delete answer error:', error);
-      if (error.response?.status === 403) {
-        alert('You can only delete your own answers.');
-      } else {
-        alert('Failed to delete answer. Please try again.');
-      }
-    }
+    );
   };
 
   const handleDeleteComment = async (commentId) => {
-    if (!window.confirm('Are you sure you want to delete this comment? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      const tid = thread._canonicalId || String(thread._id || thread.id);
-      const result = await CommunityService.deleteComment(tid, commentId);
-      
-      if (result.success) {
-        // Refresh thread to get updated comments
-        const updated = await CommunityService.get(id);
-        setThread({ ...updated, _canonicalId: tid });
-      } else {
-        alert('Failed to delete comment. Please try again.');
+    showConfirmDialog(
+      'Delete Comment',
+      'Are you sure you want to delete this comment? This action cannot be undone.',
+      async () => {
+        try {
+          const tid = thread._canonicalId || String(thread._id || thread.id);
+          const result = await CommunityService.deleteComment(tid, commentId);
+          
+          if (result.success) {
+            // Refresh thread to get updated comments
+            const updated = await CommunityService.get(id);
+            setThread({ ...updated, _canonicalId: tid });
+            showToastMessage('Comment deleted successfully', 'delete');
+          } else {
+            showToastMessage('Failed to delete comment. Please try again.', 'delete');
+          }
+        } catch (error) {
+          console.error('Delete comment error:', error);
+          if (error.response?.status === 403) {
+            showToastMessage('You can only delete your own comments.', 'delete');
+          } else {
+            showToastMessage('Failed to delete comment. Please try again.', 'delete');
+          }
+        }
       }
-    } catch (error) {
-      console.error('Delete comment error:', error);
-      if (error.response?.status === 403) {
-        alert('You can only delete your own comments.');
-      } else {
-        alert('Failed to delete comment. Please try again.');
-      }
-    }
+    );
   };
 
   const handleDeleteReply = async (commentId, replyId) => {
-    if (!window.confirm('Are you sure you want to delete this reply? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      const tid = thread._canonicalId || String(thread._id || thread.id);
-      const result = await CommunityService.deleteReply(tid, commentId, replyId);
-      
-      if (result.success) {
-        // Refresh thread to get updated replies
-        const updated = await CommunityService.get(id);
-        setThread({ ...updated, _canonicalId: tid });
-      } else {
-        alert('Failed to delete reply. Please try again.');
+    showConfirmDialog(
+      'Delete Reply',
+      'Are you sure you want to delete this reply? This action cannot be undone.',
+      async () => {
+        try {
+          const tid = thread._canonicalId || String(thread._id || thread.id);
+          const result = await CommunityService.deleteReply(tid, commentId, replyId);
+          
+          if (result.success) {
+            // Refresh thread to get updated replies
+            const updated = await CommunityService.get(id);
+            setThread({ ...updated, _canonicalId: tid });
+            showToastMessage('Reply deleted successfully', 'delete');
+          } else {
+            showToastMessage('Failed to delete reply. Please try again.', 'delete');
+          }
+        } catch (error) {
+          console.error('Delete reply error:', error);
+          if (error.response?.status === 403) {
+            showToastMessage('You can only delete your own replies.', 'delete');
+          } else {
+            showToastMessage('Failed to delete reply. Please try again.', 'delete');
+          }
+        }
       }
-    } catch (error) {
-      console.error('Delete reply error:', error);
-      if (error.response?.status === 403) {
-        alert('You can only delete your own replies.');
-      } else {
-        alert('Failed to delete reply. Please try again.');
-      }
-    }
+    );
   };
 
   const handleAcceptAnswer = async (answerId) => {
@@ -908,10 +1005,12 @@ export default function Thread() {
                       {userInfo && a.authorId && String(a.authorId) === String(userInfo._id || userInfo.userId) && (
                         <button
                           onClick={() => handleDeleteAnswer(a._id || a.id)}
-                          className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/20"
+                          className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-red-300 hover:bg-red-500/20 transition-colors"
                           title="Delete this answer"
                         >
-                          Delete
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
                         </button>
                       )}
                     </div>
@@ -1147,6 +1246,65 @@ export default function Thread() {
       </main>
       
       <Footer />
+      
+      {/* Toast Notification */}
+      <Toast
+        isShown={showToastMsg.isShown}
+        message={showToastMsg.message}
+        type={showToastMsg.type}
+        onClose={handleCloseToast}
+      />
+
+      {/* Redesigned Delete Modal */}
+      {showConfirmModal.isShown && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-lg flex items-center justify-center z-50"
+          onClick={handleCancel}
+        >
+          <div 
+            className="bg-gradient-to-br from-gray-900/90 to-gray-800/90 backdrop-blur-2xl border border-gray-700/50 rounded-2xl p-5 max-w-xs mx-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header with icon */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-white">
+                  {showConfirmModal.title}
+                </h3>
+                <p className="text-gray-400 text-xs">
+                  This action cannot be undone
+                </p>
+              </div>
+            </div>
+            
+            {/* Message */}
+            <p className="text-gray-300 text-sm mb-5 leading-relaxed">
+              {showConfirmModal.message}
+            </p>
+            
+            {/* Action buttons */}
+            <div className="flex gap-2">
+              <button
+                onClick={handleCancel}
+                className="flex-1 px-3 py-2 bg-gray-700/50 hover:bg-gray-700 text-gray-300 text-sm rounded-lg border border-gray-600/50 transition-all duration-200 hover:border-gray-500"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirm}
+                className="flex-1 px-3 py-2 bg-red-600/80 hover:bg-red-600 text-white text-sm rounded-lg border border-red-500/50 transition-all duration-200 hover:border-red-400"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
