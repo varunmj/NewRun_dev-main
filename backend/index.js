@@ -856,8 +856,13 @@ app.delete('/community/threads/:id/answers/:answerId', authenticateToken, async 
     const answer = thread.answers.id(answerId);
     if (!answer) return res.status(404).json({ success: false, message: 'Answer not found' });
     
-    // Check if user is the author of the answer
-    if (String(answer.authorId) !== String(userId)) {
+    // Check if user is the author of the answer (with fallback for older answers)
+    const userIsAuthor = (
+      (answer.authorId && String(answer.authorId) === String(userId)) ||
+      (!answer.authorId && (answer.authorName || answer.author) === req.user.username)
+    );
+    
+    if (!userIsAuthor) {
       return res.status(403).json({ success: false, message: 'You can only delete your own answers' });
     }
     
@@ -895,8 +900,13 @@ app.delete('/community/threads/:id/comments/:commentId', authenticateToken, asyn
     
     if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
     
-    // Check if user is the author of the comment
-    if (String(comment.authorId) !== String(userId)) {
+    // Check if user is the author of the comment (with fallback for older comments)
+    const userIsAuthor = (
+      (comment.authorId && String(comment.authorId) === String(userId)) ||
+      (!comment.authorId && (comment.authorName || comment.author) === req.user.username)
+    );
+    
+    if (!userIsAuthor) {
       return res.status(403).json({ success: false, message: 'You can only delete your own comments' });
     }
     

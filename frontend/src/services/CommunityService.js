@@ -134,15 +134,15 @@ async function addThread({ title, body, tags = [], school = '', author = '@you' 
   return t;
 }
 
-async function addAnswer(threadId, { body, author = '@you' }) {
+async function addAnswer(threadId, { body, author = '@you', authorId = null }) {
   try {
-    const r = await axiosInstance.post(`/community/threads/${threadId}/answers`, { body, author });
+    const r = await axiosInstance.post(`/community/threads/${threadId}/answers`, { body, author, authorId });
     if (r?.data?.item) return r.data.item;
   } catch {}
   const all = seed();
   const t = all.find(tt => tt.id === threadId);
   if (!t) return null;
-  const a = { id: 'a' + (Date.now()), body, author, votes: 0, accepted: false, createdAt: Date.now() };
+  const a = { id: 'a' + (Date.now()), body, author, authorId, votes: 0, accepted: false, createdAt: Date.now() };
   t.answers.push(a);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
   return a;

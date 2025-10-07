@@ -48,6 +48,7 @@ function ParticleField({
   const dpiRef = useRef(1);
   const mouse = useRef({ x: -9999, y: -9999, active: false });
   const particlesRef = useRef([]);
+  const reduceMotionRef = useRef(false);
 
   const setSize = () => {
     const c = canvasRef.current;
@@ -79,6 +80,10 @@ function ParticleField({
   const tick = () => {
     const c = canvasRef.current;
     if (!c) return;
+    if (reduceMotionRef.current || document.hidden) {
+      rafRef.current = requestAnimationFrame(tick);
+      return;
+    }
     const ctx = c.getContext("2d");
     const { width, height } = c;
 
@@ -134,9 +139,12 @@ function ParticleField({
   };
 
   useEffect(() => {
+    reduceMotionRef.current = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     setSize();
     init();
-    rafRef.current = requestAnimationFrame(tick);
+    if (!reduceMotionRef.current) {
+      rafRef.current = requestAnimationFrame(tick);
+    }
 
     const onResize = () => {
       setSize();
@@ -154,12 +162,19 @@ function ParticleField({
     window.addEventListener("resize", onResize);
     window.addEventListener("pointermove", onMove, { passive: true });
     window.addEventListener("pointerleave", onLeave);
+    const onVis = () => {
+      if (reduceMotionRef.current) return;
+      if (document.hidden) return;
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    document.addEventListener('visibilitychange', onVis);
 
     return () => {
       cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", onResize);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerleave", onLeave);
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, [count, maxSpeed, repelRadius, repelStrength]);
 
@@ -267,6 +282,8 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }) {
   const [campusLabel, setCampusLabel] = useState("");
   const [campusDisplayName, setCampusDisplayName] = useState("");
   const [campusPlaceId, setCampusPlaceId] = useState("");
+  const [campusLat, setCampusLat] = useState(null);
+  const [campusLng, setCampusLng] = useState(null);
 
   const acRef = useRef(null);
 
@@ -302,6 +319,10 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }) {
       "";
     setCampusDisplayName(name);
     setCampusPlaceId(place.place_id || "");
+    const lat = place?.geometry?.location?.lat?.();
+    const lng = place?.geometry?.location?.lng?.();
+    if (typeof lat === "number") setCampusLat(lat);
+    if (typeof lng === "number") setCampusLng(lng);
   };
 
   async function saveUser(payload) {
@@ -319,8 +340,24 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }) {
   const onSubmit = async (e) => {
     e.preventDefault();
     if (saving) return;
+    // validation
+    const nowISO = new Date().toISOString();
+    if (birthday && new Date(birthday).toISOString() > nowISO) {
+      alert("Birthday cannot be in the future.");
+      return;
+    }
+    if ((cohortSeason && !cohortYear) || (!cohortSeason && cohortYear)) {
+      alert("Please select both season and year for Cohort / Term.");
+      return;
+    }
+    if (campusPlaceId && !campusDisplayName) {
+      alert("Campus name is required if a Google place is linked.");
+      return;
+    }
     setSaving(true);
     try {
+      const computedCohortTerm =
+        cohortSeason && cohortYear ? `${cohortSeason} ${cohortYear}` : "";
       const payload = {
         firstName,
         lastName,
@@ -332,10 +369,12 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }) {
         graduationDate,
         // optional extras for routing
         schoolDepartment,
-        cohortTerm,
+        cohortTerm: computedCohortTerm,
         campusLabel,
         campusPlaceId,
         campusDisplayName,
+        campusLat,
+        campusLng,
       };
       const { data } = await saveUser(payload);
       const updated = normalizeUser(data?.user || { ...(initialUser || {}), ...payload });
@@ -505,32 +544,18 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }) {
                     for routing and campus grouping.
                   </p>
                 </div>
-
-                
               {/* Campus label */}
-                <div>
-                  <label className="mb-1 block text-xs text-white/60">
-                    Campus label (e.g., NIU College of Business)
-                  </label>
-                  <input
-                    value={campusLabel}
-                    onChange={(e) => setCampusLabel(e.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
-                    placeholder="e.g., NIU College of Business (Barsema Hall)"
-                  />
-                </div>
+              <div>
+                <label className="mb-1 block text-xs text-white/60">
+                  Campus label (e.g., NIU College of Business)
+                </label>
+                <input
+                  value={campusLabel}
+                  onChange={(e) => setCampusLabel(e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
+                  placeholder="e.g., NIU College of Business (Barsema Hall)"
+                />
               </div>
-
-            <div>
-              <label className="mb-1 block text-xs text-white/60">
-                Campus label (e.g., NIU College of Business)
-              </label>
-              <input
-                value={campusLabel}
-                onChange={(e) => setCampusLabel(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
-                placeholder="e.g., NIU College of Business (Barsema Hall)"
-              />
             </div>
           </div>
 
@@ -543,13 +568,13 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }) {
                 onLoad={(ac) => (acRef.current = ac)}
                 onPlaceChanged={onPlaceChanged}
                 options={{
-                fields: ["place_id", "name", "formatted_address"],
+                fields: ["place_id", "name", "formatted_address", "geometry"],
                 componentRestrictions: { country: "us" },
                 }}
                 >
                 <input
                   value={campusDisplayName}
-                  onChange={(e) => setCampusDisplayName(e.target.value)}
+                  onChange={(e) => { setCampusDisplayName(e.target.value); setCampusPlaceId(""); }}
                   className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
                   placeholder="Search for the exact building (e.g., Barsema Hall)…"
                 />
@@ -593,27 +618,53 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }) {
 export default function UserProfile() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [openEdit, setOpenEdit] = useState(false);
 
+  const loadUser = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { data } = await axiosInstance.get("/get-user");
+      setUser(normalizeUser(data?.user || {}));
+    } catch (e) {
+      console.error("Failed to load user", e);
+      setUser(null);
+      const msg = e?.response?.data?.message || e?.message || "Failed to load profile";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await axiosInstance.get("/get-user");
-        setUser(normalizeUser(data?.user || {}));
-      } catch (e) {
-        console.error("Failed to load user", e);
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    loadUser();
   }, []);
 
   if (loading) {
     return (
       <div className="relative min-h-screen bg-[#0b0c0f] text-white">
         <Navbar />
-        <div className="mx-auto max-w-5xl px-4 py-14">Loading…</div>
+        <div className="mx-auto max-w-7xl gap-6 px-4 py-8 lg:grid lg:grid-cols-12">
+          {/* LEFT skeleton */}
+          <section className="space-y-6 lg:col-span-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 animate-pulse h-40" />
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] h-24 animate-pulse" />
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] h-24 animate-pulse" />
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] h-40 animate-pulse" />
+          </section>
+          {/* CENTER skeleton */}
+          <section className="space-y-6 lg:col-span-5">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 animate-pulse h-56" />
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] h-40 animate-pulse" />
+          </section>
+          {/* RIGHT skeleton */}
+          <section className="space-y-6 lg:col-span-3">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] h-56 animate-pulse" />
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] h-40 animate-pulse" />
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] h-32 animate-pulse" />
+          </section>
+        </div>
       </div>
     );
   }
@@ -623,7 +674,20 @@ export default function UserProfile() {
       <div className="relative min-h-screen bg-[#0b0c0f] text-white">
         <Navbar />
         <div className="mx-auto max-w-5xl px-4 py-14">
-          <Shell>Couldn’t load your profile.</Shell>
+          <Shell>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-white/95 font-semibold mb-1">Couldn’t load your profile.</div>
+                <div className="text-white/60 text-sm">{error || "Please try again."}</div>
+              </div>
+              <button
+                onClick={loadUser}
+                className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-sm text-white/90 hover:bg-white/[0.1]"
+              >
+                Retry
+              </button>
+            </div>
+          </Shell>
         </div>
       </div>
     );
