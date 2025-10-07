@@ -66,13 +66,20 @@ const app = express();
 const http = require('http');
 const server = http.createServer(app);
 const io = require('socket.io')(server, { 
-    cors: { origin: ["https://newrun.club", "https://www.newrun.club"], methods: ['GET', 'POST'] }
+    cors: { 
+        origin: ["https://newrun.club", "https://www.newrun.club", "http://localhost:3000"], 
+        methods: ['GET', 'POST'],
+        credentials: true
+    }
 });
 
 
 
 app.use(express.json());
-app.use(cors({ origin: ["https://newrun.club", "https://www.newrun.club"] }));
+app.use(cors({ 
+    origin: ["https://newrun.club", "https://www.newrun.club", "http://localhost:3000"],
+    credentials: true
+}));
 
 // Passport configuration
 app.use(passport.initialize());
@@ -411,7 +418,7 @@ app.post('/community/threads/:id/vote', authenticateToken, async (req, res) => {
   }
 });
 
-// Bookmark thread
+// Bookmark thread (idempotent)
 app.post('/community/threads/:id/bookmark', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.user?._id || req.user._id;
@@ -433,10 +440,10 @@ app.post('/community/threads/:id/bookmark', authenticateToken, async (req, res) 
       return res.status(404).json({ success: false, message: 'Thread not found' });
     }
     
-    // Check if already bookmarked
-    const existingBookmark = await UserBookmark.findOne({ userId, threadId });
-    if (existingBookmark) {
-      return res.status(400).json({ success: false, message: 'Already bookmarked' });
+    // Check if already bookmarked (idempotent)
+    const existing = await UserBookmark.findOne({ userId, threadId });
+    if (existing) {
+      return res.json({ success: true, message: 'Already bookmarked' });
     }
     
     // Create bookmark
@@ -453,7 +460,7 @@ app.post('/community/threads/:id/bookmark', authenticateToken, async (req, res) 
   }
 });
 
-// Remove bookmark
+// Remove bookmark (idempotent)
 app.delete('/community/threads/:id/bookmark', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.user?._id || req.user._id;
@@ -467,15 +474,8 @@ app.delete('/community/threads/:id/bookmark', authenticateToken, async (req, res
       return res.status(400).json({ success: false, message: 'Invalid thread ID' });
     }
     
-    const result = await UserBookmark.findOneAndDelete({ userId, threadId });
-    if (!result) {
-      return res.status(404).json({ success: false, message: 'Bookmark not found' });
-    }
-    
-    res.json({ 
-      success: true, 
-      message: 'Bookmark removed successfully' 
-    });
+    const r = await UserBookmark.deleteOne({ userId, threadId });
+    return res.json({ success: true, removed: r.deletedCount > 0 });
   } catch (e) {
     console.error('Remove bookmark error:', e.message);
     res.status(500).json({ success: false, message: 'Server error', error: e.message });
@@ -486,33 +486,33 @@ app.delete('/community/threads/:id/bookmark', authenticateToken, async (req, res
 app.get('/community/bookmarks', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.user?._id || req.user._id;
-    const { page = 1, limit = 20 } = req.query;
-    
-    const skip = (page - 1) * limit;
-    
-    const bookmarks = await UserBookmark.find({ userId })
-      .populate('threadId')
+    const page  = parseInt(req.query.page || 1, 10);
+    const limit = parseInt(req.query.limit || 20, 10);
+    const skip  = (page - 1) * limit;
+
+    // no populate needed to restore icon state
+    const docs = await UserBookmark.find({ userId })
+      .select('threadId')
       .sort({ bookmarkedAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
-    
-    // Filter out null threads (in case thread was deleted)
-    const validBookmarks = bookmarks.filter(b => b.threadId);
-    
-    const totalBookmarks = await UserBookmark.countDocuments({ userId });
-    
+      .limit(limit)
+      .lean();
+
+    const ids = docs
+      .map(d => d.threadId)
+      .filter(Boolean)
+      .map(String);
+
+    const total = await UserBookmark.countDocuments({ userId });
+
     res.json({
       success: true,
-      bookmarks: validBookmarks.map(b => ({
-        _id: b._id,
-        thread: b.threadId,
-        bookmarkedAt: b.bookmarkedAt
-      })),
+      bookmarks: ids, // <— flat list of thread IDs
       pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(totalBookmarks / limit),
-        totalBookmarks,
-        hasNextPage: skip + validBookmarks.length < totalBookmarks
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalBookmarks: total,
+        hasNextPage: skip + docs.length < total
       }
     });
   } catch (e) {
@@ -644,15 +644,25 @@ app.post('/community/threads/:id/answers/:answerId/reply', authenticateToken, as
     const threadId = req.params.id;
     const answerId = req.params.answerId;
     
+    console.log('🔄 Reply request:', { body: body?.substring(0, 50) + '...', userId, threadId, answerId });
+    console.log('🔄 User object:', req.user);
+    
     if (!body || !body.trim()) {
+      console.log('❌ Missing reply body');
       return res.status(400).json({ success: false, message: 'Reply body is required' });
     }
     
     const thread = await CommunityThread.findById(threadId);
-    if (!thread) return res.status(404).json({ success: false, message: 'Thread not found' });
+    if (!thread) {
+      console.log('❌ Thread not found:', threadId);
+      return res.status(404).json({ success: false, message: 'Thread not found' });
+    }
     
     const answer = thread.answers.id(answerId);
-    if (!answer) return res.status(404).json({ success: false, message: 'Answer not found' });
+    if (!answer) {
+      console.log('❌ Answer not found:', answerId, 'in thread:', threadId);
+      return res.status(404).json({ success: false, message: 'Answer not found' });
+    }
     
     // Check if user is the original poster
     const isOP = thread.authorId && thread.authorId.toString() === userId;
@@ -665,6 +675,306 @@ app.post('/community/threads/:id/answers/:answerId/reply', authenticateToken, as
       isOP: isOP
     };
     
+    console.log('✅ Adding reply:', reply);
+    answer.replies.push(reply);
+    await thread.save();
+    
+    console.log('✅ Reply added successfully');
+    res.json({ 
+      success: true, 
+      message: 'Reply added successfully',
+      reply: answer.replies[answer.replies.length - 1]
+    });
+  } catch (e) {
+    console.error('❌ Add reply error:', e.message);
+    console.error('❌ Full error:', e);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Vote comment (for replies to answers)
+app.post('/community/threads/:id/comments/:commentId/vote', authenticateToken, async (req, res) => {
+  try {
+    const { type = 'upvote' } = req.body || {};
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    const commentId = req.params.commentId;
+    
+    const thread = await CommunityThread.findById(threadId);
+    if (!thread) {
+      return res.status(404).json({ success: false, message: 'Thread not found' });
+    }
+    
+    // Find the comment in any answer's replies
+    let comment = null;
+    let answer = null;
+    for (const a of thread.answers) {
+      comment = a.replies.id(commentId);
+      if (comment) {
+        answer = a;
+        break;
+      }
+    }
+    
+    if (!comment) {
+      return res.status(404).json({ success: false, message: 'Comment not found' });
+    }
+    
+    // Check if user already voted
+    const existingVote = comment.userVotes.find(vote => vote.userId.toString() === userId);
+    
+    if (existingVote) {
+      if (existingVote.voteType === type) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'You have already voted on this comment',
+          currentVote: existingVote.voteType
+        });
+      } else {
+        // User is changing their vote
+        if (existingVote.voteType === 'upvote') {
+          comment.upvotes = Math.max(0, comment.upvotes - 1);
+        } else {
+          comment.downvotes = Math.max(0, comment.downvotes - 1);
+        }
+        comment.userVotes = comment.userVotes.filter(vote => vote.userId.toString() !== userId);
+      }
+    }
+    
+    // Add new vote
+    if (type === 'upvote') {
+      comment.upvotes += 1;
+    } else if (type === 'downvote') {
+      comment.downvotes += 1;
+    }
+    
+    comment.userVotes.push({
+      userId: userId,
+      voteType: type,
+      votedAt: new Date()
+    });
+    
+    comment.votes = comment.upvotes - comment.downvotes;
+    await thread.save();
+    
+    res.json({ 
+      success: true, 
+      upvotes: comment.upvotes, 
+      downvotes: comment.downvotes, 
+      votes: comment.votes,
+      userVote: type
+    });
+  } catch (e) {
+    console.error('Vote comment error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Add comment to answer (alias for reply)
+app.post('/community/threads/:id/answers/:answerId/comments', authenticateToken, async (req, res) => {
+  try {
+    const { body } = req.body;
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    const answerId = req.params.answerId;
+    
+    if (!body || !body.trim()) {
+      return res.status(400).json({ success: false, message: 'Comment body is required' });
+    }
+    
+    const thread = await CommunityThread.findById(threadId);
+    if (!thread) {
+      return res.status(404).json({ success: false, message: 'Thread not found' });
+    }
+    
+    const answer = thread.answers.id(answerId);
+    if (!answer) {
+      return res.status(404).json({ success: false, message: 'Answer not found' });
+    }
+    
+    const isOP = thread.authorId && thread.authorId.toString() === userId;
+    
+    const comment = {
+      authorId: userId,
+      authorName: req.user.username || '@anonymous',
+      author: req.user.username || '@anonymous',
+      body: body.trim(),
+      isOP: isOP
+    };
+    
+    answer.replies.push(comment);
+    await thread.save();
+    
+    res.json({ 
+      success: true, 
+      message: 'Comment added successfully',
+      comment: answer.replies[answer.replies.length - 1]
+    });
+  } catch (e) {
+    console.error('Add comment error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Delete answer
+app.delete('/community/threads/:id/answers/:answerId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    const answerId = req.params.answerId;
+    
+    const thread = await CommunityThread.findById(threadId);
+    if (!thread) return res.status(404).json({ success: false, message: 'Thread not found' });
+    
+    const answer = thread.answers.id(answerId);
+    if (!answer) return res.status(404).json({ success: false, message: 'Answer not found' });
+    
+    // Check if user is the author of the answer
+    if (String(answer.authorId) !== String(userId)) {
+      return res.status(403).json({ success: false, message: 'You can only delete your own answers' });
+    }
+    
+    // Remove the answer
+    thread.answers.pull(answerId);
+    await thread.save();
+    
+    res.json({ success: true, message: 'Answer deleted successfully' });
+  } catch (e) {
+    console.error('Delete answer error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Delete comment
+app.delete('/community/threads/:id/comments/:commentId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    const commentId = req.params.commentId;
+    
+    const thread = await CommunityThread.findById(threadId);
+    if (!thread) return res.status(404).json({ success: false, message: 'Thread not found' });
+    
+    // Find the comment in any answer's replies
+    let comment = null;
+    let answer = null;
+    for (const a of thread.answers) {
+      comment = a.replies.id(commentId);
+      if (comment) {
+        answer = a;
+        break;
+      }
+    }
+    
+    if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
+    
+    // Check if user is the author of the comment
+    if (String(comment.authorId) !== String(userId)) {
+      return res.status(403).json({ success: false, message: 'You can only delete your own comments' });
+    }
+    
+    // Remove the comment
+    answer.replies.pull(commentId);
+    await thread.save();
+    
+    res.json({ success: true, message: 'Comment deleted successfully' });
+  } catch (e) {
+    console.error('Delete comment error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Delete reply (nested reply to comment)
+app.delete('/community/threads/:id/comments/:commentId/replies/:replyId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    const commentId = req.params.commentId;
+    const replyId = req.params.replyId;
+    
+    const thread = await CommunityThread.findById(threadId);
+    if (!thread) return res.status(404).json({ success: false, message: 'Thread not found' });
+    
+    // Find the comment and reply
+    let comment = null;
+    let reply = null;
+    let answer = null;
+    
+    for (const a of thread.answers) {
+      comment = a.replies.id(commentId);
+      if (comment) {
+        answer = a;
+        // Check if this comment has nested replies
+        if (comment.replies && comment.replies.length > 0) {
+          reply = comment.replies.id(replyId);
+        }
+        break;
+      }
+    }
+    
+    if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
+    if (!reply) return res.status(404).json({ success: false, message: 'Reply not found' });
+    
+    // Check if user is the author of the reply
+    if (String(reply.authorId) !== String(userId)) {
+      return res.status(403).json({ success: false, message: 'You can only delete your own replies' });
+    }
+    
+    // Remove the reply
+    comment.replies.pull(replyId);
+    await thread.save();
+    
+    res.json({ success: true, message: 'Reply deleted successfully' });
+  } catch (e) {
+    console.error('Delete reply error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Add reply to comment (nested reply)
+app.post('/community/threads/:id/comments/:commentId/replies', authenticateToken, async (req, res) => {
+  try {
+    const { body } = req.body;
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    const commentId = req.params.commentId;
+    
+    if (!body || !body.trim()) {
+      return res.status(400).json({ success: false, message: 'Reply body is required' });
+    }
+    
+    const thread = await CommunityThread.findById(threadId);
+    if (!thread) {
+      return res.status(404).json({ success: false, message: 'Thread not found' });
+    }
+    
+    // Find the comment in any answer's replies
+    let comment = null;
+    let answer = null;
+    for (const a of thread.answers) {
+      comment = a.replies.id(commentId);
+      if (comment) {
+        answer = a;
+        break;
+      }
+    }
+    
+    if (!comment) {
+      return res.status(404).json({ success: false, message: 'Comment not found' });
+    }
+    
+    const isOP = thread.authorId && thread.authorId.toString() === userId;
+    
+    const reply = {
+      authorId: userId,
+      authorName: req.user.username || '@anonymous',
+      author: req.user.username || '@anonymous',
+      body: body.trim(),
+      isOP: isOP
+    };
+    
+    // For now, we'll add it as a new reply to the answer since we don't have nested replies in the schema
+    // TODO: Implement proper nested replies in the schema
     answer.replies.push(reply);
     await thread.save();
     
@@ -674,7 +984,7 @@ app.post('/community/threads/:id/answers/:answerId/reply', authenticateToken, as
       reply: answer.replies[answer.replies.length - 1]
     });
   } catch (e) {
-    console.error('Add reply error:', e.message);
+    console.error('Add comment reply error:', e.message);
     res.status(500).json({ success: false, message: 'Server error', error: e.message });
   }
 });

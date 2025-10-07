@@ -9,26 +9,7 @@ import CommunityService from "../services/CommunityService";
 import { timeAgo } from "../utils/timeUtils";
 import PlaybookSpotlight from "../components/ThisWeekCard";
 import { MdChecklist, MdTimeline } from "react-icons/md";
-// Exact geometry from /assets/icons/bookmark.svg
-const BookmarkSvg = ({ active, className = "" }) => (
-  <svg
-    viewBox="0 0 120 120"
-    className={className}
-    aria-hidden="true"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <polygon
-      points="98,109 60,88 22,109 22,12 98,12"
-      // solid red when active, otherwise transparent with red outline
-      fill={active ? "#ff1200" : "transparent"}
-      stroke="#ff1200"
-      strokeWidth={active ? 0 : 8}          // ~1.6px when rendered at 24px
-      strokeLinejoin="round"
-      strokeLinecap="round"
-      shapeRendering="geometricPrecision"
-    />
-  </svg>
-);
+import BookmarkSvg from "../components/BookmarkSvg.jsx";
 import { getUniversityBranding, getContrastTextColor } from "../utils/universityBranding";
 import ViewAllModal from "../components/Community/ViewAllModal";
 import MagicBento, { ParticleCard, GlobalSpotlight } from "../components/MagicBento";
@@ -164,6 +145,8 @@ export default function Community() {
   const [bookmarkedIds, setBookmarkedIds] = useState(() => new Set()); // Set<string>
   const [bookmarkInFlight, setBookmarkInFlight] = useState({}); // { [id]: boolean }
   const [showBookmarks, setShowBookmarks] = useState(false); // Show bookmarked questions
+  const [bookmarkedQuestions, setBookmarkedQuestions] = useState([]); // All bookmarked questions
+  const [loadingBookmarks, setLoadingBookmarks] = useState(false); // Loading bookmarked questions
   const gridRef = useRef(null);
   
   // AI Question Assistant states
@@ -411,32 +394,37 @@ export default function Community() {
 
   // Load bookmarks once when user changes
   useEffect(() => {
-    if (!userInfo?.userId) return;
+    const uid = userInfo?._id || userInfo?.userId; // handle both shapes
+    if (!uid) return;
     
     (async () => {
       try {
-        console.log('🔄 Loading bookmarks for user:', userInfo.userId);
+        console.log('🔄 Loading bookmarks for user:', uid);
         const res = await CommunityService.getBookmarks();
         console.log('📌 Raw bookmark response:', res);
         
-        // Robust ID normalization for any backend response format
-        const toId = (x) => {
-          if (!x) return null;
-          if (typeof x === 'string') return x;
-          return String(x._id || x.id || x.threadId || (x.thread && (x.thread._id || x.thread.id)));
-        };
+        // Accept either {success, bookmarks:[...]} or a raw array
+        const list = Array.isArray(res?.bookmarks) ? res.bookmarks : Array.isArray(res) ? res : [];
         
-        const ids = (res?.bookmarks || []).map(toId).filter(Boolean);
+        // Extract thread id from multiple possible shapes
+        const ids = list.map((b) => {
+          // supports: "threadId" as string, "thread" populated doc, or flat string
+          if (typeof b === 'string') return b;
+          if (b.threadId) return String(b.threadId);
+          if (b.thread?._id) return String(b.thread._id);
+          if (b.thread) return String(b.thread); // if not populated
+          return null;
+        }).filter(Boolean);
+        
         console.log('📌 Loaded bookmark IDs:', ids);
         console.log('📌 Setting bookmarkedIds to:', new Set(ids));
-        setBookmarkedIds(new Set(ids));
+        setBookmarkedIds(new Set(ids.map(String)));
       } catch (e) {
-        console.error('❌ Load bookmarks error:', e?.response?.data || e.message);
-        console.log('📌 Setting bookmarkedIds to empty Set due to error');
+        console.error('❌ Load bookmarks failed:', e?.response?.data || e.message);
         setBookmarkedIds(new Set());
       }
     })();
-  }, [userInfo?.userId]);
+  }, [userInfo?._id, userInfo?.userId]);
 
   const loadThreads = async (page = 1) => {
     setSearching(true);
@@ -710,9 +698,56 @@ export default function Community() {
     } finally {
       setBookmarkInFlight((s) => ({ ...s, [threadId]: false }));
     }
+    
+    // If we're currently showing bookmarks, refresh the bookmarked questions list
+    if (showBookmarks) {
+      await fetchBookmarkedQuestions();
+    }
   };
 
-  const toggleBookmarks = () => {
+  // Fetch all bookmarked questions
+  const fetchBookmarkedQuestions = async () => {
+    setLoadingBookmarks(true);
+    try {
+      const res = await CommunityService.getBookmarks();
+      const bookmarkIds = Array.isArray(res?.bookmarks) ? res.bookmarks : [];
+      
+      if (bookmarkIds.length === 0) {
+        setBookmarkedQuestions([]);
+        return;
+      }
+
+      // Fetch full question details for each bookmarked thread
+      const questionPromises = bookmarkIds.map(async (bookmark) => {
+        const threadId = typeof bookmark === 'string' ? bookmark : bookmark.threadId || bookmark.thread?._id;
+        if (!threadId) return null;
+        
+        try {
+          const question = await CommunityService.get(threadId);
+          return question;
+        } catch (error) {
+          console.error(`Failed to fetch question ${threadId}:`, error);
+          return null;
+        }
+      });
+
+      const questions = await Promise.all(questionPromises);
+      const validQuestions = questions.filter(q => q !== null);
+      
+      setBookmarkedQuestions(validQuestions);
+    } catch (error) {
+      console.error('Error fetching bookmarked questions:', error);
+      setBookmarkedQuestions([]);
+    } finally {
+      setLoadingBookmarks(false);
+    }
+  };
+
+  const toggleBookmarks = async () => {
+    if (!showBookmarks) {
+      // Switching to bookmarks view - fetch all bookmarked questions
+      await fetchBookmarkedQuestions();
+    }
     setShowBookmarks(!showBookmarks);
   };
 
@@ -1181,7 +1216,7 @@ export default function Community() {
             <p className="text-white/60">
               {showBookmarks ? (
                 <>
-                  {bookmarkedCount} {bookmarkedCount === 1 ? 'bookmark' : 'bookmarks'} saved
+                  {bookmarkedQuestions.length} {bookmarkedQuestions.length === 1 ? 'bookmark' : 'bookmarks'} saved
                 </>
               ) : activeFilter ? (
                 <>
@@ -1270,7 +1305,7 @@ export default function Community() {
               <p className="mt-3 text-white/60">Searching...</p>
             </div>
           </div>
-        ) : (showBookmarks ? bookmarkedCount === 0 : latest.length === 0) ? (
+        ) : (showBookmarks ? bookmarkedQuestions.length === 0 : latest.length === 0) ? (
           <div className="nr-panel text-center py-12">
             <p className="text-white/60">
               {activeFilter ? (
@@ -1289,9 +1324,16 @@ export default function Community() {
               )}
             </p>
           </div>
+        ) : loadingBookmarks ? (
+          <div className="nr-panel text-center py-12">
+            <div className="text-center">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-white/20 border-t-amber-400"></div>
+              <p className="mt-3 text-white/60">Loading your bookmarks...</p>
+            </div>
+          </div>
         ) : (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {(showBookmarks ? latest.filter(q => bookmarkedIds.has(normId(q))) : latest).map((q) => {
+          {(showBookmarks ? bookmarkedQuestions : latest).map((q) => {
             const threadId = normId(q);
             const isBookmarked = bookmarkedIds.has(threadId);
             const isBusy = !!bookmarkInFlight[threadId];
@@ -1302,9 +1344,9 @@ export default function Community() {
               <button
                 onClick={(e) => handleBookmark(threadId, e)}
                 disabled={isBusy}
-                className={`absolute top-3 right-3 p-2 rounded-lg transition-colors duration-200 disabled:opacity-50 z-10 ${
+                className={`absolute top-3 right-3 p-2 rounded-lg transition-all duration-200 disabled:opacity-50 z-10 ${
                   isBookmarked
-                    ? 'bg-transparent text-red-500 ring-1 ring-red-500/25 hover:ring-red-500/35'
+                    ? 'bg-transparent text-red-500'
                     : 'bg-transparent text-red-500 hover:bg-red-500/5'
                 }`}
                 title={isBookmarked ? 'Remove bookmark' : 'Bookmark question'}
@@ -1312,7 +1354,6 @@ export default function Community() {
                 <BookmarkSvg
                   active={isBookmarked}
                   className={`w-6 h-6 ${isBusy ? 'opacity-60' : ''}`}
-                  style={{ filter: isBookmarked ? 'drop-shadow(0 0 3px rgba(239,68,68,.25))' : 'none' }}
                 />
               </button>
 
