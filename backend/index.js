@@ -66,13 +66,13 @@ const app = express();
 const http = require('http');
 const server = http.createServer(app);
 const io = require('socket.io')(server, { 
-    cors: { origin: '*', methods: ['GET', 'POST'] }
+    cors: { origin: ["https://newrun.club", "https://www.newrun.club"], methods: ['GET', 'POST'] }
 });
 
 
 
 app.use(express.json());
-app.use(cors({ origin: '*' }));
+app.use(cors({ origin: ["https://newrun.club", "https://www.newrun.club"] }));
 
 // Passport configuration
 app.use(passport.initialize());
