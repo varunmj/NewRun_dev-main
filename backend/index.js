@@ -66,13 +66,20 @@ const app = express();
 const http = require('http');
 const server = http.createServer(app);
 const io = require('socket.io')(server, { 
-    cors: { origin: ["https://newrun.club", "https://www.newrun.club"], methods: ['GET', 'POST'] }
+    cors: { 
+        origin: ["https://newrun.club", "https://www.newrun.club", "http://localhost:3000"], 
+        methods: ['GET', 'POST'],
+        credentials: true
+    }
 });
 
 
 
 app.use(express.json());
-app.use(cors({ origin: ["https://newrun.club", "https://www.newrun.club"] }));
+app.use(cors({ 
+    origin: ["https://newrun.club", "https://www.newrun.club", "http://localhost:3000"],
+    credentials: true
+}));
 
 // Passport configuration
 app.use(passport.initialize());
@@ -675,6 +682,188 @@ app.post('/community/threads/:id/answers/:answerId/reply', authenticateToken, as
     });
   } catch (e) {
     console.error('Add reply error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Vote comment (for replies to answers)
+app.post('/community/threads/:id/comments/:commentId/vote', authenticateToken, async (req, res) => {
+  try {
+    const { type = 'upvote' } = req.body || {};
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    const commentId = req.params.commentId;
+    
+    const thread = await CommunityThread.findById(threadId);
+    if (!thread) {
+      return res.status(404).json({ success: false, message: 'Thread not found' });
+    }
+    
+    // Find the comment in any answer's replies
+    let comment = null;
+    let answer = null;
+    for (const a of thread.answers) {
+      comment = a.replies.id(commentId);
+      if (comment) {
+        answer = a;
+        break;
+      }
+    }
+    
+    if (!comment) {
+      return res.status(404).json({ success: false, message: 'Comment not found' });
+    }
+    
+    // Check if user already voted
+    const existingVote = comment.userVotes.find(vote => vote.userId.toString() === userId);
+    
+    if (existingVote) {
+      if (existingVote.voteType === type) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'You have already voted on this comment',
+          currentVote: existingVote.voteType
+        });
+      } else {
+        // User is changing their vote
+        if (existingVote.voteType === 'upvote') {
+          comment.upvotes = Math.max(0, comment.upvotes - 1);
+        } else {
+          comment.downvotes = Math.max(0, comment.downvotes - 1);
+        }
+        comment.userVotes = comment.userVotes.filter(vote => vote.userId.toString() !== userId);
+      }
+    }
+    
+    // Add new vote
+    if (type === 'upvote') {
+      comment.upvotes += 1;
+    } else if (type === 'downvote') {
+      comment.downvotes += 1;
+    }
+    
+    comment.userVotes.push({
+      userId: userId,
+      voteType: type,
+      votedAt: new Date()
+    });
+    
+    comment.votes = comment.upvotes - comment.downvotes;
+    await thread.save();
+    
+    res.json({ 
+      success: true, 
+      upvotes: comment.upvotes, 
+      downvotes: comment.downvotes, 
+      votes: comment.votes,
+      userVote: type
+    });
+  } catch (e) {
+    console.error('Vote comment error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Add comment to answer (alias for reply)
+app.post('/community/threads/:id/answers/:answerId/comments', authenticateToken, async (req, res) => {
+  try {
+    const { body } = req.body;
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    const answerId = req.params.answerId;
+    
+    if (!body || !body.trim()) {
+      return res.status(400).json({ success: false, message: 'Comment body is required' });
+    }
+    
+    const thread = await CommunityThread.findById(threadId);
+    if (!thread) {
+      return res.status(404).json({ success: false, message: 'Thread not found' });
+    }
+    
+    const answer = thread.answers.id(answerId);
+    if (!answer) {
+      return res.status(404).json({ success: false, message: 'Answer not found' });
+    }
+    
+    const isOP = thread.authorId && thread.authorId.toString() === userId;
+    
+    const comment = {
+      authorId: userId,
+      authorName: req.user.username || '@anonymous',
+      author: req.user.username || '@anonymous',
+      body: body.trim(),
+      isOP: isOP
+    };
+    
+    answer.replies.push(comment);
+    await thread.save();
+    
+    res.json({ 
+      success: true, 
+      message: 'Comment added successfully',
+      comment: answer.replies[answer.replies.length - 1]
+    });
+  } catch (e) {
+    console.error('Add comment error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Add reply to comment (nested reply)
+app.post('/community/threads/:id/comments/:commentId/replies', authenticateToken, async (req, res) => {
+  try {
+    const { body } = req.body;
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    const commentId = req.params.commentId;
+    
+    if (!body || !body.trim()) {
+      return res.status(400).json({ success: false, message: 'Reply body is required' });
+    }
+    
+    const thread = await CommunityThread.findById(threadId);
+    if (!thread) {
+      return res.status(404).json({ success: false, message: 'Thread not found' });
+    }
+    
+    // Find the comment in any answer's replies
+    let comment = null;
+    let answer = null;
+    for (const a of thread.answers) {
+      comment = a.replies.id(commentId);
+      if (comment) {
+        answer = a;
+        break;
+      }
+    }
+    
+    if (!comment) {
+      return res.status(404).json({ success: false, message: 'Comment not found' });
+    }
+    
+    const isOP = thread.authorId && thread.authorId.toString() === userId;
+    
+    const reply = {
+      authorId: userId,
+      authorName: req.user.username || '@anonymous',
+      author: req.user.username || '@anonymous',
+      body: body.trim(),
+      isOP: isOP
+    };
+    
+    // For now, we'll add it as a new reply to the answer since we don't have nested replies in the schema
+    // TODO: Implement proper nested replies in the schema
+    answer.replies.push(reply);
+    await thread.save();
+    
+    res.json({ 
+      success: true, 
+      message: 'Reply added successfully',
+      reply: answer.replies[answer.replies.length - 1]
+    });
+  } catch (e) {
+    console.error('Add comment reply error:', e.message);
     res.status(500).json({ success: false, message: 'Server error', error: e.message });
   }
 });
