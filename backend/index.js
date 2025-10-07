@@ -644,15 +644,25 @@ app.post('/community/threads/:id/answers/:answerId/reply', authenticateToken, as
     const threadId = req.params.id;
     const answerId = req.params.answerId;
     
+    console.log('🔄 Reply request:', { body: body?.substring(0, 50) + '...', userId, threadId, answerId });
+    console.log('🔄 User object:', req.user);
+    
     if (!body || !body.trim()) {
+      console.log('❌ Missing reply body');
       return res.status(400).json({ success: false, message: 'Reply body is required' });
     }
     
     const thread = await CommunityThread.findById(threadId);
-    if (!thread) return res.status(404).json({ success: false, message: 'Thread not found' });
+    if (!thread) {
+      console.log('❌ Thread not found:', threadId);
+      return res.status(404).json({ success: false, message: 'Thread not found' });
+    }
     
     const answer = thread.answers.id(answerId);
-    if (!answer) return res.status(404).json({ success: false, message: 'Answer not found' });
+    if (!answer) {
+      console.log('❌ Answer not found:', answerId, 'in thread:', threadId);
+      return res.status(404).json({ success: false, message: 'Answer not found' });
+    }
     
     // Check if user is the original poster
     const isOP = thread.authorId && thread.authorId.toString() === userId;
@@ -665,16 +675,19 @@ app.post('/community/threads/:id/answers/:answerId/reply', authenticateToken, as
       isOP: isOP
     };
     
+    console.log('✅ Adding reply:', reply);
     answer.replies.push(reply);
     await thread.save();
     
+    console.log('✅ Reply added successfully');
     res.json({ 
       success: true, 
       message: 'Reply added successfully',
       reply: answer.replies[answer.replies.length - 1]
     });
   } catch (e) {
-    console.error('Add reply error:', e.message);
+    console.error('❌ Add reply error:', e.message);
+    console.error('❌ Full error:', e);
     res.status(500).json({ success: false, message: 'Server error', error: e.message });
   }
 });
@@ -799,6 +812,121 @@ app.post('/community/threads/:id/answers/:answerId/comments', authenticateToken,
     });
   } catch (e) {
     console.error('Add comment error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Delete answer
+app.delete('/community/threads/:id/answers/:answerId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    const answerId = req.params.answerId;
+    
+    const thread = await CommunityThread.findById(threadId);
+    if (!thread) return res.status(404).json({ success: false, message: 'Thread not found' });
+    
+    const answer = thread.answers.id(answerId);
+    if (!answer) return res.status(404).json({ success: false, message: 'Answer not found' });
+    
+    // Check if user is the author of the answer
+    if (String(answer.authorId) !== String(userId)) {
+      return res.status(403).json({ success: false, message: 'You can only delete your own answers' });
+    }
+    
+    // Remove the answer
+    thread.answers.pull(answerId);
+    await thread.save();
+    
+    res.json({ success: true, message: 'Answer deleted successfully' });
+  } catch (e) {
+    console.error('Delete answer error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Delete comment
+app.delete('/community/threads/:id/comments/:commentId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    const commentId = req.params.commentId;
+    
+    const thread = await CommunityThread.findById(threadId);
+    if (!thread) return res.status(404).json({ success: false, message: 'Thread not found' });
+    
+    // Find the comment in any answer's replies
+    let comment = null;
+    let answer = null;
+    for (const a of thread.answers) {
+      comment = a.replies.id(commentId);
+      if (comment) {
+        answer = a;
+        break;
+      }
+    }
+    
+    if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
+    
+    // Check if user is the author of the comment
+    if (String(comment.authorId) !== String(userId)) {
+      return res.status(403).json({ success: false, message: 'You can only delete your own comments' });
+    }
+    
+    // Remove the comment
+    answer.replies.pull(commentId);
+    await thread.save();
+    
+    res.json({ success: true, message: 'Comment deleted successfully' });
+  } catch (e) {
+    console.error('Delete comment error:', e.message);
+    res.status(500).json({ success: false, message: 'Server error', error: e.message });
+  }
+});
+
+// Delete reply (nested reply to comment)
+app.delete('/community/threads/:id/comments/:commentId/replies/:replyId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.user?._id || req.user._id;
+    const threadId = req.params.id;
+    const commentId = req.params.commentId;
+    const replyId = req.params.replyId;
+    
+    const thread = await CommunityThread.findById(threadId);
+    if (!thread) return res.status(404).json({ success: false, message: 'Thread not found' });
+    
+    // Find the comment and reply
+    let comment = null;
+    let reply = null;
+    let answer = null;
+    
+    for (const a of thread.answers) {
+      comment = a.replies.id(commentId);
+      if (comment) {
+        answer = a;
+        // Check if this comment has nested replies
+        if (comment.replies && comment.replies.length > 0) {
+          reply = comment.replies.id(replyId);
+        }
+        break;
+      }
+    }
+    
+    if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
+    if (!reply) return res.status(404).json({ success: false, message: 'Reply not found' });
+    
+    // Check if user is the author of the reply
+    if (String(reply.authorId) !== String(userId)) {
+      return res.status(403).json({ success: false, message: 'You can only delete your own replies' });
+    }
+    
+    // Remove the reply
+    comment.replies.pull(replyId);
+    await thread.save();
+    
+    res.json({ success: true, message: 'Reply deleted successfully' });
+  } catch (e) {
+    console.error('Delete reply error:', e.message);
     res.status(500).json({ success: false, message: 'Server error', error: e.message });
   }
 });

@@ -6,9 +6,10 @@ import Footer from '../components/Footer/Footer';
 import axiosInstance from '../utils/axiosInstance';
 import { timeAgo } from '../utils/timeUtils';
 import useBookmarks from '../hooks/useBookmarks';
+import BookmarkSvg from '../components/BookmarkSvg.jsx';
 
 // Depth-capped comment system (Answer → Comment → Reply, max depth 2)
-function CommentTree({ comments, thread, timeAgo, depth = 0, maxDepth = 2, onVote, onReply, showCommentForm, commentText, setCommentText }) {
+function CommentTree({ comments, thread, timeAgo, depth = 0, maxDepth = 2, onVote, onReply, showCommentForm, commentText, setCommentText, onDeleteComment, onDeleteReply, userInfo }) {
   if (depth >= maxDepth) {
     return (
       <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
@@ -98,6 +99,17 @@ function CommentTree({ comments, thread, timeAgo, depth = 0, maxDepth = 2, onVot
                   </button>
                 )}
                 
+                {/* Delete button - only show to comment author */}
+                {userInfo && comment.authorId && String(comment.authorId) === String(userInfo._id || userInfo.userId) && (
+                  <button 
+                    onClick={() => onDeleteComment && onDeleteComment(comment._id || comment.id)}
+                    className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                    title="Delete this comment"
+                  >
+                    Delete
+                  </button>
+                )}
+                
                 {/* Report button */}
                 <button className="text-xs text-white/40 hover:text-white/60 transition-colors">
                   Report
@@ -146,6 +158,9 @@ function CommentTree({ comments, thread, timeAgo, depth = 0, maxDepth = 2, onVot
                     showCommentForm={showCommentForm}
                     commentText={commentText}
                     setCommentText={setCommentText}
+                    onDeleteComment={onDeleteComment}
+                    onDeleteReply={onDeleteReply}
+                    userInfo={userInfo}
                   />
                 </div>
               )}
@@ -157,44 +172,6 @@ function CommentTree({ comments, thread, timeAgo, depth = 0, maxDepth = 2, onVot
   );
 }
 
-// Exact geometry from /assets/icons/bookmark.svg with soft glow
-const BookmarkSvg = ({ active, className = "", ...props }) => (
-  <svg
-    viewBox="0 0 120 120"
-    className={className}
-    aria-hidden="true"
-    xmlns="http://www.w3.org/2000/svg"
-    {...props}
-  >
-    {/* Soft glow definition (only used when active) */}
-    {active && (
-      <defs>
-        <filter id="nr-soft-glow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
-    )}
-
-    <polygon
-      points="98,109 60,88 22,109 22,12 98,12"
-      fill={active ? "#ff1200" : "transparent"}
-      stroke="#ff1200"
-      strokeWidth={active ? 0 : 8}
-      strokeLinejoin="round"
-      strokeLinecap="round"
-      shapeRendering="geometricPrecision"
-      style={{
-        // icon-only glow
-        filter: active ? "url(#nr-soft-glow) drop-shadow(0 0 6px rgba(255,18,0,0.35))" : "none",
-        transition: "filter 180ms ease, fill 180ms ease, stroke-width 180ms ease",
-      }}
-    />
-  </svg>
-);
 import '../styles/newrun-hero.css';
 
 export default function Thread() {
@@ -348,7 +325,7 @@ export default function Thread() {
     setAnswer('');
     // Re-fetch the thread to get the updated answers
     const updated = await CommunityService.get(id);
-    setThread(updated);
+    setThread({ ...updated, _canonicalId: tid });
   };
 
   const handleVote = async (type) => {
@@ -424,9 +401,28 @@ export default function Thread() {
     const replyBody = replyText[answerId];
     if (!replyBody || !replyBody.trim()) return;
     
+    // Check if user is logged in
+    if (!userInfo) {
+      alert('Please log in to post a reply.');
+      return;
+    }
+    
+    // Check authentication token
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('token') || localStorage.getItem('userToken');
+    if (!token) {
+      alert('Authentication token not found. Please log in again.');
+      return;
+    }
+    
+    console.log('🔑 Auth token found:', token.substring(0, 20) + '...');
+    
     try {
       const tid = thread._canonicalId || String(thread._id || thread.id);
+      console.log('🔄 Posting reply:', { tid, answerId, replyBody: replyBody.substring(0, 50) + '...' });
+      
       const result = await CommunityService.addReply(tid, answerId, replyBody);
+      console.log('✅ Reply result:', result);
+      
       if (result.success) {
         // Clear reply text and hide form
         setReplyText(prev => ({ ...prev, [answerId]: '' }));
@@ -434,10 +430,23 @@ export default function Thread() {
         
         // Refresh thread to get updated replies
         const updated = await CommunityService.get(id);
-        setThread(updated);
+        setThread({ ...updated, _canonicalId: tid });
+      } else {
+        console.error('❌ Reply failed - no success:', result);
+        alert('Failed to post reply. Please try again.');
       }
     } catch (error) {
-      console.error('Reply error:', error);
+      console.error('❌ Reply error:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
+      
+      if (error.response?.status === 401) {
+        alert('Please log in to post a reply.');
+      } else if (error.response?.status === 400) {
+        alert(error.response.data.message || 'Invalid request. Please try again.');
+      } else {
+        alert('Failed to post reply. Please try again.');
+      }
     }
   };
 
@@ -473,27 +482,125 @@ export default function Thread() {
       const text = commentText[commentId];
       if (!text?.trim()) return;
       
+      // Check if user is logged in
+      if (!userInfo) {
+        alert('Please log in to post a reply.');
+        return;
+      }
+      
       try {
         const tid = thread._canonicalId || String(thread._id || thread.id);
+        console.log('🔄 Posting comment reply:', { tid, commentId, text: text.substring(0, 50) + '...' });
         
-        // For now, use the existing addReply method since we don't have comment-specific endpoints yet
-        const result = await CommunityService.addReply(tid, commentId, text.trim());
+        // ✅ Use the dedicated endpoint for comment replies
+        const result = await CommunityService.replyToComment(tid, commentId, text.trim());
+        
         if (result.success) {
           setCommentText(prev => ({ ...prev, [commentId]: '' }));
           setShowCommentForm(prev => ({ ...prev, [commentId]: false }));
           
           // Refresh thread to get updated comments
           const updated = await CommunityService.get(id);
-          setThread(updated);
+          setThread({ ...updated, _canonicalId: tid });
+        } else {
+          alert(result.message || 'Failed to post reply. Please try again.');
         }
       } catch (error) {
-        console.error('Comment submit error:', error);
-        alert('Failed to post reply. Please try again.');
+        console.error('❌ Comment submit error:', error);
+        console.error('❌ Error response:', error.response?.data);
+        console.error('❌ Error status:', error.response?.status);
+        
+        if (error.response?.status === 401) {
+          alert('Please log in to post a reply.');
+        } else if (error.response?.status === 400) {
+          alert(error.response.data.message || 'Invalid request. Please try again.');
+        } else {
+          alert('Failed to post reply. Please try again.');
+        }
       }
     }
   };
 
   const handleBookmark = toggleBookmark;
+
+  // Delete handlers
+  const handleDeleteAnswer = async (answerId) => {
+    if (!window.confirm('Are you sure you want to delete this answer? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const tid = thread._canonicalId || String(thread._id || thread.id);
+      const result = await CommunityService.deleteAnswer(tid, answerId);
+      
+      if (result.success) {
+        // Refresh thread to get updated answers
+        const updated = await CommunityService.get(id);
+        setThread({ ...updated, _canonicalId: tid });
+      } else {
+        alert('Failed to delete answer. Please try again.');
+      }
+    } catch (error) {
+      console.error('Delete answer error:', error);
+      if (error.response?.status === 403) {
+        alert('You can only delete your own answers.');
+      } else {
+        alert('Failed to delete answer. Please try again.');
+      }
+    }
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    if (!window.confirm('Are you sure you want to delete this comment? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const tid = thread._canonicalId || String(thread._id || thread.id);
+      const result = await CommunityService.deleteComment(tid, commentId);
+      
+      if (result.success) {
+        // Refresh thread to get updated comments
+        const updated = await CommunityService.get(id);
+        setThread({ ...updated, _canonicalId: tid });
+      } else {
+        alert('Failed to delete comment. Please try again.');
+      }
+    } catch (error) {
+      console.error('Delete comment error:', error);
+      if (error.response?.status === 403) {
+        alert('You can only delete your own comments.');
+      } else {
+        alert('Failed to delete comment. Please try again.');
+      }
+    }
+  };
+
+  const handleDeleteReply = async (commentId, replyId) => {
+    if (!window.confirm('Are you sure you want to delete this reply? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const tid = thread._canonicalId || String(thread._id || thread.id);
+      const result = await CommunityService.deleteReply(tid, commentId, replyId);
+      
+      if (result.success) {
+        // Refresh thread to get updated replies
+        const updated = await CommunityService.get(id);
+        setThread({ ...updated, _canonicalId: tid });
+      } else {
+        alert('Failed to delete reply. Please try again.');
+      }
+    } catch (error) {
+      console.error('Delete reply error:', error);
+      if (error.response?.status === 403) {
+        alert('You can only delete your own replies.');
+      } else {
+        alert('Failed to delete reply. Please try again.');
+      }
+    }
+  };
 
   const handleAcceptAnswer = async (answerId) => {
     try {
@@ -501,7 +608,7 @@ export default function Thread() {
       const success = await CommunityService.acceptAnswer(tid, answerId);
       if (success) {
         const updated = await CommunityService.get(id);
-        setThread(updated);
+        setThread({ ...updated, _canonicalId: tid });
       }
     } catch (error) {
       console.error('Accept answer error:', error);
@@ -554,19 +661,16 @@ export default function Thread() {
             const tid = thread._canonicalId || String(thread._id || thread.id);
             return (
               <button
+                type="button"
                 onClick={(e) => handleBookmark(tid, e)}
                 disabled={bookmarkInFlight[tid]}
-                className={`absolute top-3 right-3 p-2 rounded-lg transition-all duration-200 disabled:opacity-50 z-10 ${
-                  bookmarkedIds.has(tid)
-                    ? 'bg-transparent text-red-500'
-                    : 'bg-transparent text-red-500 hover:bg-red-500/5'
-                }`}
-                title={bookmarkedIds.has(tid) ? 'Remove bookmark' : 'Bookmark question'}
+                className={`absolute top-3 right-3 p-2 rounded-lg transition-all duration-200 z-10
+                  ${bookmarkedIds.has(tid) ? "text-red-500" : "text-red-500 hover:bg-red-500/5"}
+                  ${bookmarkInFlight[tid] ? "cursor-wait" : "cursor-pointer"}`}
+                aria-pressed={bookmarkedIds.has(tid)}
+                aria-label={bookmarkedIds.has(tid) ? "Remove bookmark" : "Bookmark question"}
               >
-            <BookmarkSvg
-              active={bookmarkedIds.has(tid)}
-              className={`w-6 h-6 ${bookmarkInFlight[tid] ? 'opacity-60' : ''}`}
-            />
+                <BookmarkSvg active={bookmarkedIds.has(tid)} className="w-6 h-6" />
               </button>
             );
           })()}
@@ -790,14 +894,27 @@ export default function Thread() {
                       <span>{timeAgo(a.createdAt)}</span>
                     </div>
 
-                    {isAuthor && !a.accepted && !thread.solved && (
-                      <button
-                        onClick={() => handleAcceptAnswer(a._id || a.id)}
-                        className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20"
-                      >
-                        Accept Answer
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {isAuthor && !a.accepted && !thread.solved && (
+                        <button
+                          onClick={() => handleAcceptAnswer(a._id || a.id)}
+                          className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20"
+                        >
+                          Accept Answer
+                        </button>
+                      )}
+                      
+                      {/* Delete button - only show to answer author */}
+                      {userInfo && a.authorId && String(a.authorId) === String(userInfo._id || userInfo.userId) && (
+                        <button
+                          onClick={() => handleDeleteAnswer(a._id || a.id)}
+                          className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/20"
+                          title="Delete this answer"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -859,6 +976,9 @@ export default function Thread() {
                       showCommentForm={showCommentForm}
                       commentText={commentText}
                       setCommentText={setCommentText}
+                      onDeleteComment={handleDeleteComment}
+                      onDeleteReply={handleDeleteReply}
+                      userInfo={userInfo}
                     />
                   </div>
                 )}

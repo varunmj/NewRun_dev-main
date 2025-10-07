@@ -316,6 +316,48 @@ export default {
       console.error('Add comment reply error:', error);
       throw error;
     }
+  },
+
+  // Reply to a COMMENT (nested reply) - alias for addCommentReply
+  replyToComment: async (threadId, commentId, body) => {
+    try {
+      const response = await axiosInstance.post(`/community/threads/${threadId}/comments/${commentId}/replies`, { body });
+      return response.data;
+    } catch (error) {
+      console.error('Reply to comment error:', error);
+      throw error;
+    }
+  },
+
+  // Delete methods
+  deleteAnswer: async (threadId, answerId) => {
+    try {
+      const response = await axiosInstance.delete(`/community/threads/${threadId}/answers/${answerId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Delete answer error:', error);
+      throw error;
+    }
+  },
+
+  deleteComment: async (threadId, commentId) => {
+    try {
+      const response = await axiosInstance.delete(`/community/threads/${threadId}/comments/${commentId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Delete comment error:', error);
+      throw error;
+    }
+  },
+
+  deleteReply: async (threadId, commentId, replyId) => {
+    try {
+      const response = await axiosInstance.delete(`/community/threads/${threadId}/comments/${commentId}/replies/${replyId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Delete reply error:', error);
+      throw error;
+    }
   }
 };
 

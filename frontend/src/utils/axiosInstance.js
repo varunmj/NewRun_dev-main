@@ -45,7 +45,12 @@ const axiosInstance = axios.create({
 // ---- attach Authorization header ----
 axiosInstance.interceptors.request.use((config) => {
   const t = getToken();
-  if (t) config.headers.Authorization = `Bearer ${t}`;
+  if (t) {
+    config.headers.Authorization = `Bearer ${t}`;
+    console.log('🔑 Adding auth header to request:', config.url, 'Token:', t.substring(0, 20) + '...');
+  } else {
+    console.log('❌ No token found for request:', config.url);
+  }
   return config;
 });
 

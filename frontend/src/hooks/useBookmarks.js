@@ -1,81 +1,98 @@
 // src/hooks/useBookmarks.js
-import { useEffect, useState } from 'react';
-import CommunityService from '../services/CommunityService';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import CommunityService from "../services/CommunityService";
 
-export default function useBookmarks(userInfo) {
-  const [bookmarkedIds, setBookmarkedIds] = useState(() => {
-    // seed from cache for instant UI
-    try {
-      const cached = JSON.parse(localStorage.getItem('nr_bookmarks') || '[]');
-      return new Set(cached.map(String));
-    } catch { return new Set(); }
-  });
+export default function useBookmarks(user) {
+  const userId = ((user && (user.userId || user._id)) || "").toString();
+  const [bookmarkedIds, setBookmarkedIds] = useState(() => new Set());
   const [bookmarkInFlight, setBookmarkInFlight] = useState({});
+  const seeded = useRef(false);
 
+  // seed once per user
   useEffect(() => {
-    const uid = userInfo?._id || userInfo?.userId;
-    if (!uid) return;
+    if (!userId) {
+      setBookmarkedIds(new Set());
+      seeded.current = false;
+      return;
+    }
+    if (seeded.current) return;
 
     (async () => {
       try {
         const res = await CommunityService.getBookmarks();
-        const list = Array.isArray(res?.bookmarks) ? res.bookmarks
-                     : Array.isArray(res) ? res : [];
-        const ids = list.map((b) => {
-          if (typeof b === 'string') return b;
-          if (b.threadId) return String(b.threadId);
-          if (b.thread?._id) return String(b.thread._id);
-          if (b.thread) return String(b.thread);
-          return null;
-        }).filter(Boolean);
+        const ids = Array.isArray(res?.bookmarks)
+          ? res.bookmarks
+              .map((b) => {
+                if (typeof b === "string") return b;
+                return String(
+                  b?.threadId ||
+                    b?.thread?._id ||
+                    b?.thread?.id ||
+                    b?._id ||
+                    ""
+                );
+              })
+              .filter(Boolean)
+          : [];
         setBookmarkedIds(new Set(ids));
-        localStorage.setItem('nr_bookmarks', JSON.stringify(ids));
-      } catch (e) {
-        console.error('Bookmarks load failed:', e?.response?.data || e.message);
+        seeded.current = true;
+      } catch (_) {
+        setBookmarkedIds(new Set());
+        seeded.current = true;
       }
     })();
-  }, [userInfo?._id, userInfo?.userId]);
+  }, [userId]);
 
-  const toggleBookmark = async (threadIdRaw, e) => {
-    e?.preventDefault?.(); e?.stopPropagation?.();
-    const threadId = String(threadIdRaw);
-    if (!threadId || bookmarkInFlight[threadId]) return;
+  const toggleBookmark = useCallback(
+    async (rawId, e) => {
+      e?.preventDefault?.();
+      e?.stopPropagation?.();
 
-    setBookmarkInFlight((s) => ({ ...s, [threadId]: true }));
-    const was = bookmarkedIds.has(threadId);
+      const tid = String(rawId || "");
+      if (!tid || tid === "undefined" || tid === "null") return;
 
-    // optimistic
-    setBookmarkedIds(prev => {
-      const next = new Set(prev);
-      was ? next.delete(threadId) : next.add(threadId);
-      localStorage.setItem('nr_bookmarks', JSON.stringify([...next]));
-      return next;
-    });
+      if (bookmarkInFlight[tid]) return;
+      setBookmarkInFlight((s) => ({ ...s, [tid]: true }));
 
-    try {
-      if (was) await CommunityService.removeBookmark(threadId);
-      else     await CommunityService.bookmarkThread(threadId);
-    } catch (err) {
-      const status = err?.response?.status;
-      const msg = err?.response?.data?.message || '';
-      const idempotentOK =
-        (was && (status === 404 || /not\s*bookmarked/i.test(msg))) ||
-        (!was && (status === 409 || /already\s*bookmarked/i.test(msg)));
-      if (!idempotentOK) {
-        // revert
-        setBookmarkedIds(prev => {
-          const next = new Set(prev);
-          was ? next.add(threadId) : next.delete(threadId);
-          localStorage.setItem('nr_bookmarks', JSON.stringify([...next]));
-          return next;
-        });
-        console.error('Bookmark toggle failed:', status, msg);
-        alert('Failed to update bookmark. Please try again.');
+      const was = bookmarkedIds.has(tid);
+
+      // optimistic flip
+      setBookmarkedIds((prev) => {
+        const next = new Set(prev);
+        was ? next.delete(tid) : next.add(tid);
+        return next;
+      });
+
+      try {
+        if (was) {
+          await CommunityService.removeBookmark(tid);
+        } else {
+          await CommunityService.bookmarkThread(tid);
+        }
+      } catch (err) {
+        const status = err?.response?.status;
+        const msg = err?.response?.data?.message || "";
+        const idempotentOK =
+          (was && (status === 404 || /not\s*bookmarked/i.test(msg))) ||
+          (!was && (status === 409 || /already\s*bookmarked/i.test(msg)));
+
+        if (!idempotentOK) {
+          // revert
+          setBookmarkedIds((prev) => {
+            const next = new Set(prev);
+            was ? next.add(tid) : next.delete(tid);
+            return next;
+          });
+        }
+      } finally {
+        setBookmarkInFlight((s) => ({ ...s, [tid]: false }));
       }
-    } finally {
-      setBookmarkInFlight((s) => ({ ...s, [threadId]: false }));
-    }
-  };
+    },
+    [bookmarkedIds, bookmarkInFlight]
+  );
 
-  return { bookmarkedIds, setBookmarkedIds, bookmarkInFlight, toggleBookmark };
+  return useMemo(
+    () => ({ bookmarkedIds, bookmarkInFlight, toggleBookmark }),
+    [bookmarkedIds, bookmarkInFlight, toggleBookmark]
+  );
 }
