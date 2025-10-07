@@ -5,6 +5,7 @@
   "dependencies": {
     "@heroui/react": "^2.8.2",
     "@react-google-maps/api": "^2.19.3",
+    "@studio-freight/lenis": "^1.0.42",
     "aws-sdk": "^2.1691.0",
     "axios": "^1.7.2",
     "canvas-confetti": "^1.9.3",
