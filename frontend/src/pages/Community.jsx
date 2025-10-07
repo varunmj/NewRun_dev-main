@@ -10,22 +10,40 @@ import { timeAgo } from "../utils/timeUtils";
 import PlaybookSpotlight from "../components/ThisWeekCard";
 import { MdChecklist, MdTimeline } from "react-icons/md";
 // Exact geometry from /assets/icons/bookmark.svg
-const BookmarkSvg = ({ active, className = "" }) => (
+const BookmarkSvg = ({ active, className = "", ...props }) => (
   <svg
     viewBox="0 0 120 120"
     className={className}
     aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
+    {...props}
   >
+    {/* Soft glow definition (only used when active) */}
+    {active && (
+      <defs>
+        <filter id="nr-soft-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+    )}
+
     <polygon
       points="98,109 60,88 22,109 22,12 98,12"
-      // solid red when active, otherwise transparent with red outline
       fill={active ? "#ff1200" : "transparent"}
-      stroke="#ff1200"
-      strokeWidth={active ? 0 : 8}          // ~1.6px when rendered at 24px
+      stroke={active ? "#ff1200" : "#ff1200"}
+      strokeWidth={active ? 0 : 8}
       strokeLinejoin="round"
       strokeLinecap="round"
       shapeRendering="geometricPrecision"
+      style={{
+        // icon-only glow
+        filter: active ? "url(#nr-soft-glow) drop-shadow(0 0 6px rgba(255,18,0,0.25))" : "none",
+        transition: "filter 180ms ease, fill 180ms ease, stroke-width 180ms ease",
+      }}
     />
   </svg>
 );
@@ -411,32 +429,37 @@ export default function Community() {
 
   // Load bookmarks once when user changes
   useEffect(() => {
-    if (!userInfo?.userId) return;
+    const uid = userInfo?._id || userInfo?.userId; // handle both shapes
+    if (!uid) return;
     
     (async () => {
       try {
-        console.log('🔄 Loading bookmarks for user:', userInfo.userId);
+        console.log('🔄 Loading bookmarks for user:', uid);
         const res = await CommunityService.getBookmarks();
         console.log('📌 Raw bookmark response:', res);
         
-        // Robust ID normalization for any backend response format
-        const toId = (x) => {
-          if (!x) return null;
-          if (typeof x === 'string') return x;
-          return String(x._id || x.id || x.threadId || (x.thread && (x.thread._id || x.thread.id)));
-        };
+        // Accept either {success, bookmarks:[...]} or a raw array
+        const list = Array.isArray(res?.bookmarks) ? res.bookmarks : Array.isArray(res) ? res : [];
         
-        const ids = (res?.bookmarks || []).map(toId).filter(Boolean);
+        // Extract thread id from multiple possible shapes
+        const ids = list.map((b) => {
+          // supports: "threadId" as string, "thread" populated doc, or flat string
+          if (typeof b === 'string') return b;
+          if (b.threadId) return String(b.threadId);
+          if (b.thread?._id) return String(b.thread._id);
+          if (b.thread) return String(b.thread); // if not populated
+          return null;
+        }).filter(Boolean);
+        
         console.log('📌 Loaded bookmark IDs:', ids);
         console.log('📌 Setting bookmarkedIds to:', new Set(ids));
-        setBookmarkedIds(new Set(ids));
+        setBookmarkedIds(new Set(ids.map(String)));
       } catch (e) {
-        console.error('❌ Load bookmarks error:', e?.response?.data || e.message);
-        console.log('📌 Setting bookmarkedIds to empty Set due to error');
+        console.error('❌ Load bookmarks failed:', e?.response?.data || e.message);
         setBookmarkedIds(new Set());
       }
     })();
-  }, [userInfo?.userId]);
+  }, [userInfo?._id, userInfo?.userId]);
 
   const loadThreads = async (page = 1) => {
     setSearching(true);
@@ -1302,9 +1325,9 @@ export default function Community() {
               <button
                 onClick={(e) => handleBookmark(threadId, e)}
                 disabled={isBusy}
-                className={`absolute top-3 right-3 p-2 rounded-lg transition-colors duration-200 disabled:opacity-50 z-10 ${
+                className={`absolute top-3 right-3 p-2 rounded-lg transition-all duration-200 disabled:opacity-50 z-10 ${
                   isBookmarked
-                    ? 'bg-transparent text-red-500 ring-1 ring-red-500/25 hover:ring-red-500/35'
+                    ? 'bg-transparent text-red-500'
                     : 'bg-transparent text-red-500 hover:bg-red-500/5'
                 }`}
                 title={isBookmarked ? 'Remove bookmark' : 'Bookmark question'}
@@ -1312,7 +1335,6 @@ export default function Community() {
                 <BookmarkSvg
                   active={isBookmarked}
                   className={`w-6 h-6 ${isBusy ? 'opacity-60' : ''}`}
-                  style={{ filter: isBookmarked ? 'drop-shadow(0 0 3px rgba(239,68,68,.25))' : 'none' }}
                 />
               </button>
 

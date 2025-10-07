@@ -418,7 +418,7 @@ app.post('/community/threads/:id/vote', authenticateToken, async (req, res) => {
   }
 });
 
-// Bookmark thread
+// Bookmark thread (idempotent)
 app.post('/community/threads/:id/bookmark', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.user?._id || req.user._id;
@@ -440,10 +440,10 @@ app.post('/community/threads/:id/bookmark', authenticateToken, async (req, res) 
       return res.status(404).json({ success: false, message: 'Thread not found' });
     }
     
-    // Check if already bookmarked
-    const existingBookmark = await UserBookmark.findOne({ userId, threadId });
-    if (existingBookmark) {
-      return res.status(400).json({ success: false, message: 'Already bookmarked' });
+    // Check if already bookmarked (idempotent)
+    const existing = await UserBookmark.findOne({ userId, threadId });
+    if (existing) {
+      return res.json({ success: true, message: 'Already bookmarked' });
     }
     
     // Create bookmark
@@ -460,7 +460,7 @@ app.post('/community/threads/:id/bookmark', authenticateToken, async (req, res) 
   }
 });
 
-// Remove bookmark
+// Remove bookmark (idempotent)
 app.delete('/community/threads/:id/bookmark', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.user?._id || req.user._id;
@@ -474,15 +474,8 @@ app.delete('/community/threads/:id/bookmark', authenticateToken, async (req, res
       return res.status(400).json({ success: false, message: 'Invalid thread ID' });
     }
     
-    const result = await UserBookmark.findOneAndDelete({ userId, threadId });
-    if (!result) {
-      return res.status(404).json({ success: false, message: 'Bookmark not found' });
-    }
-    
-    res.json({ 
-      success: true, 
-      message: 'Bookmark removed successfully' 
-    });
+    const r = await UserBookmark.deleteOne({ userId, threadId });
+    return res.json({ success: true, removed: r.deletedCount > 0 });
   } catch (e) {
     console.error('Remove bookmark error:', e.message);
     res.status(500).json({ success: false, message: 'Server error', error: e.message });
@@ -493,33 +486,33 @@ app.delete('/community/threads/:id/bookmark', authenticateToken, async (req, res
 app.get('/community/bookmarks', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.user?._id || req.user._id;
-    const { page = 1, limit = 20 } = req.query;
-    
-    const skip = (page - 1) * limit;
-    
-    const bookmarks = await UserBookmark.find({ userId })
-      .populate('threadId')
+    const page  = parseInt(req.query.page || 1, 10);
+    const limit = parseInt(req.query.limit || 20, 10);
+    const skip  = (page - 1) * limit;
+
+    // no populate needed to restore icon state
+    const docs = await UserBookmark.find({ userId })
+      .select('threadId')
       .sort({ bookmarkedAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
-    
-    // Filter out null threads (in case thread was deleted)
-    const validBookmarks = bookmarks.filter(b => b.threadId);
-    
-    const totalBookmarks = await UserBookmark.countDocuments({ userId });
-    
+      .limit(limit)
+      .lean();
+
+    const ids = docs
+      .map(d => d.threadId)
+      .filter(Boolean)
+      .map(String);
+
+    const total = await UserBookmark.countDocuments({ userId });
+
     res.json({
       success: true,
-      bookmarks: validBookmarks.map(b => ({
-        _id: b._id,
-        thread: b.threadId,
-        bookmarkedAt: b.bookmarkedAt
-      })),
+      bookmarks: ids, // <— flat list of thread IDs
       pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(totalBookmarks / limit),
-        totalBookmarks,
-        hasNextPage: skip + validBookmarks.length < totalBookmarks
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalBookmarks: total,
+        hasNextPage: skip + docs.length < total
       }
     });
   } catch (e) {

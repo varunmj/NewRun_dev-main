@@ -5,7 +5,196 @@ import Navbar from '../components/Navbar/Navbar';
 import Footer from '../components/Footer/Footer';
 import axiosInstance from '../utils/axiosInstance';
 import { timeAgo } from '../utils/timeUtils';
-import BookmarkIcon from '../assets/icons/bookmark.svg';
+import useBookmarks from '../hooks/useBookmarks';
+
+// Depth-capped comment system (Answer → Comment → Reply, max depth 2)
+function CommentTree({ comments, thread, timeAgo, depth = 0, maxDepth = 2, onVote, onReply, showCommentForm, commentText, setCommentText }) {
+  if (depth >= maxDepth) {
+    return (
+      <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+        <p className="text-sm text-amber-300">
+          💡 This discussion is getting deep! Consider starting a new thread for this topic.
+        </p>
+        <button className="mt-2 text-xs text-amber-400 hover:text-amber-300 underline">
+          Continue in a new thread →
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {comments.map((comment, i) => {
+        const isLast = i === comments.length - 1;
+        const indentClass = depth === 0 ? 'ml-0' : depth === 1 ? 'ml-4' : 'ml-8';
+        
+        return (
+          <div key={comment._id || comment.id || i} className={`${indentClass} relative`}>
+            {/* Rail and elbow for depth > 0 */}
+            {depth > 0 && (
+              <div className="absolute -left-4 top-0 w-4 h-4 flex items-center justify-center">
+                {!isLast && (
+                  <span className="absolute left-[6px] top-0 bottom-0 w-px bg-white/12" aria-hidden />
+                )}
+                <span
+                  className="absolute left-[6px] top-[12px] w-2 h-2 border-l border-b border-white/25 rounded-bl-sm"
+                  aria-hidden
+                />
+              </div>
+            )}
+
+            {/* Comment card */}
+            <div className="bg-white/[0.02] border border-white/8 rounded-lg p-3">
+              <div className="flex items-center gap-2 mb-2">
+                {/* OP badge for any level */}
+                {thread.authorId && comment.authorId &&
+                  String(thread.authorId) === String(comment.authorId) && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-300">
+                      OP
+                    </span>
+                )}
+                <span className="text-xs font-medium text-white/80">
+                  {comment.authorName || comment.author}
+                </span>
+                <span className="text-xs text-white/50">·</span>
+                <span className="text-xs text-white/50">{timeAgo(comment.createdAt)}</span>
+                
+                {/* Depth indicator */}
+                {depth > 0 && (
+                  <span className="text-xs text-white/40">
+                    {depth === 1 ? 'Comment' : 'Reply'}
+                  </span>
+                )}
+              </div>
+              
+              <div className="text-sm text-white/85 whitespace-pre-wrap mb-3">
+                {comment.body}
+              </div>
+
+              {/* Actions based on depth */}
+              <div className="flex items-center gap-3">
+                {depth === 0 && (
+                  <>
+                    {/* Light upvote for comments only */}
+                    <button 
+                      onClick={() => onVote && onVote(comment._id || comment.id, 'upvote')}
+                      className="flex items-center gap-1 text-xs text-white/60 hover:text-white/80 transition-colors"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                      </svg>
+                      {comment.votesLight || 0}
+                    </button>
+                  </>
+                )}
+                
+                {/* Reply button (only if not at max depth) */}
+                {depth < maxDepth - 1 && (
+                  <button 
+                    onClick={() => onReply && onReply(comment._id || comment.id)}
+                    className="text-xs text-white/60 hover:text-white/80 transition-colors"
+                  >
+                    Reply
+                  </button>
+                )}
+                
+                {/* Report button */}
+                <button className="text-xs text-white/40 hover:text-white/60 transition-colors">
+                  Report
+                </button>
+              </div>
+
+              {/* Reply form for this comment */}
+              {showCommentForm && showCommentForm[comment._id || comment.id] && (
+                <div className="mt-3 p-3 bg-white/[0.02] border border-white/10 rounded-lg">
+                  <textarea
+                    value={commentText[comment._id || comment.id] || ''}
+                    onChange={(e) => setCommentText(prev => ({ ...prev, [comment._id || comment.id]: e.target.value }))}
+                    placeholder="Write a reply..."
+                    rows={2}
+                    className="w-full bg-white/[0.03] border border-white/10 rounded px-2 py-1 text-sm text-white placeholder:text-white/40 outline-none focus:border-amber-400 resize-none"
+                  />
+                  <div className="mt-2 flex justify-end gap-2">
+                    <button
+                      onClick={() => onReply && onReply(comment._id || comment.id)}
+                      className="px-2 py-1 text-xs text-white/60 hover:text-white/90 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => onReply && onReply(comment._id || comment.id, 'submit')}
+                      disabled={!commentText[comment._id || comment.id]?.trim()}
+                      className="px-2 py-1 text-xs bg-amber-500/20 text-amber-300 rounded hover:bg-amber-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Post Reply
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Nested comments (recursive) */}
+              {comment.replies && comment.replies.length > 0 && (
+                <div className="mt-3">
+                  <CommentTree 
+                    comments={comment.replies} 
+                    thread={thread} 
+                    timeAgo={timeAgo} 
+                    depth={depth + 1}
+                    maxDepth={maxDepth}
+                    onVote={onVote}
+                    onReply={onReply}
+                    showCommentForm={showCommentForm}
+                    commentText={commentText}
+                    setCommentText={setCommentText}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Exact geometry from /assets/icons/bookmark.svg with soft glow
+const BookmarkSvg = ({ active, className = "", ...props }) => (
+  <svg
+    viewBox="0 0 120 120"
+    className={className}
+    aria-hidden="true"
+    xmlns="http://www.w3.org/2000/svg"
+    {...props}
+  >
+    {/* Soft glow definition (only used when active) */}
+    {active && (
+      <defs>
+        <filter id="nr-soft-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+    )}
+
+    <polygon
+      points="98,109 60,88 22,109 22,12 98,12"
+      fill={active ? "#ff1200" : "transparent"}
+      stroke="#ff1200"
+      strokeWidth={active ? 0 : 8}
+      strokeLinejoin="round"
+      strokeLinecap="round"
+      shapeRendering="geometricPrecision"
+      style={{
+        // icon-only glow
+        filter: active ? "url(#nr-soft-glow) drop-shadow(0 0 6px rgba(255,18,0,0.35))" : "none",
+        transition: "filter 180ms ease, fill 180ms ease, stroke-width 180ms ease",
+      }}
+    />
+  </svg>
+);
 import '../styles/newrun-hero.css';
 
 export default function Thread() {
@@ -17,31 +206,50 @@ export default function Thread() {
   const [voting, setVoting] = useState(false);
   const [userVotes, setUserVotes] = useState({});
   const [answerVotes, setAnswerVotes] = useState({});
-  const [bookmarkStates, setBookmarkStates] = useState({});
+  // Use shared bookmark hook
+  const { bookmarkedIds, bookmarkInFlight, toggleBookmark } = useBookmarks(userInfo);
   const [showReplyForm, setShowReplyForm] = useState({});
   const [replyText, setReplyText] = useState({});
+  const [showCommentForm, setShowCommentForm] = useState({});
+  const [commentText, setCommentText] = useState({});
+  const [commentVotes, setCommentVotes] = useState({});
+  const [relatedQuestions, setRelatedQuestions] = useState([]);
+  const [loadingRelated, setLoadingRelated] = useState(false);
+
+  // Load user info first
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await axiosInstance.get("/get-user");
+        if (r?.data?.user) {
+          setUserInfo(r.data.user);
+        }
+      } catch (error) {
+        console.error('Error loading user info:', error);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     async function fetchThread() {
       setLoading(true);
       try {
         const data = await CommunityService.get(id);
-        setThread(data);
+        // Normalize canonical ID for consistent bookmark state management
+        const canonicalId = String(data._id || data.id || id);
+        setThread({ ...data, _canonicalId: canonicalId });
         
         // Load vote status for this thread
-        if (userInfo?.userId) {
+        const hasUser = !!(userInfo?._id || userInfo?.userId);
+        if (hasUser) {
           const voteStatus = await CommunityService.checkVoteStatus(id);
           if (voteStatus.userVote) {
-            setUserVotes(prev => ({ ...prev, [id]: voteStatus.userVote }));
+            setUserVotes(prev => ({ ...prev, [canonicalId]: voteStatus.userVote }));
           }
-          
-          // Load bookmark status for this thread
-          const bookmarkStatus = await CommunityService.checkBookmarkStatus(id);
-          setBookmarkStates(prev => ({ 
-            ...prev, 
-            [`${id}_isBookmarked`]: bookmarkStatus.isBookmarked 
-          }));
         }
+        
+        // Fetch related questions (always load, regardless of user login status)
+        fetchRelatedQuestions(data);
       } catch (error) {
         console.error('Error fetching thread:', error);
         setThread(null);
@@ -50,23 +258,90 @@ export default function Thread() {
       }
     }
     fetchThread();
-  }, [id, userInfo?.userId]);
+  }, [id, userInfo?._id, userInfo?.userId]);
 
+  // Fallback: Load mock data immediately if no thread data
   useEffect(() => {
-    (async () => {
-      try {
-        const r = await axiosInstance.get("/get-user");
-        if (r?.data?.user) setUserInfo(r.data.user);
-      } catch (err) {
-        console.error('Failed to fetch user:', err);
-      }
-    })();
-  }, []);
+    if (!thread && !loading) {
+      // Load mock data as fallback
+      const mockData = {
+        school: "Northern Illinois University"
+      };
+      fetchRelatedQuestions(mockData);
+    }
+  }, [thread, loading]);
+
+  const fetchRelatedQuestions = async (currentThread) => {
+    setLoadingRelated(true);
+    try {
+      // Mock data for now - replace with actual API call later
+      const mockRelatedQuestions = [
+        {
+          _id: "mock1",
+          title: "How to apply for OPT after graduation?",
+          answers: [{}, {}, {}], // 3 answers
+          upvotes: 15,
+          createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
+          solved: true,
+          school: "Northern Illinois University"
+        },
+        {
+          _id: "mock2", 
+          title: "Best places to find housing near campus",
+          answers: [{}, {}], // 2 answers
+          upvotes: 8,
+          createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
+          solved: false,
+          school: "Northern Illinois University"
+        },
+        {
+          _id: "mock3",
+          title: "Visa renewal process timeline and documents needed",
+          answers: [{}, {}, {}, {}], // 4 answers
+          upvotes: 22,
+          createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
+          solved: true,
+          school: "Northern Illinois University"
+        },
+        {
+          _id: "mock4",
+          title: "How to get a social security number as international student?",
+          answers: [{}], // 1 answer
+          upvotes: 5,
+          createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
+          solved: false,
+          school: "Northern Illinois University"
+        },
+        {
+          _id: "mock5",
+          title: "Part-time job opportunities on campus",
+          answers: [{}, {}, {}], // 3 answers
+          upvotes: 12,
+          createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 1 week ago
+          solved: true,
+          school: "Northern Illinois University"
+        }
+      ];
+      
+      // Simulate API delay (reduced for testing)
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      console.log('Setting mock related questions:', mockRelatedQuestions);
+      setRelatedQuestions(mockRelatedQuestions);
+    } catch (error) {
+      console.error('Error fetching related questions:', error);
+      setRelatedQuestions([]);
+    } finally {
+      setLoadingRelated(false);
+    }
+  };
+
 
   const submit = async (e) => {
     e.preventDefault();
     if (!answer.trim()) return;
-    await CommunityService.addAnswer(thread._id || thread.id, { 
+    const tid = thread._canonicalId || String(thread._id || thread.id);
+    await CommunityService.addAnswer(tid, { 
       body: answer.trim(),
       author: userInfo?.username || '@anonymous'
     });
@@ -79,8 +354,10 @@ export default function Thread() {
   const handleVote = async (type) => {
     if (voting) return;
     
+    const tid = thread._canonicalId || String(thread._id || thread.id);
+    
     // Check if user already voted on this thread
-    const currentUserVote = userVotes[thread._id || thread.id];
+    const currentUserVote = userVotes[tid];
     if (currentUserVote === type) {
       alert('You have already voted on this question!');
       return;
@@ -88,10 +365,10 @@ export default function Thread() {
     
     setVoting(true);
     try {
-      const result = await CommunityService.voteThread(thread._id || thread.id, type);
+      const result = await CommunityService.voteThread(tid, type);
       if (result) {
         // Update user vote state
-        setUserVotes(prev => ({ ...prev, [thread._id || thread.id]: type }));
+        setUserVotes(prev => ({ ...prev, [tid]: type }));
         
         // Update thread with new vote counts
         setThread(prev => ({
@@ -113,7 +390,8 @@ export default function Thread() {
 
   const handleAnswerVote = async (answerId, type) => {
     try {
-      const result = await CommunityService.voteAnswer(thread._id || thread.id, answerId, type);
+      const tid = thread._canonicalId || String(thread._id || thread.id);
+      const result = await CommunityService.voteAnswer(tid, answerId, type);
       if (result) {
         // Update answer vote state
         setAnswerVotes(prev => ({ ...prev, [answerId]: type }));
@@ -147,7 +425,8 @@ export default function Thread() {
     if (!replyBody || !replyBody.trim()) return;
     
     try {
-      const result = await CommunityService.addReply(thread._id || thread.id, answerId, replyBody);
+      const tid = thread._canonicalId || String(thread._id || thread.id);
+      const result = await CommunityService.addReply(tid, answerId, replyBody);
       if (result.success) {
         // Clear reply text and hide form
         setReplyText(prev => ({ ...prev, [answerId]: '' }));
@@ -166,36 +445,60 @@ export default function Thread() {
     setShowReplyForm(prev => ({ ...prev, [answerId]: !prev[answerId] }));
   };
 
-  const handleBookmark = async (threadId) => {
+  const toggleCommentForm = (commentId) => {
+    setShowCommentForm(prev => ({ ...prev, [commentId]: !prev[commentId] }));
+  };
+
+  const handleCommentVote = async (commentId, type) => {
     try {
-      setBookmarkStates(prev => ({ ...prev, [`${threadId}_bookmark`]: true }));
-      
-      const isBookmarked = bookmarkStates[`${threadId}_isBookmarked`];
-      
-      if (isBookmarked) {
-        await CommunityService.removeBookmark(threadId);
-        setBookmarkStates(prev => ({ 
-          ...prev, 
-          [`${threadId}_isBookmarked`]: false,
-          [`${threadId}_bookmark`]: false
-        }));
-      } else {
-        await CommunityService.bookmarkThread(threadId);
-        setBookmarkStates(prev => ({ 
-          ...prev, 
-          [`${threadId}_isBookmarked`]: true,
-          [`${threadId}_bookmark`]: false
-        }));
+      const tid = thread._canonicalId || String(thread._id || thread.id);
+      const result = await CommunityService.voteComment(tid, commentId, type);
+      if (result) {
+        setCommentVotes(prev => ({ ...prev, [commentId]: type }));
       }
     } catch (error) {
-      console.error('Bookmark error:', error);
-      setBookmarkStates(prev => ({ ...prev, [`${threadId}_bookmark`]: false }));
+      console.error('Comment vote error:', error);
+      // For now, just update the UI optimistically
+      setCommentVotes(prev => ({ ...prev, [commentId]: type }));
     }
   };
 
+  const handleCommentSubmit = async (commentId, action = 'toggle') => {
+    if (action === 'toggle') {
+      toggleCommentForm(commentId);
+      return;
+    }
+    
+    if (action === 'submit') {
+      const text = commentText[commentId];
+      if (!text?.trim()) return;
+      
+      try {
+        const tid = thread._canonicalId || String(thread._id || thread.id);
+        
+        // For now, use the existing addReply method since we don't have comment-specific endpoints yet
+        const result = await CommunityService.addReply(tid, commentId, text.trim());
+        if (result.success) {
+          setCommentText(prev => ({ ...prev, [commentId]: '' }));
+          setShowCommentForm(prev => ({ ...prev, [commentId]: false }));
+          
+          // Refresh thread to get updated comments
+          const updated = await CommunityService.get(id);
+          setThread(updated);
+        }
+      } catch (error) {
+        console.error('Comment submit error:', error);
+        alert('Failed to post reply. Please try again.');
+      }
+    }
+  };
+
+  const handleBookmark = toggleBookmark;
+
   const handleAcceptAnswer = async (answerId) => {
     try {
-      const success = await CommunityService.acceptAnswer(thread._id || thread.id, answerId);
+      const tid = thread._canonicalId || String(thread._id || thread.id);
+      const success = await CommunityService.acceptAnswer(tid, answerId);
       if (success) {
         const updated = await CommunityService.get(id);
         setThread(updated);
@@ -235,36 +538,38 @@ export default function Thread() {
     <div className="nr-dots-page min-h-screen text-white">
       <Navbar userInfo={userInfo} />
       
-      <main className="mx-auto max-w-4xl px-4 py-8">
-        {/* Back link */}
-        <Link to="/community" className="inline-flex items-center gap-1 text-sm text-white/60 hover:text-white mb-6">
-          <span>←</span> Back to Community
-        </Link>
+      <main className="mx-auto max-w-7xl px-4 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Left Column - Main Thread (8 columns) */}
+          <div className="lg:col-span-8">
+            {/* Back link */}
+            <Link to="/community" className="inline-flex items-center gap-1 text-sm text-white/60 hover:text-white mb-6">
+              <span>←</span> Back to Community
+            </Link>
 
         {/* Question Card */}
         <div className="relative">
           {/* Bookmark Button - Top Right */}
-          <button
-            onClick={() => handleBookmark(thread._id || thread.id)}
-            disabled={bookmarkStates[`${thread._id || thread.id}_bookmark`]}
-            className={`absolute top-3 right-3 p-2 rounded-lg transition-all duration-300 disabled:opacity-50 z-10 ${
-              bookmarkStates[`${thread._id || thread.id}_isBookmarked`]
-                ? 'bg-red-500/20 text-red-500 hover:bg-red-500/30 scale-110'
-                : 'bg-transparent text-red-500 hover:bg-red-500/10 hover:scale-105'
-            }`}
-            title={bookmarkStates[`${thread._id || thread.id}_isBookmarked`] ? 'Remove bookmark' : 'Bookmark question'}
-          >
-            <img 
-              src={BookmarkIcon} 
-              alt="Bookmark" 
-              className="w-6 h-6 transition-all duration-300"
-              style={{ 
-                filter: bookmarkStates[`${thread._id || thread.id}_isBookmarked`] 
-                  ? 'drop-shadow(0 0 8px rgba(239, 68, 68, 0.6))' 
-                  : 'drop-shadow(0 0 4px rgba(239, 68, 68, 0.3))'
-              }}
+          {(() => {
+            const tid = thread._canonicalId || String(thread._id || thread.id);
+            return (
+              <button
+                onClick={(e) => handleBookmark(tid, e)}
+                disabled={bookmarkInFlight[tid]}
+                className={`absolute top-3 right-3 p-2 rounded-lg transition-all duration-200 disabled:opacity-50 z-10 ${
+                  bookmarkedIds.has(tid)
+                    ? 'bg-transparent text-red-500'
+                    : 'bg-transparent text-red-500 hover:bg-red-500/5'
+                }`}
+                title={bookmarkedIds.has(tid) ? 'Remove bookmark' : 'Bookmark question'}
+              >
+            <BookmarkSvg
+              active={bookmarkedIds.has(tid)}
+              className={`w-6 h-6 ${bookmarkInFlight[tid] ? 'opacity-60' : ''}`}
             />
-          </button>
+              </button>
+            );
+          })()}
 
           <div className="nr-panel">
 
@@ -306,21 +611,21 @@ export default function Thread() {
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => handleVote('upvote')}
-                  disabled={voting || userVotes[thread._id || thread.id] === 'downvote'}
+                  disabled={voting || userVotes[thread._canonicalId || String(thread._id || thread.id)] === 'downvote'}
                   className={`p-2 rounded-lg transition-colors group disabled:opacity-50 ${
-                    userVotes[thread._id || thread.id] === 'upvote' 
+                    userVotes[thread._canonicalId || String(thread._id || thread.id)] === 'upvote' 
                       ? 'bg-green-500/20 text-green-400' 
                       : 'hover:bg-white/10'
                   }`}
-                  title={userVotes[thread._id || thread.id] === 'upvote' ? 'You upvoted this' : 'Upvote'}
+                  title={userVotes[thread._canonicalId || String(thread._id || thread.id)] === 'upvote' ? 'You upvoted this' : 'Upvote'}
                 >
                   <svg 
                     className={`w-4 h-4 transition-colors ${
-                      userVotes[thread._id || thread.id] === 'upvote'
+                      userVotes[thread._canonicalId || String(thread._id || thread.id)] === 'upvote'
                         ? 'text-green-400'
                         : 'text-white/60 group-hover:text-green-400'
                     }`}
-                    fill={userVotes[thread._id || thread.id] === 'upvote' ? 'currentColor' : 'none'}
+                    fill={userVotes[thread._canonicalId || String(thread._id || thread.id)] === 'upvote' ? 'currentColor' : 'none'}
                     stroke="currentColor" 
                     viewBox="0 0 24 24"
                   >
@@ -335,21 +640,21 @@ export default function Thread() {
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => handleVote('downvote')}
-                  disabled={voting || userVotes[thread._id || thread.id] === 'upvote'}
+                  disabled={voting || userVotes[thread._canonicalId || String(thread._id || thread.id)] === 'upvote'}
                   className={`p-2 rounded-lg transition-colors group disabled:opacity-50 ${
-                    userVotes[thread._id || thread.id] === 'downvote' 
+                    userVotes[thread._canonicalId || String(thread._id || thread.id)] === 'downvote' 
                       ? 'bg-red-500/20 text-red-400' 
                       : 'hover:bg-white/10'
                   }`}
-                  title={userVotes[thread._id || thread.id] === 'downvote' ? 'You downvoted this' : 'Downvote'}
+                  title={userVotes[thread._canonicalId || String(thread._id || thread.id)] === 'downvote' ? 'You downvoted this' : 'Downvote'}
                 >
                   <svg 
                     className={`w-4 h-4 transition-colors ${
-                      userVotes[thread._id || thread.id] === 'downvote'
+                      userVotes[thread._canonicalId || String(thread._id || thread.id)] === 'downvote'
                         ? 'text-red-400'
                         : 'text-white/60 group-hover:text-red-400'
                     }`}
-                    fill={userVotes[thread._id || thread.id] === 'downvote' ? 'currentColor' : 'none'}
+                    fill={userVotes[thread._canonicalId || String(thread._id || thread.id)] === 'downvote' ? 'currentColor' : 'none'}
                     stroke="currentColor" 
                     viewBox="0 0 24 24"
                   >
@@ -466,7 +771,7 @@ export default function Thread() {
                       </div>
                     </div>
 
-                    {/* Reply Button */}
+                    {/* Comment Button */}
                     <button
                       onClick={() => toggleReplyForm(a._id || a.id)}
                       className="flex items-center gap-1 text-xs text-white/60 hover:text-white/90 transition-colors"
@@ -474,7 +779,7 @@ export default function Thread() {
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                       </svg>
-                      Reply
+                      Comment
                     </button>
                   </div>
 
@@ -496,75 +801,65 @@ export default function Thread() {
                   </div>
                 </div>
 
-                {/* Reply Form */}
+                {/* Comment Form */}
                 {showReplyForm[a._id || a.id] && (
                   <div className="mt-4 border-t border-white/10 pt-4">
+                    <div className="mb-2">
+                      <label className="text-xs text-white/60">Add a comment to this answer</label>
+                    </div>
                     <textarea
                       value={replyText[a._id || a.id] || ''}
                       onChange={(e) => setReplyText(prev => ({ ...prev, [a._id || a.id]: e.target.value }))}
-                      placeholder="Write a reply..."
+                      placeholder="Share your thoughts, ask for clarification, or add context..."
                       rows={3}
                       className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/40 outline-none focus:border-amber-400 resize-none"
                     />
-                    <div className="mt-2 flex justify-end gap-2">
-                      <button
-                        onClick={() => toggleReplyForm(a._id || a.id)}
-                        className="px-3 py-1 text-xs text-white/60 hover:text-white/90 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => handleReply(a._id || a.id)}
-                        disabled={!replyText[a._id || a.id]?.trim()}
-                        className="px-3 py-1 text-xs bg-amber-500/20 text-amber-300 rounded-lg hover:bg-amber-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        Post Reply
-                      </button>
+                    <div className="mt-2 flex justify-between items-center">
+                      <div className="text-xs text-white/50">
+                        💡 Comments help clarify and improve answers
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => toggleReplyForm(a._id || a.id)}
+                          className="px-3 py-1 text-xs text-white/60 hover:text-white/90 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => handleReply(a._id || a.id)}
+                          disabled={!replyText[a._id || a.id]?.trim()}
+                          className="px-3 py-1 text-xs bg-amber-500/20 text-amber-300 rounded-lg hover:bg-amber-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Post Comment
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
 
-                {/* Replies Display */}
+                {/* Comments Display */}
                 {a.replies && a.replies.length > 0 && (
                   <div className="mt-4 border-t border-white/10 pt-4">
-                    <div className="space-y-3">
-                      {a.replies.map((reply, index) => (
-                        <div key={index} className="relative ml-6">
-                          {/* Curvy Arrow Connector */}
-                          <div className="absolute -left-6 top-0 w-6 h-6 flex items-center justify-center">
-                            <svg 
-                              className="w-4 h-4 text-white/20" 
-                              fill="none" 
-                              stroke="currentColor" 
-                              viewBox="0 0 24 24"
-                            >
-                              <path 
-                                strokeLinecap="round" 
-                                strokeLinejoin="round" 
-                                strokeWidth={1.5} 
-                                d="M9 5l7 7-7 7" 
-                              />
-                            </svg>
-                          </div>
-                          
-                          {/* Reply Content */}
-                          <div className="bg-white/[0.02] rounded-lg p-3 border border-white/5 relative">
-                            <div className="flex items-center gap-2 mb-2">
-                              {/* Check if this reply is from the original poster */}
-                              {thread.authorId && reply.authorId && thread.authorId.toString() === reply.authorId.toString() && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-300">
-                                  OP
-                                </span>
-                              )}
-                              <span className="text-xs font-medium text-white/80">{reply.authorName || reply.author}</span>
-                              <span className="text-xs text-white/50">·</span>
-                              <span className="text-xs text-white/50">{timeAgo(reply.createdAt)}</span>
-                            </div>
-                            <div className="text-sm text-white/85 whitespace-pre-wrap">{reply.body}</div>
-                          </div>
-                        </div>
-                      ))}
+                    <div className="mb-3 flex items-center justify-between">
+                      <h4 className="text-sm font-medium text-white/80">
+                        Comments ({a.replies.length})
+                      </h4>
+                      <button className="text-xs text-white/60 hover:text-white/80 transition-colors">
+                        Collapse
+                      </button>
                     </div>
+                    <CommentTree 
+                      comments={a.replies} 
+                      thread={thread} 
+                      timeAgo={timeAgo} 
+                      depth={0}
+                      maxDepth={2}
+                      onVote={handleCommentVote}
+                      onReply={handleCommentSubmit}
+                      showCommentForm={showCommentForm}
+                      commentText={commentText}
+                      setCommentText={setCommentText}
+                    />
                   </div>
                 )}
               </article>
@@ -594,6 +889,141 @@ export default function Thread() {
             </div>
           </form>
         </section>
+          </div>
+
+          {/* Right Column - Related Questions (4 columns) */}
+          <div className="lg:col-span-4">
+            <div className="sticky top-8">
+              {/* Fading divider line */}
+              <div className="hidden lg:block absolute left-0 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-white/20 to-transparent"></div>
+              
+              <div className="pl-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-white">RELATED QUESTIONS</h3>
+                  <button className="text-xs text-white/60 hover:text-white transition-colors">
+                    Clear
+                  </button>
+                </div>
+                
+                {loadingRelated ? (
+                  <div className="space-y-4">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="animate-pulse">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 bg-white/10 rounded-full flex-shrink-0"></div>
+                          <div className="flex-1">
+                            <div className="h-3 bg-white/10 rounded mb-2"></div>
+                            <div className="h-2 bg-white/5 rounded w-1/2 mb-1"></div>
+                            <div className="h-2 bg-white/5 rounded w-1/3"></div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : relatedQuestions.length > 0 ? (
+                  <div className="space-y-0">
+                    {relatedQuestions.map((question, index) => (
+                      <div key={question._id || question.id}>
+                        <Link
+                          to={`/community/thread/${question._id || question.id}`}
+                          className="block group py-4"
+                        >
+                          <div className="flex items-start gap-3">
+                            {/* University/Community indicator */}
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs font-bold text-white">
+                                {question.school?.charAt(0) || 'N'}
+                              </span>
+                            </div>
+                            
+                            <div className="flex-1 min-w-0">
+                              {/* University and time */}
+                              <div className="flex items-center gap-1 text-xs text-white/60 mb-1">
+                                <span>{question.school || 'Northern Illinois University'}</span>
+                                <span>·</span>
+                                <span>{timeAgo(question.createdAt || question.updatedAt)}</span>
+                              </div>
+                              
+                              {/* Question title */}
+                              <h4 className="text-sm font-medium text-white group-hover:text-blue-300 line-clamp-2 mb-2 transition-colors">
+                                {question.title}
+                              </h4>
+                              
+                              {/* Engagement metrics */}
+                              <div className="flex items-center gap-3 text-xs text-white/50">
+                                <span>{question.upvotes || Math.floor(Math.random() * 20) + 1} upvotes</span>
+                                <span>·</span>
+                                <span>{question.answers?.length || 0} comments</span>
+                                {question.solved && (
+                                  <>
+                                    <span>·</span>
+                                    <span className="inline-flex items-center gap-1 text-emerald-400">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                      Solved
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </Link>
+                        
+                        {/* Horizontal fading line between questions (except for the last one) */}
+                        {index < relatedQuestions.length - 1 && (
+                          <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+                        )}
+                      </div>
+                    ))}
+                    
+                    <div className="pt-4 border-t border-white/10">
+                      <Link
+                        to="/community"
+                        className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors"
+                      >
+                        View all questions →
+                      </Link>
+                    </div>
+                    
+                    {/* Footer section */}
+                    <div className="mt-8 pt-6 border-t border-white/10">
+                      <div className="space-y-3 text-xs text-white/50">
+                        <div className="flex flex-wrap gap-3">
+                          <Link to="/community/rules" className="hover:text-white/70 transition-colors">
+                            Community Rules
+                          </Link>
+                          <Link to="/privacy" className="hover:text-white/70 transition-colors">
+                            Privacy Policy
+                          </Link>
+                          <Link to="/terms" className="hover:text-white/70 transition-colors">
+                            User Agreement
+                          </Link>
+                        </div>
+                        <div className="space-y-1">
+                          <Link to="/accessibility" className="hover:text-white/70 transition-colors">
+                            Accessibility
+                          </Link>
+                          <div className="text-white/40">
+                            NewRun, Inc. © 2025. All rights reserved.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <p className="text-white/60 text-sm">No related questions found</p>
+                    <Link
+                      to="/community"
+                      className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors mt-3"
+                    >
+                      Browse all questions →
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       </main>
       
       <Footer />
