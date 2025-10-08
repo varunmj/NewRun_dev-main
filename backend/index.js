@@ -3628,7 +3628,7 @@ app.post('/marketplace/favorites/:id', (req, res) => {
   const PropertyDataTransformer = require('./services/propertyDataTransformer');
   const AIDataValidator = require('./services/aiDataValidator');
 
-  // Generate personalized insights
+//   // Generate personalized insights
   app.post('/api/ai/insights', authenticateToken, async (req, res) => {
     try {
       const userId = getAuthUserId(req);
@@ -5614,6 +5614,16 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
     return colors[index % colors.length];
   }
 
+  // AI Probe endpoint (no auth required for testing)
+  app.get('/api/ai/insights/probe', (req, res) => {
+    res.json({ 
+      success: true, 
+      message: 'AI insights endpoint is accessible',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development'
+    });
+  });
+
   // AI Explain Insight endpoint
   app.post('/api/ai/explain-insight', authenticateToken, async (req, res) => {
     const userId = getAuthUserId(req);
@@ -5822,9 +5832,14 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
         }
       }
       
+      // Ensure we never return empty explanation
+      const finalExplanation = explanation && explanation.trim() 
+        ? explanation 
+        : generateFallbackExplanation(insight, user, dashboardData);
+      
       res.json({ 
         success: true, 
-        explanation,
+        explanation: finalExplanation,
         insight: insight,
         aiGenerated: true,
         specificRecommendations

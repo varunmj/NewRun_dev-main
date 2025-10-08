@@ -17,7 +17,9 @@ let API_BASE_URL =
   fromVite ||
   fromCRA ||
   (typeof window !== "undefined" && window.__API_BASE_URL__) ||
-  "http://localhost:8000";
+  (typeof window !== "undefined" && window.location.hostname === "localhost" 
+    ? "http://localhost:8000" 
+    : "https://api.newrun.club");
 
 // Guardrails: if we’re on production domain without a configured API base, complain loudly.
 if (typeof window !== "undefined") {
@@ -61,8 +63,13 @@ const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use((config) => {
   const t = getToken();
   if (t) {
-    config.headers.Authorization = `Bearer ${t}`;
-    console.log('🔑 Adding auth header to request:', config.url, 'Token:', t.substring(0, 20) + '...');
+    // Validate JWT format (should start with 'eyJ')
+    if (t.startsWith('eyJ')) {
+      config.headers.Authorization = `Bearer ${t}`;
+      console.log('🔑 Adding auth header to request:', config.url, 'Token:', t.substring(0, 20) + '...');
+    } else {
+      console.log('❌ Invalid token format (not JWT):', config.url, 'Token:', t.substring(0, 20) + '...');
+    }
   } else {
     console.log('❌ No token found for request:', config.url);
   }
