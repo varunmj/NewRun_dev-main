@@ -3628,6 +3628,61 @@ app.post('/marketplace/favorites/:id', (req, res) => {
   const PropertyDataTransformer = require('./services/propertyDataTransformer');
   const AIDataValidator = require('./services/aiDataValidator');
 
+  // Helper function to get recommendations directly from database
+  async function getRecommendationsDirectly(user, insightType) {
+    try {
+      if (insightType === 'housing') {
+        // Direct property query
+        let propertyQuery = { availabilityStatus: 'available' };
+        if (user.onboardingData?.budgetRange?.min && user.onboardingData?.budgetRange?.max) {
+          propertyQuery.price = { 
+            $gte: user.onboardingData.budgetRange.min, 
+            $lte: user.onboardingData.budgetRange.max 
+          };
+        }
+        
+        const rawProperties = await Property.find(propertyQuery)
+          .limit(5)
+          .select('title price bedrooms bathrooms address distanceFromUniversity contactInfo images availabilityStatus')
+          .lean();
+        
+        // Direct roommate query
+        let roommateQuery = { 
+          'synapse.visibility.showAvatarInPreviews': true,
+          university: user.university 
+        };
+        
+        if (user.onboardingData?.budgetRange) {
+          roommateQuery['onboardingData.budgetRange'] = {
+            $gte: user.onboardingData.budgetRange.min,
+            $lte: user.onboardingData.budgetRange.max
+          };
+        }
+        
+        const rawRoommates = await User.find(roommateQuery)
+          .select('firstName lastName email university major synapse onboardingData')
+          .limit(3)
+          .lean();
+        
+        // Transform data
+        const scoredProperties = PropertyDataTransformer.transformPropertiesForAI(rawProperties);
+        const scoredRoommates = rawRoommates.map(roommate => 
+          PropertyDataTransformer.transformRoommateForAI(roommate)
+        );
+        
+        return {
+          properties: scoredProperties,
+          roommates: scoredRoommates,
+          bestMatches: findBestPropertyRoommatePairs(scoredProperties, scoredRoommates)
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting recommendations directly:', error);
+      return null;
+    }
+  }
+
 //   // Generate personalized insights
   app.post('/api/ai/insights', authenticateToken, async (req, res) => {
     try {
@@ -3707,6 +3762,8 @@ EXAMPLES:
 
 NEVER repeat the title in the message. The message should provide ADDITIONAL context, data, and reasoning.
 
+IMPORTANT: Always calculate arrival dates correctly. If arrival date is in the past, focus on immediate housing needs. If arrival is far in the future, focus on planning and preparation.
+
 REMEMBER: For housing insights, you MUST call the get_housing_recommendations tool first.`;
 
       const userPrompt = `Student Profile:
@@ -3725,7 +3782,8 @@ REMEMBER: For housing insights, you MUST call the get_housing_recommendations to
 
 Onboarding Preferences:
 - Focus Area: ${userContext.onboarding?.focus || 'Not specified'}
-- Arrival Date: ${userContext.onboarding?.arrivalDate || 'Not set'}
+- Arrival Date: ${userContext.onboarding?.arrivalDate ? new Date(userContext.onboarding.arrivalDate).toLocaleDateString() : 'Not set'}
+- Days Until Arrival: ${userContext.onboarding?.arrivalDate ? Math.ceil((new Date(userContext.onboarding.arrivalDate) - new Date()) / (1000 * 60 * 60 * 24)) : 'Unknown'}
 - Budget Range: $${userContext.onboarding?.budgetRange?.min || 'Unknown'} - $${userContext.onboarding?.budgetRange?.max || 'Unknown'}
 - Housing Need: ${userContext.onboarding?.housingNeed || 'Not specified'}
 - Roommate Interest: ${userContext.onboarding?.roommateInterest ? 'Yes' : 'No'}
@@ -3816,20 +3874,10 @@ Provide 3-5 specific, actionable insights that will help this student succeed. F
             const toolArgs = JSON.parse(toolCall.function.arguments);
             console.log('🔧 Tool arguments:', toolArgs);
             
-            // Get specific recommendations from our database
-            console.log('🔧 Calling get-recommendations endpoint...');
-            const recommendationsResponse = await axios.post(`${req.protocol}://${req.get('host')}/api/ai/tools/get-recommendations`, {
-              insightType: toolArgs.insightType,
-              userProfile: userContext
-            }, {
-              headers: {
-                'Authorization': req.headers.authorization,
-                'Content-Type': 'application/json'
-              }
-            });
-            
-            console.log('🔧 Recommendations response:', recommendationsResponse.data);
-            specificRecommendations = recommendationsResponse.data;
+            // Get specific recommendations directly from database
+            console.log('🔧 Getting recommendations directly from database...');
+            specificRecommendations = await getRecommendationsDirectly(user, toolArgs.insightType);
+            console.log('🔧 Recommendations found:', specificRecommendations);
             
             // Generate insights with specific recommendations
             const enhancedPrompt = `${userPrompt}\n\nBased on the specific recommendations found:\n${JSON.stringify(specificRecommendations, null, 2)}\n\nProvide insights that reference these specific options.`;
@@ -5385,7 +5433,14 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
         // Create specific housing insights based on user data
         if (userContext.onboarding?.arrivalDate) {
           const arrivalDate = new Date(userContext.onboarding.arrivalDate);
-          const daysUntilArrival = Math.ceil((arrivalDate - new Date()) / (1000 * 60 * 60 * 24));
+          const today = new Date();
+          const daysUntilArrival = Math.ceil((arrivalDate - today) / (1000 * 60 * 60 * 24));
+          
+          console.log('📅 Date calculation:', {
+            arrivalDate: arrivalDate.toISOString(),
+            today: today.toISOString(),
+            daysUntilArrival: daysUntilArrival
+          });
           
           if (daysUntilArrival <= 30) {
             insights.push({
@@ -5490,7 +5545,15 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
     const insights = [];
     
     if (user.onboardingData?.arrivalDate) {
-      const daysUntilArrival = Math.ceil((new Date(user.onboardingData.arrivalDate) - new Date()) / (1000 * 60 * 60 * 24));
+      const arrivalDate = new Date(user.onboardingData.arrivalDate);
+      const today = new Date();
+      const daysUntilArrival = Math.ceil((arrivalDate - today) / (1000 * 60 * 60 * 24));
+      
+      console.log('📅 Fallback date calculation:', {
+        arrivalDate: arrivalDate.toISOString(),
+        today: today.toISOString(),
+        daysUntilArrival: daysUntilArrival
+      });
       if (daysUntilArrival <= 30) {
         insights.push({
           id: 'fallback-arrival',
@@ -5870,7 +5933,14 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
     let daysUntilArrival = 0;
     if (arrivalDate) {
       const arrival = new Date(arrivalDate);
-      daysUntilArrival = Math.ceil((arrival - new Date()) / (1000 * 60 * 60 * 24));
+      const today = new Date();
+      daysUntilArrival = Math.ceil((arrival - today) / (1000 * 60 * 60 * 24));
+      
+      console.log('📅 Explanation date calculation:', {
+        arrivalDate: arrival.toISOString(),
+        today: today.toISOString(),
+        daysUntilArrival: daysUntilArrival
+      });
     }
     
     const explanations = {
@@ -6181,35 +6251,46 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
       let reasoning = '';
 
       if (insightType === 'housing') {
-        // Find properties and roommates
-        const propertiesResponse = await axios.post(`${req.protocol}://${req.get('host')}/api/ai/tools/find-properties`, {
-          campusId: user.university,
-          budgetMin: user.onboardingData?.budgetRange?.min,
-          budgetMax: user.onboardingData?.budgetRange?.max,
-          moveInDate: user.onboardingData?.arrivalDate
+        // Find properties and roommates - use direct database calls instead of HTTP
+        console.log('🔍 Getting properties directly from database...');
+        
+        // Direct property query
+        let propertyQuery = { availabilityStatus: 'available' };
+        if (user.onboardingData?.budgetRange?.min && user.onboardingData?.budgetRange?.max) {
+          propertyQuery.price = { 
+            $gte: user.onboardingData.budgetRange.min, 
+            $lte: user.onboardingData.budgetRange.max 
+          };
+        }
+        
+        const rawProperties = await Property.find(propertyQuery)
+          .limit(5)
+          .select('title price bedrooms bathrooms address distanceFromUniversity contactInfo images availabilityStatus')
+          .lean();
+        
+        console.log('🔍 Properties found:', rawProperties.length);
+        
+        // Direct roommate query
+        let roommateQuery = { 
+          'synapse.visibility.showAvatarInPreviews': true,
+          university: user.university 
+        };
+        
+        if (user.onboardingData?.budgetRange) {
+          roommateQuery['onboardingData.budgetRange'] = {
+            $gte: user.onboardingData.budgetRange.min,
+            $lte: user.onboardingData.budgetRange.max
+          };
+        }
+        
+        const rawRoommates = await User.find(roommateQuery)
+          .select('firstName lastName email university major synapse onboardingData')
+          .limit(3)
+          .lean();
+        
+        console.log('🔍 Roommates found:', rawRoommates.length);
 
-        }, {
-          headers: {
-            'Authorization': req.headers.authorization,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        const roommatesResponse = await axios.post(`${req.protocol}://${req.get('host')}/api/ai/tools/find-roommates`, {
-          campusId: user.university,
-          budgetBand: user.onboardingData?.budgetRange,
-          language: user.synapse?.culture?.primaryLanguage,
-          dealbreakers: user.synapse?.dealbreakers || []
-        }, {
-          headers: {
-            'Authorization': req.headers.authorization,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        // Score and rank
-        const rawProperties = propertiesResponse.data.properties.slice(0, 5);
-        const rawRoommates = roommatesResponse.data.roommates.slice(0, 3);
+        // Score and rank (using direct database results)
 
         // Transform properties for beautiful AI drawer display
         const scoredProperties = PropertyDataTransformer.transformPropertiesForAI(rawProperties);
