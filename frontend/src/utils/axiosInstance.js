@@ -13,11 +13,26 @@ const fromCRA =
   process.env &&
   (process.env.REACT_APP_API_BASE_URL || process.env.API_BASE_URL);
 
-const API_BASE_URL =
+let API_BASE_URL =
   fromVite ||
   fromCRA ||
   (typeof window !== "undefined" && window.__API_BASE_URL__) ||
   "http://localhost:8000";
+
+// Guardrails: if we’re on production domain without a configured API base, complain loudly.
+if (typeof window !== "undefined") {
+  const isProdHost = /(^|\.)newrun\.club$/.test(window.location.hostname);
+  const isLocalDefault = API_BASE_URL.startsWith("http://localhost");
+  if (isProdHost && isLocalDefault) {
+    // eslint-disable-next-line no-console
+    console.error(
+      "[axios] Missing VITE_API_BASE_URL in prod. Refusing to use localhost. " +
+      "Set VITE_API_BASE_URL=https://api.newrun.club in Vercel."
+    );
+    // Optional: fail closed in prod to avoid weird calls to localhost
+    // throw new Error("API base misconfigured in production");
+  }
+}
 
 // ---- token helpers (read multiple keys defensively) ----
 export function getToken() {
