@@ -5797,18 +5797,8 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
             const toolArgs = JSON.parse(toolCall.function.arguments);
             console.log('🔧 Tool arguments for explain-insight:', toolArgs);
             
-            // Get specific recommendations from our database
-            const recommendationsResponse = await axios.post(`${req.protocol}://${req.get('host')}/api/ai/tools/get-recommendations`, {
-              insightType: toolArgs.insightType,
-              userProfile: userContext
-            }, {
-              headers: {
-                'Authorization': req.headers.authorization,
-                'Content-Type': 'application/json'
-              }
-            });
-            
-            specificRecommendations = recommendationsResponse.data;
+            // Get specific recommendations directly from database
+            specificRecommendations = await getRecommendationsDirectly(user, toolArgs.insightType);
             console.log('🔧 Recommendations response for explain-insight:', specificRecommendations);
             
             // Generate explanation with specific recommendations
@@ -5848,18 +5838,8 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
         console.log('🔧 AI didn\'t call tools for explain-insight, forcing tool usage...');
         
         try {
-          // Force call the recommendations tool
-          const recommendationsResponse = await axios.post(`${req.protocol}://${req.get('host')}/api/ai/tools/get-recommendations`, {
-            insightType: "housing",
-            userProfile: userContext
-          }, {
-            headers: {
-              'Authorization': req.headers.authorization,
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          specificRecommendations = recommendationsResponse.data;
+          // Force get recommendations directly from database
+          specificRecommendations = await getRecommendationsDirectly(user, "housing");
           console.log('🔧 Forced recommendations response for explain-insight:', specificRecommendations);
           
           // Generate explanation with specific recommendations
