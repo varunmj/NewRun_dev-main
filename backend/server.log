@@ -1,0 +1,15 @@
+(node:11179) [MONGOOSE] Warning: Duplicate schema index on {"universityName":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:11179) [MONGOOSE] Warning: Duplicate schema index on {"expiresAt":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:11179) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+🔧 Initializing email service...
+📧 SMTP Host: email-smtp.us-east-2.amazonaws.com
+🔌 SMTP Port: 587
+👤 SMTP Username: Set
+🔑 SMTP Password: Set
+📨 From Email: noreply@newrun.club
+✅ Email service initialized with SES SMTP

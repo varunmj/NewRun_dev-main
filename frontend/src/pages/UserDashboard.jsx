@@ -20,8 +20,10 @@ import PropertyDrawer from "../components/Property/PropertyDrawer";
 import ListingDrawer from "../components/marketplace/ListingDrawer";
 import { useUnifiedState } from "../context/UnifiedStateContext";
 import IntelligentInsights from "../components/AI/IntelligentInsights";
+import AIRoommateInsights from "../components/AI/AIRoommateInsights";
 import axiosInstance from "../utils/axiosInstance";
 import "../styles/newrun-hero.css";
+
 
 // Multi-language Welcome Component with Typewriter Effect
 const TypewriterWelcome = () => {
@@ -171,44 +173,119 @@ export default function UserDashboard() {
   }, [aiInsights]);
 
 
-  // Static fallback actions with CORRECT routes
+  // Enhanced static fallback actions with specific descriptions
   const getStaticActions = () => {
     if (!onboardingData) {
       return [
-        { label: "List Property", icon: MdHome, path: "/dashboard", color: "from-blue-500 to-cyan-500" }, // Will open property drawer
-        { label: "Browse Properties", icon: MdSearch, path: "/all-properties", color: "from-indigo-500 to-blue-500" },
-        { label: "Find Roommate", icon: MdGroups, path: "/Synapse", color: "from-purple-500 to-pink-500" },
-        { label: "Browse Community", icon: MdChat, path: "/community", color: "from-orange-500 to-red-500" }
+        { 
+          label: "Verify Email for Access", 
+          icon: MdCheckCircle, 
+          path: "/dashboard", 
+          color: "from-blue-500 to-cyan-500",
+          description: "Complete email verification to unlock all NewRun features and personalized recommendations."
+        },
+        { 
+          label: "Explore Housing Options", 
+          icon: MdHome, 
+          path: "/all-properties", 
+          color: "from-indigo-500 to-blue-500",
+          description: "Browse AI-recommended properties based on your budget and location preferences."
+        },
+        { 
+          label: "Connect with Roommates", 
+          icon: MdGroups, 
+          path: "/Synapse", 
+          color: "from-purple-500 to-pink-500",
+          description: "Complete your Synapse profile to find compatible roommates and potential housing partners."
+        },
+        { 
+          label: "Browse Community", 
+          icon: MdChat, 
+          path: "/community", 
+          color: "from-orange-500 to-red-500",
+          description: "Join university community discussions and connect with fellow students."
+        }
       ];
     }
 
     const focus = onboardingData.focus;
+    const arrivalDate = onboardingData.arrivalDate;
+    const budgetRange = onboardingData.budgetRange;
     const actions = [];
 
-    // Base actions for everyone
-    actions.push({ label: "List Property", icon: MdHome, path: "/dashboard", color: "from-blue-500 to-cyan-500" }); // Will open property drawer
-    actions.push({ label: "Browse Properties", icon: MdSearch, path: "/all-properties", color: "from-indigo-500 to-blue-500" });
+    // Calculate days until arrival for personalized messaging
+    let daysUntilArrival = null;
+    if (arrivalDate) {
+      daysUntilArrival = Math.ceil((new Date(arrivalDate) - new Date()) / (1000 * 60 * 60 * 24));
+    }
 
-    // Add focus-specific actions
+    // Priority actions based on timing and focus
+    if (daysUntilArrival && daysUntilArrival <= 30) {
+      actions.push({ 
+        label: "Secure Housing Immediately", 
+        icon: MdHome, 
+        path: "/all-properties", 
+        color: "from-red-500 to-orange-500",
+        description: `Only ${daysUntilArrival} days until arrival! Browse available properties and secure housing quickly.`
+      });
+    }
+
     if (focus === 'Housing' || focus === 'Everything') {
-      actions.push({ label: "Browse Properties", icon: MdSearch, path: "/all-properties", color: "from-indigo-500 to-blue-500" });
-      actions.push({ label: "Schedule Tours", icon: MdSchedule, path: "/all-properties", color: "from-teal-500 to-cyan-500" });
+      actions.push({ 
+        label: "Find Your Perfect Home", 
+        icon: MdSearch, 
+        path: "/all-properties", 
+        color: "from-indigo-500 to-blue-500",
+        description: `Browse ${budgetRange ? `properties within $${budgetRange.min}-$${budgetRange.max}` : 'available properties'} near your university.`
+      });
+      
+      actions.push({ 
+        label: "Connect with Roommates", 
+        icon: MdGroups, 
+        path: "/Synapse", 
+        color: "from-purple-500 to-pink-500",
+        description: "Complete your Synapse profile to find compatible roommates and split housing costs."
+      });
     }
 
     if (focus === 'Roommate' || focus === 'Everything') {
-      actions.push({ label: "Find Roommate", icon: MdGroups, path: "/Synapse", color: "from-purple-500 to-pink-500" });
-      actions.push({ label: "Complete Profile", icon: MdPerson, path: "/Synapse", color: "from-rose-500 to-pink-500" });
+      actions.push({ 
+        label: "Complete Synapse Profile", 
+        icon: MdPerson, 
+        path: "/Synapse", 
+        color: "from-rose-500 to-pink-500",
+        description: "Complete your detailed profile to unlock AI-powered roommate matching and personalized recommendations."
+      });
     }
 
     if (focus === 'Essentials' || focus === 'Everything') {
-      actions.push({ label: "Browse Essentials", icon: MdShoppingBag, path: "/marketplace", color: "from-green-500 to-emerald-500" });
-      actions.push({ label: "Smart Pack", icon: MdLightbulb, path: "/marketplace", color: "from-yellow-500 to-orange-500" });
+      actions.push({ 
+        label: "Prepare for Essentials", 
+        icon: MdShoppingBag, 
+        path: "/marketplace", 
+        color: "from-green-500 to-emerald-500",
+        description: "Create a checklist of essential items you'll need for your university transition and campus life."
+      });
     }
 
     if (focus === 'Community' || focus === 'Everything') {
-      actions.push({ label: "Browse Community", icon: MdChat, path: "/community", color: "from-orange-500 to-red-500" });
-      actions.push({ label: "Join Events", icon: MdEvent, path: "/community", color: "from-red-500 to-pink-500" });
+      actions.push({ 
+        label: "Join University Community", 
+        icon: MdChat, 
+        path: "/community", 
+        color: "from-orange-500 to-red-500",
+        description: "Connect with fellow students, ask questions, and get advice from the university community."
+      });
     }
+
+    // Add essential actions
+    actions.push({ 
+      label: "Establish Bank Account", 
+      icon: MdAttachMoney, 
+      path: "/dashboard", 
+      color: "from-emerald-500 to-green-500",
+      description: "Set up a local bank account for easy financial management during your studies."
+    });
 
     return actions.slice(0, 6); // Limit to 6 actions
   };
@@ -895,6 +972,17 @@ export default function UserDashboard() {
           </section>
         )}
 
+        {/* AI Roommate Matching Section */}
+        {onboardingData && userInfo?.synapse && (
+          <section className="mx-auto max-w-7xl px-4 py-8">
+            <AIRoommateInsights 
+              userInfo={userInfo} 
+              dashboardData={dashboardData} 
+              onboardingData={onboardingData}
+            />
+          </section>
+        )}
+
         {/* Dashboard Content - Hero with Side Data Boxes */}
         <div className="mx-auto max-w-7xl px-4 py-8">
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -1059,7 +1147,15 @@ export default function UserDashboard() {
               {/* AI-Powered Quick Actions */}
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-white">Quick Actions</h3>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-blue-500/20">
+                      <MdRocket className="text-xl text-blue-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-white">AI-Recommended Actions</h3>
+                      <p className="text-xs text-white/60">Smart actions tailored to your profile</p>
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2">
                     {actionsLoading && (
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>

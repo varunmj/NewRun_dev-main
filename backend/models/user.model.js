@@ -131,6 +131,15 @@ const SynapseSchema = new mongoose.Schema(
 
 userSchema.add({
   synapse: { type: SynapseSchema, default: () => ({}) },
+  
+  // Synapse completion tracking
+  synapseCompletion: {
+    completed: { type: Boolean, default: false },
+    completedAt: { type: Date, default: null },
+    lastStep: { type: Number, default: 0 }, // Track which step they're on (0-10)
+    completionPercentage: { type: Number, default: 0 }, // 0-100%
+    totalSteps: { type: Number, default: 11 } // Total steps in Synapse
+  }
 });
 
 

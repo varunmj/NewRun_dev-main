@@ -1,12 +1,14 @@
 // src/pages/Roommate.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import axiosInstance from "../utils/axiosInstance";
 import Navbar from "../components/Navbar/Navbar";
 import "../styles/newrun-hero.css";
 import {
   Languages, MapPin, CalendarClock, Route, Moon, Sparkles, Utensils, PartyPopper, PawPrint,
-  OctagonX, CheckCircle2, Timer, Cigarette, CigaretteOff, Wine, Heart, Ban, Plus, Users, BookOpen, Search 
+  OctagonX, CheckCircle2, Timer, Cigarette, CigaretteOff, Wine, Heart, Ban, Plus, Users, BookOpen, Search, Edit
 } from "lucide-react";
+import { BorderBeam } from "../components/ui/border-beam";
 
 /* =============================== */
 /* Laptop-first layout constants   */
@@ -572,6 +574,7 @@ function QuestionCard({ step, total, title, sub, icon = null, loading = false })
 /* Page                            */
 /* =============================== */
 export default function Roommate() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [typing, setTyping] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -616,15 +619,45 @@ export default function Roommate() {
     dealbreakers: [],
   });
 
-  /* Load saved prefs */
+  /* Load saved prefs and check completion status */
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
+        // Check if user wants to edit preferences (from URL params)
+        const urlParams = new URLSearchParams(window.location.search);
+        const editMode = urlParams.get('edit') === 'true';
+        
+        // Check completion status first
+        const completionResponse = await axiosInstance.get("/synapse/completion-status");
+        const completionData = completionResponse?.data;
+        
+        if (mounted && completionData?.completed && !editMode) {
+          // User has completed Synapse and doesn't want to edit, redirect to matches
+          navigate('/Synapsematches', { replace: true });
+          return;
+        }
+        
+        // Load preferences and set appropriate step
         const r = await axiosInstance.get("/synapse/preferences");
-        if (mounted && r?.data?.preferences) setPrefs((p) => ({ ...p, ...r.data.preferences }));
-      } catch {}
-      finally { setLoading(false); }
+        if (mounted && r?.data?.preferences) {
+          setPrefs((p) => ({ ...p, ...r.data.preferences }));
+          
+          // Set step based on completion progress
+          if (completionData?.lastStep && completionData.lastStep > 0) {
+            setStep(completionData.lastStep);
+          }
+        }
+        
+        // If user is in edit mode and completed, start from step 0 to allow full review
+        if (editMode && completionData?.completed) {
+          setStep(0);
+        }
+      } catch (error) {
+        console.error('Error loading Synapse data:', error);
+      } finally { 
+        if (mounted) setLoading(false); 
+      }
     })();
     return () => { mounted = false; };
   }, []);
@@ -650,8 +683,23 @@ export default function Roommate() {
   const setPets      = (patch) => savePrefs({ pets:      { ...prefs.pets,      ...patch } });
 
   const nextStep = async () => {
-    setTyping(true); await new Promise((r) => setTimeout(r, 220 + Math.random() * 280)); setTyping(false);
-    setStep((s) => Math.min(s + 1, STEPS.length - 1));
+    setTyping(true); 
+    await new Promise((r) => setTimeout(r, 220 + Math.random() * 280)); 
+    setTyping(false);
+    
+    const newStep = Math.min(step + 1, STEPS.length - 1);
+    setStep(newStep);
+    
+    // Update progress in backend
+    try {
+      const completionPercentage = Math.round(((newStep + 1) / STEPS.length) * 100);
+      await axiosInstance.post("/synapse/progress", {
+        step: newStep,
+        completionPercentage
+      });
+    } catch (error) {
+      console.error('Error updating progress:', error);
+    }
   };
   const prevStep = () => setStep((s) => Math.max(0, s - 1));
   const goToStep = (i) => setStep(Math.max(0, Math.min(i, STEPS.length - 1)));
@@ -1760,18 +1808,92 @@ const StepCleanliness = () => {
 
   return (
     <div className="nr-dots-page text-white" style={{ height: "100vh", overflow: "hidden", position: "relative" }}>
+      <style jsx>{`
+        @keyframes gradientShift {
+          0% { background-position: 200% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+      `}</style>
       <Navbar />
 
-      {/* Compact hero */}
-      <section className="nr-hero-bg" style={{ paddingTop: 10, paddingBottom: 6 }}>
+      {/* Clean hero section - minimal and space-efficient */}
+      <section className="nr-hero-bg" style={{ paddingTop: 20, paddingBottom: 20 }}>
         <div className="mx-auto max-w-7xl px-4">
-          <div className="mt-[6px] mb-2 flex items-center justify-center gap-2 text-[11px]">
-            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/70">NewRun Synapse</span>
-            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/70">Private • Editable anytime</span>
+          <div className="flex items-start justify-between gap-8">
+            {/* Left side - Title */}
+            <div className="flex-1">
+              <h1 className="text-[36px] md:text-[48px] lg:text-[56px] font-black tracking-tight leading-[1.1]">
+                {(() => {
+                  const urlParams = new URLSearchParams(window.location.search);
+                  const editMode = urlParams.get('edit') === 'true';
+                  return editMode ? (
+                    <div className="space-y-1">
+                      <div className="text-white">Update your</div>
+                      <div 
+                        className="drop-shadow-[0_0_20px_rgba(59,130,246,0.5)] drop-shadow-[0_0_40px_rgba(59,130,246,0.3)]"
+                        style={{
+                          background: 'linear-gradient(90deg, #2563eb, #1e40af, #000000, #2563eb)',
+                          backgroundSize: '200% 100%',
+                          animation: 'gradientShift 3s ease-in-out infinite',
+                          WebkitBackgroundClip: 'text',
+                          WebkitTextFillColor: 'transparent'
+                        }}
+                      >
+                        Synapse preferences.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <div className="text-white">Let's tune your</div>
+                      <div 
+                        className="drop-shadow-[0_0_20px_rgba(59,130,246,0.5)] drop-shadow-[0_0_40px_rgba(59,130,246,0.3)]"
+                        style={{
+                          background: 'linear-gradient(90deg, #2563eb, #1e40af, #000000, #2563eb)',
+                          backgroundSize: '200% 100%',
+                          animation: 'gradientShift 3s ease-in-out infinite',
+                          WebkitBackgroundClip: 'text',
+                          WebkitTextFillColor: 'transparent'
+                        }}
+                      >
+                        Synapse profile.
+                      </div>
+                    </div>
+                  );
+                })()}
+              </h1>
+            </div>
+
+            {/* Right side - Edit Mode Banner */}
+            {(() => {
+              const urlParams = new URLSearchParams(window.location.search);
+              const editMode = urlParams.get('edit') === 'true';
+              return editMode ? (
+                <div className="flex-shrink-0">
+                  <div className="relative bg-black border border-green-400/30 rounded-2xl p-5 w-[300px] shadow-lg shadow-green-500/10 overflow-hidden">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-gradient-to-br from-green-500/30 to-green-600/30 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md">
+                        <Edit className="text-green-300 text-xl" />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-green-300 font-bold text-lg">Edit Mode</div>
+                        <div className="text-green-400/70 text-sm">Auto-saved changes</div>
+                      </div>
+                    </div>
+                    <BorderBeam 
+                      size={200}
+                      duration={4}
+                      colorFrom="#10b981"
+                      colorTo="#000000"
+                      borderWidth={2}
+                      delay={0}
+                      initialOffset={0}
+                      reverse={false}
+                    />
+                  </div>
+                </div>
+              ) : null;
+            })()}
           </div>
-          <h1 className="mx-auto max-w-6xl text-center text-[42px] md:text-[58px] font-black tracking-tight leading-[1.05]">
-            Let’s tune your <span className="bg-gradient-to-r from-amber-400 via-amber-300 to-orange-500 bg-clip-text text-transparent">roommate vibe.</span>
-          </h1>
         </div>
       </section>
 
@@ -1858,12 +1980,23 @@ const StepCleanliness = () => {
                         Continue →
                       </button>
                     ) : (
-                      <a
-                        href="/Synapsematches"
-                        className="inline-flex items-center gap-2 rounded-xl bg-white text-black px-4 py-2 text-sm font-semibold"
+                      <button
+                        onClick={async () => {
+                          try {
+                            // Mark as completed
+                            await axiosInstance.post("/synapse/mark-complete");
+                            // Redirect to matches
+                            navigate('/Synapsematches');
+                          } catch (error) {
+                            console.error('Error marking as complete:', error);
+                            // Still redirect even if API call fails
+                            navigate('/Synapsematches');
+                          }
+                        }}
+                        className="inline-flex items-center gap-2 rounded-xl bg-white text-black px-4 py-2 text-sm font-semibold hover:bg-gray-100 transition-colors"
                       >
                         See matches →
-                      </a>
+                      </button>
                     )}
                   </div>
                 </div>

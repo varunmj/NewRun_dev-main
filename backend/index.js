@@ -177,25 +177,25 @@ const s3 = new AWS.S3();
 
 // Multer storage for S3
 const upload = multer({
-  storage: multerS3({
-    s3: s3Client,
-    bucket: process.env.AWS_S3_BUCKET,
+    storage: multerS3({
+      s3: s3Client,
+      bucket: process.env.AWS_S3_BUCKET,
     // Adjust based on the access level you need
-    key: function (req, file, cb) {
-      const filename = Date.now().toString() + "-" + file.originalname;
+      key: function (req, file, cb) {
+        const filename = Date.now().toString() + "-" + file.originalname;
       cb(null, filename); // File name format
-    },
-  }),
-  fileFilter: (req, file, cb) => {
+      },
+    }),
+    fileFilter: (req, file, cb) => {
     // Accept only image files
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed!'), false);
-    }
-  },
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed!'), false);
+      }
+    },
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB limit
   }
 });
 
@@ -3172,13 +3172,13 @@ app.set('io', io);
 const activityRouter = require('./routes/activity');
 app.use('/activity', activityRouter);
 
-// New Platform Entity Routes
-const studentFinanceRouter = require('./routes/studentFinance');
-const academicHubRouter = require('./routes/academicHub');
-const academicRoutes = require('./routes/academicRoutes');
-app.use('/api/finance', studentFinanceRouter);
-app.use('/api/academic', academicHubRouter);
-app.use('/api/academic', academicRoutes);
+// New Platform Entity Routes - Temporarily disabled (moved to Upcoming Features)
+// const studentFinanceRouter = require('./routes/studentFinance');
+// const academicHubRouter = require('./routes/academicHub');
+// const academicRoutes = require('./routes/academicRoutes');
+// app.use('/api/finance', studentFinanceRouter);
+// app.use('/api/academic', academicHubRouter);
+// app.use('/api/academic', academicRoutes);
 
 // Financial Management Models
 const Transaction = require('./models/transaction.model');
@@ -3628,6 +3628,10 @@ app.post('/marketplace/favorites/:id', (req, res) => {
   const PropertyDataTransformer = require('./services/propertyDataTransformer');
   const AIDataValidator = require('./services/aiDataValidator');
 
+  // AI Roommate Matching System
+  const aiRoommateMatching = require('./ai-roommate-matching');
+  const aiRoommateEndpoints = require('./ai-roommate-endpoints');
+
   // Helper function to get recommendations directly from database
   async function getRecommendationsDirectly(user, insightType) {
     try {
@@ -3683,7 +3687,7 @@ app.post('/marketplace/favorites/:id', (req, res) => {
     }
   }
 
-//   // Generate personalized insights
+//   // Generate personalized insights using unified system
   app.post('/api/ai/insights', authenticateToken, async (req, res) => {
     try {
       const userId = getAuthUserId(req);
@@ -3726,258 +3730,18 @@ app.post('/marketplace/favorites/:id', (req, res) => {
         timestamp: new Date().toISOString()
       };
 
-      // Create AI prompt for personalized insights
-      const systemPrompt = `You are an expert student advisor AI with access to a housing database. 
-
-CRITICAL INSTRUCTION: You MUST use the get_housing_recommendations tool for ANY housing-related insights. Do not provide generic housing advice.
-
-When you see housing needs, budget concerns, or roommate interests, you MUST:
-1. Call get_housing_recommendations tool with insightType: "housing" 
-2. Use the specific data returned to provide concrete recommendations
-3. Reference actual properties, prices, and roommate matches
-
-Do not provide generic advice like "start browsing housing options" - use the tool to get real data first.
-
-Focus on:
-- Housing needs and timeline (MUST use tool for specific properties)
-- Academic success factors  
-- Social integration opportunities
-- Financial planning
-- Campus life optimization
-
-CRITICAL: Generate insights with DIFFERENT content for title vs message:
-
-Format each insight as:
-1. **Title** (action-oriented, 3-5 words) - SHORT and punchy
-2. **Message** (detailed explanation, context, and specific data) - DIFFERENT from title
-3. **Priority** (HIGH/MEDIUM/LOW based on urgency)
-4. **Action** (specific next step)
-
-EXAMPLES:
-- Title: "Secure Housing Now"
-- Message: "Based on your $300-1000 budget, I found 3 properties within 2 miles of campus. Average price is $350/month. Your arrival date is approaching - secure housing this week to avoid last-minute stress."
-
-- Title: "Schedule Property Visits" 
-- Message: "Contact Dheeban Kumar at Stadium View II ($300, 1.5 miles) and Sathya Keshav at Campus Drive ($300, 1 mile). Both are within your budget and close to campus. Schedule visits this week."
-
-NEVER repeat the title in the message. The message should provide ADDITIONAL context, data, and reasoning.
-
-IMPORTANT: Always calculate arrival dates correctly. If arrival date is in the past, focus on immediate housing needs. If arrival is far in the future, focus on planning and preparation.
-
-REMEMBER: For housing insights, you MUST call the get_housing_recommendations tool first.`;
-
-      const userPrompt = `Student Profile:
-- Name: ${userContext.profile.name}
-- Email: ${userContext.profile.email}
-- University: ${userContext.profile.university}
-- Major: ${userContext.profile.major}
-- Graduation Date: ${userContext.profile.graduationDate}
-- Current Location: ${userContext.profile.currentLocation}
-- Hometown: ${userContext.profile.hometown}
-- Birthday: ${userContext.profile.birthday}
-- Campus: ${userContext.profile.campusLabel} (${userContext.profile.campusDisplayName})
-- School Department: ${userContext.profile.schoolDepartment}
-- Cohort Term: ${userContext.profile.cohortTerm}
-- Email Verified: ${userContext.profile.emailVerified}
-
-Onboarding Preferences:
-- Focus Area: ${userContext.onboarding?.focus || 'Not specified'}
-- Arrival Date: ${userContext.onboarding?.arrivalDate ? new Date(userContext.onboarding.arrivalDate).toLocaleDateString() : 'Not set'}
-- Days Until Arrival: ${userContext.onboarding?.arrivalDate ? Math.ceil((new Date(userContext.onboarding.arrivalDate) - new Date()) / (1000 * 60 * 60 * 24)) : 'Unknown'}
-- Budget Range: $${userContext.onboarding?.budgetRange?.min || 'Unknown'} - $${userContext.onboarding?.budgetRange?.max || 'Unknown'}
-- Housing Need: ${userContext.onboarding?.housingNeed || 'Not specified'}
-- Roommate Interest: ${userContext.onboarding?.roommateInterest ? 'Yes' : 'No'}
-- Essentials Needed: ${userContext.onboarding?.essentials?.join(', ') || 'None specified'}
-
-Synapse Profile (Compatibility Data):
-- Culture: ${JSON.stringify(userContext.synapse?.culture || {})}
-- Lifestyle: ${JSON.stringify(userContext.synapse?.lifestyle || {})}
-- Habits: ${JSON.stringify(userContext.synapse?.habits || {})}
-- Dealbreakers: ${JSON.stringify(userContext.synapse?.dealbreakers || [])}
-
-Current Activity:
-- Properties Listed: ${userContext.dashboard?.propertiesCount || 0}
-- Marketplace Items: ${userContext.dashboard?.marketplaceCount || 0}
-- Total Views: ${userContext.dashboard?.propertiesStats?.totalViews || 0}
-- Average Property Price: $${userContext.dashboard?.propertiesStats?.averagePrice || 0}
-
-Progress Status:
-- Has housing secured: ${userContext.dashboard?.propertiesCount > 0 ? 'Yes' : 'No'}
-- Has roommate connections: ${userContext.onboarding?.roommateInterest ? 'Interested' : 'Not specified'}
-- Has essentials planned: ${userContext.onboarding?.essentials?.length > 0 ? 'Yes' : 'No'}
-- Email verified: ${userContext.profile.emailVerified ? 'Yes' : 'No'}
-
-This student needs housing help. You MUST use the get_housing_recommendations tool to find specific properties and roommates.
-
-DO NOT provide generic advice like "start browsing housing options" or "contact landlords directly". 
-
-You MUST:
-1. Call get_housing_recommendations tool with insightType: "housing"
-2. Use the returned data to provide specific property names, prices, and roommate matches
-3. Reference actual addresses, distances from campus, and compatibility scores
-
-Provide 3-5 specific, actionable insights that will help this student succeed. Focus on their biggest gaps and most urgent needs.`;
-
-      // Call GPT-4o for insights with function calling
-      const aiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
-        model: "gpt-4o",
-        temperature: 0.7,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "get_housing_recommendations",
-              description: "Get specific housing and roommate recommendations for the student",
-              parameters: {
-                type: "object",
-                properties: {
-                  insightType: {
-                    type: "string",
-                    enum: ["housing", "roommate", "both"],
-                    description: "Type of recommendations needed"
-                  },
-                  userProfile: {
-                    type: "object",
-                    description: "User profile data for recommendations"
-                  }
-                },
-                required: ["insightType", "userProfile"]
-              }
-            }
-          }
-        ],
-        tool_choice: "auto"
-      }, {
-        headers: {
-          Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const aiMessage = aiResponse?.data?.choices?.[0]?.message;
-      const aiContent = aiMessage?.content || '';
+      // Use unified AI insights system
+      const unifiedAIInsights = require('./services/unifiedAIInsights');
+      const result = await unifiedAIInsights.generateUnifiedInsights(user, dashboardData, userContext);
       
-      let insights = [];
-      let specificRecommendations = null;
-      
-      // Check if AI wants to use tools
-      if (aiMessage?.tool_calls && aiMessage.tool_calls.length > 0) {
-        console.log('🔧 AI wants to use tools:', aiMessage.tool_calls);
-        const toolCall = aiMessage.tool_calls[0];
-        
-        if (toolCall.function.name === 'get_housing_recommendations') {
-          try {
-            const toolArgs = JSON.parse(toolCall.function.arguments);
-            console.log('🔧 Tool arguments:', toolArgs);
-            
-            // Get specific recommendations directly from database
-            console.log('🔧 Getting recommendations directly from database...');
-            specificRecommendations = await getRecommendationsDirectly(user, toolArgs.insightType);
-            console.log('🔧 Recommendations found:', specificRecommendations);
-            
-            // Generate insights with specific recommendations
-            const enhancedPrompt = `${userPrompt}\n\nBased on the specific recommendations found:\n${JSON.stringify(specificRecommendations, null, 2)}\n\nProvide insights that reference these specific options.`;
-            
-            const enhancedResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
-              model: "gpt-4o",
-              temperature: 0.7,
-              messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: enhancedPrompt }
-              ]
-            }, {
-              headers: {
-                Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
-                'Content-Type': 'application/json',
-              },
-            });
-            
-            const enhancedContent = enhancedResponse?.data?.choices?.[0]?.message?.content || '';
-            insights = parseAIInsights(enhancedContent, userContext);
-            
-            // Add specific recommendations to insights
-            insights = insights.map(insight => ({
-              ...insight,
-              hasSpecificRecommendations: true,
-              specificRecommendations: specificRecommendations
-            }));
-            
-          } catch (toolError) {
-            console.error('Tool execution error:', toolError);
-            insights = parseAIInsights(aiContent, userContext);
-          }
-        }
-      } else {
-        // AI didn't call tools - force it to use tools for housing insights
-        console.log('🔧 AI didn\'t call tools, forcing tool usage for housing...');
-        
-        try {
-          // Force call the recommendations tool
-          const recommendationsResponse = await axios.post(`${req.protocol}://${req.get('host')}/api/ai/tools/get-recommendations`, {
-            insightType: "housing",
-            userProfile: userContext
-          }, {
-            headers: {
-              'Authorization': req.headers.authorization,
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          specificRecommendations = recommendationsResponse.data;
-          console.log('🔧 Forced recommendations response:', specificRecommendations);
-          
-          // Generate insights with specific recommendations
-          const enhancedPrompt = `${userPrompt}\n\nBased on the specific recommendations found:\n${JSON.stringify(specificRecommendations, null, 2)}\n\nProvide insights that reference these specific options.`;
-          
-          const enhancedResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
-            model: "gpt-4o",
-            temperature: 0.7,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: enhancedPrompt }
-            ]
-          }, {
-            headers: {
-              Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-          });
-          
-          const enhancedContent = enhancedResponse?.data?.choices?.[0]?.message?.content || '';
-          insights = parseAIInsights(enhancedContent, userContext);
-          
-          // Add specific recommendations to insights
-          insights = insights.map(insight => ({
-            ...insight,
-            hasSpecificRecommendations: true,
-            specificRecommendations: specificRecommendations
-          }));
-          
-        } catch (forceError) {
-          console.error('Force tool usage error:', forceError);
-          insights = parseAIInsights(aiContent, userContext);
-        }
-      }
-      
-      // Validate and fix any duplicate content
-      const validatedInsights = AIDataValidator.validateInsights(insights);
-      
-      res.json({ 
-        success: true, 
-        insights: validatedInsights, 
-        aiGenerated: true,
-        specificRecommendations 
-      });
+      res.json(result);
     } catch (error) {
       console.error('AI Insights Error:', error);
       
-      // Fallback insights based on user data
-      const fallbackInsights = generateFallbackInsights(user, dashboardData);
-      res.json({ success: true, insights: fallbackInsights, fallback: true });
+      // Use unified system fallback
+      const unifiedAIInsights = require('./services/unifiedAIInsights');
+      const fallbackResult = unifiedAIInsights.generateFallbackInsights(user, dashboardData);
+      res.json(fallbackResult);
     }
   });
 
@@ -4015,30 +3779,36 @@ Provide 3-5 specific, actionable insights that will help this student succeed. F
       };
 
       // Create AI prompt for personalized actions
-      const systemPrompt = `You are an expert student advisor AI. Based on the student's profile and current situation, provide 4-6 personalized, actionable next steps that will help them succeed.
+      const systemPrompt = `You are an expert student advisor AI. Generate 4-6 personalized, actionable next steps for university students.
 
-CRITICAL: Generate actions with DIFFERENT content for label vs description:
-
-Format each action as:
-1. **Label** (action name, 2-4 words) - SHORT and clear
-2. **Description** (detailed explanation, context, and specific steps) - DIFFERENT from label
-3. **Priority** (HIGH/MEDIUM/LOW based on urgency)
-4. **Path** (specific route or action to take)
+CRITICAL FORMAT: Each action must follow this exact structure:
+**Label: [Short Action Name]**
+**Description: [Detailed explanation with specific steps and context]**
 
 EXAMPLES:
-- Label: "Schedule Property Visits"
-- Description: "Contact the 3 properties I found within your budget. Call Dheeban Kumar at Stadium View II ($300, 1.5 miles) and Sathya Keshav at Campus Drive ($300, 1 mile). Schedule visits this week to secure housing before your arrival date."
+**Label: Verify Email for Access**
+**Description: Complete email verification to unlock all NewRun features and personalized recommendations.**
 
-- Label: "Complete Onboarding"
-- Description: "Finish your profile setup to get personalized recommendations. Add your budget range, arrival date, and housing preferences to unlock AI-powered property matches and roommate suggestions."
+**Label: Secure Housing Immediately**
+**Description: Only 15 days until arrival! Browse available properties and secure housing quickly. Contact property managers to schedule viewings this week.**
 
-NEVER repeat the label in the description. The description should provide ADDITIONAL context, specific steps, and reasoning.
+**Label: Complete Synapse Profile**
+**Description: Complete your detailed profile to unlock AI-powered roommate matching and personalized recommendations. Add your preferences, lifestyle habits, and housing requirements.**
+
+**Label: Establish Bank Account**
+**Description: Set up a local bank account for easy financial management during your studies. Research student-friendly banks near your university.**
+
+**Label: Join University Community**
+**Description: Connect with fellow students, ask questions, and get advice from the university community. Join relevant groups and discussions.**
+
+**Label: Prepare for Essentials**
+**Description: Create a checklist of essential items you'll need for your university transition and campus life. Browse marketplace for student deals.**
 
 Focus on:
-- Immediate priorities based on their timeline
+- Immediate priorities based on their timeline and arrival date
 - Their focus area (Housing, Roommate, Essentials, Community)
-- Current activity and engagement level
-- University-specific opportunities
+- Specific, actionable steps with context
+- University-specific opportunities and resources
 
 Be specific, actionable, and prioritize based on urgency and importance.`;
 
@@ -5121,7 +4891,146 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
   }
 });
 
+// =====================
+// SYNAPSE COMPLETION TRACKING
+// =====================
 
+// GET: Check Synapse completion status
+app.get("/synapse/completion-status", authenticateToken, async (req, res) => {
+  try {
+    const userId = getAuthUserId(req);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const user = await User.findById(userId, {
+      synapseCompletion: 1,
+      synapse: 1
+    }).lean();
+
+    const completion = user?.synapseCompletion || {};
+    const synapse = user?.synapse || {};
+
+    // Calculate completion percentage based on filled fields
+    const completionPercentage = calculateSynapseCompletion(synapse);
+    
+    // Update completion status if needed
+    const isCompleted = completionPercentage >= 80; // 80% threshold for completion
+    
+    if (isCompleted && !completion.completed) {
+      await User.findByIdAndUpdate(userId, {
+        $set: {
+          'synapseCompletion.completed': true,
+          'synapseCompletion.completedAt': new Date(),
+          'synapseCompletion.completionPercentage': completionPercentage
+        }
+      });
+    }
+
+    res.json({
+      completed: isCompleted,
+      completionPercentage,
+      lastStep: completion.lastStep || 0,
+      completedAt: completion.completedAt,
+      totalSteps: completion.totalSteps || 11
+    });
+  } catch (error) {
+    console.error('GET /synapse/completion-status error:', error);
+    res.status(500).json({ message: 'Failed to get completion status' });
+  }
+});
+
+// POST: Update Synapse progress
+app.post("/synapse/progress", authenticateToken, async (req, res) => {
+  try {
+    const userId = getAuthUserId(req);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const { step, completionPercentage } = req.body;
+    
+    const updateData = {
+      'synapseCompletion.lastStep': step || 0,
+      'synapseCompletion.completionPercentage': completionPercentage || 0
+    };
+
+    // If completion is 100%, mark as completed
+    if (completionPercentage >= 100) {
+      updateData['synapseCompletion.completed'] = true;
+      updateData['synapseCompletion.completedAt'] = new Date();
+    }
+
+    await User.findByIdAndUpdate(userId, { $set: updateData });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('POST /synapse/progress error:', error);
+    res.status(500).json({ message: 'Failed to update progress' });
+  }
+});
+
+// POST: Mark Synapse as completed
+app.post("/synapse/mark-complete", authenticateToken, async (req, res) => {
+  try {
+    const userId = getAuthUserId(req);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    await User.findByIdAndUpdate(userId, {
+      $set: {
+        'synapseCompletion.completed': true,
+        'synapseCompletion.completedAt': new Date(),
+        'synapseCompletion.completionPercentage': 100,
+        'synapseCompletion.lastStep': 10 // Final step
+      }
+    });
+
+    res.json({ success: true, message: 'Synapse marked as completed' });
+  } catch (error) {
+    console.error('POST /synapse/mark-complete error:', error);
+    res.status(500).json({ message: 'Failed to mark as complete' });
+  }
+});
+
+// Helper function to calculate completion percentage
+function calculateSynapseCompletion(synapse) {
+  let completedFields = 0;
+  let totalFields = 0;
+
+  // Culture section
+  if (synapse.culture) {
+    totalFields += 3;
+    if (synapse.culture.primaryLanguage) completedFields++;
+    if (synapse.culture.home?.country) completedFields++;
+    if (synapse.culture.home?.region) completedFields++;
+  }
+
+  // Logistics section
+  if (synapse.logistics) {
+    totalFields += 3;
+    if (synapse.logistics.moveInMonth) completedFields++;
+    if (synapse.logistics.budgetMax !== null) completedFields++;
+    if (synapse.logistics.commuteMode?.length > 0) completedFields++;
+  }
+
+  // Lifestyle section
+  if (synapse.lifestyle) {
+    totalFields += 2;
+    if (synapse.lifestyle.sleepPattern) completedFields++;
+    if (synapse.lifestyle.cleanliness) completedFields++;
+  }
+
+  // Habits section
+  if (synapse.habits) {
+    totalFields += 2;
+    if (synapse.habits.diet) completedFields++;
+    if (synapse.habits.smoking) completedFields++;
+  }
+
+  // Pets section
+  if (synapse.pets) {
+    totalFields += 1;
+    if (synapse.pets.hasPets !== undefined) completedFields++;
+  }
+
+  return totalFields > 0 ? Math.round((completedFields / totalFields) * 100) : 0;
+}
 
   // --- Synapse (roommate) matches ---
   // Query params:
@@ -5503,15 +5412,63 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
   function parseAIActions(aiContent, userContext) {
     try {
       const actions = [];
+      
+      // Split content into sections and look for **Label:** and **Description:** patterns
+      const sections = aiContent.split(/\*\*Label:/);
+      
+      sections.forEach((section, index) => {
+        if (index === 0) return; // Skip first empty section
+        
+        const lines = section.split('\n');
+        let label = '';
+        let description = '';
+        
+        // Extract label (first line after **Label:)
+        const labelLine = lines[0]?.trim();
+        if (labelLine) {
+          label = labelLine.replace(/\*\*$/, '').trim();
+        }
+        
+        // Look for **Description:** in the section
+        const descriptionMatch = section.match(/\*\*Description:\s*(.+?)(?=\*\*|$)/s);
+        if (descriptionMatch) {
+          description = descriptionMatch[1].trim();
+        } else {
+          // Fallback: use the rest of the content as description
+          const remainingLines = lines.slice(1).join('\n').trim();
+          description = remainingLines || label;
+        }
+        
+        if (label && description && label !== description) {
+          actions.push({
+            label: label.length > 30 ? label.substring(0, 30) + '...' : label,
+            description: description,
+            path: getActionPath(label, userContext),
+            icon: getActionIcon(label),
+            color: getActionColor(index - 1),
+            priority: index <= 2 ? 'high' : 'medium',
+            aiGenerated: true
+          });
+        }
+      });
+
+      // Fallback: if no structured actions found, try the old format
+      if (actions.length === 0) {
       const lines = aiContent.split('\n').filter(line => line.trim());
       
       lines.forEach((line, index) => {
         if (line.match(/^\d+\.|^[-*]|^•/)) {
           const cleanLine = line.replace(/^\d+\.|^[-*]|^•/, '').trim();
           if (cleanLine.length > 10) {
+              const labelMatch = cleanLine.match(/^([^:]+?)(?:\s*:|\s*\.|$)/);
+              const label = labelMatch ? labelMatch[1].trim() : cleanLine.substring(0, 25);
+              
+              const descriptionMatch = cleanLine.match(/^[^:]+:\s*(.+)$/);
+              const description = descriptionMatch ? descriptionMatch[1].trim() : cleanLine;
+              
             actions.push({
-              label: cleanLine.substring(0, 30) + (cleanLine.length > 30 ? '...' : ''),
-              description: cleanLine,
+                label: label.length > 30 ? label.substring(0, 30) + '...' : label,
+                description: description,
               path: getActionPath(cleanLine, userContext),
               icon: getActionIcon(cleanLine),
               color: getActionColor(index),
@@ -5521,6 +5478,7 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
           }
         }
       });
+      }
 
       if (actions.length === 0) {
         actions.push({
@@ -5783,33 +5741,47 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
       });
 
       const aiMessage = aiResponse?.data?.choices?.[0]?.message;
-      const explanation = aiMessage?.content || '';
+      let explanation = aiMessage?.content || '';
+      // Sanitize any literal tool placeholders that some models emit in content
+      // e.g., "[get_housing_recommendations insightType: \"housing\"]"
+      const toolPlaceholderRegex = /\[get_[^\]]+\]/gi;
+      if (toolPlaceholderRegex.test(explanation)) {
+        explanation = explanation.replace(toolPlaceholderRegex, '').trim();
+      }
+      // Also catch bare tool-call style text without brackets
+      const bareToolCallRegex = /(^|\n)\s*get_[a-zA-Z0-9_]+[^\n]*/g;
+      if (bareToolCallRegex.test(explanation)) {
+        explanation = explanation.replace(bareToolCallRegex, '').trim();
+      }
       
       let specificRecommendations = null;
       
-      // Check if AI wants to use tools
-      if (aiMessage?.tool_calls && aiMessage.tool_calls.length > 0) {
-        console.log('🔧 AI wants to use tools for explain-insight:', aiMessage.tool_calls);
-        const toolCall = aiMessage.tool_calls[0];
+      // Generate explanation directly without complex data fetching
+      try {
+        // Simple, reliable explanation generation
+        const simplePrompt = `Please explain this insight in detail for ${userContext.profile.name}:
+
+        Insight: ${insight.title}
+        Message: ${insight.message}
+        Priority: ${insight.priority}
+        Category: ${insight.category}
         
-        if (toolCall.function.name === 'get_housing_recommendations') {
-          try {
-            const toolArgs = JSON.parse(toolCall.function.arguments);
-            console.log('🔧 Tool arguments for explain-insight:', toolArgs);
-            
-            // Get specific recommendations directly from database
-            specificRecommendations = await getRecommendationsDirectly(user, toolArgs.insightType);
-            console.log('🔧 Recommendations response for explain-insight:', specificRecommendations);
-            
-            // Generate explanation with specific recommendations
-            const enhancedPrompt = `${userPrompt}\n\nBased on the specific recommendations found:\n${JSON.stringify(specificRecommendations, null, 2)}\n\nExplain why this recommendation is important using these specific options.`;
-            
-            const enhancedResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
+        User Context:
+        - University: ${userContext.profile.university}
+        - Major: ${userContext.profile.major}
+        - Arrival Date: ${userContext.arrivalDate || 'Not specified'}
+        - Days until arrival: ${userContext.daysUntilArrival || 'Not calculated'}
+        - Budget: $${userContext.onboardingData?.budget?.min || 'Not specified'} - $${userContext.onboardingData?.budget?.max || 'Not specified'}
+        - Current Location: ${userContext.profile.currentLocation || 'Not specified'}
+        
+        Please provide a detailed, personalized explanation of why this recommendation is important for ${userContext.profile.name} and what they should do next.`;
+        
+        const response = await axios.post('https://api.openai.com/v1/chat/completions', {
               model: "gpt-4o",
               temperature: 0.7,
               messages: [
                 { role: "system", content: systemPrompt },
-                { role: "user", content: enhancedPrompt }
+            { role: "user", content: simplePrompt }
               ]
             }, {
               headers: {
@@ -5818,71 +5790,19 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
               },
             });
             
-            const enhancedExplanation = enhancedResponse?.data?.choices?.[0]?.message?.content || '';
-            
-            res.json({ 
-              success: true, 
-              explanation: enhancedExplanation,
-              insight: insight,
-              aiGenerated: true,
-              specificRecommendations: specificRecommendations
-            });
-            return;
-            
-          } catch (toolError) {
-            console.error('Tool execution error in explain-insight:', toolError);
-          }
-        }
-      } else {
-        // AI didn't call tools - force it to use tools for housing insights
-        console.log('🔧 AI didn\'t call tools for explain-insight, forcing tool usage...');
+        explanation = response?.data?.choices?.[0]?.message?.content || '';
         
-        try {
-          // Force get recommendations directly from database
-          specificRecommendations = await getRecommendationsDirectly(user, "housing");
-          console.log('🔧 Forced recommendations response for explain-insight:', specificRecommendations);
-          
-          // Generate explanation with specific recommendations
-          const enhancedPrompt = `${userPrompt}\n\nBased on the specific recommendations found:\n${JSON.stringify(specificRecommendations, null, 2)}\n\nExplain why this recommendation is important using these specific options.`;
-          
-          const enhancedResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
-            model: "gpt-4o",
-            temperature: 0.7,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: enhancedPrompt }
-            ]
-          }, {
-            headers: {
-              Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-          });
-          
-          const enhancedExplanation = enhancedResponse?.data?.choices?.[0]?.message?.content || '';
+        // Final cleanup: strip any tool call artifacts
+        explanation = explanation.replace(/\[get_[^\]]+\]/gi, '').replace(/(^|\n)\s*get_[a-zA-Z0-9_]+[^\n]*/g, '').trim();
+        
+      } catch (error) {
+        console.error('Failed to generate explanation:', error);
+        explanation = generateFallbackExplanation(insight, user, dashboardData);
+      }
           
           res.json({ 
             success: true, 
-            explanation: enhancedExplanation,
-            insight: insight,
-            aiGenerated: true,
-            specificRecommendations: specificRecommendations
-          });
-          return;
-          
-        } catch (forceError) {
-          console.error('Force tool usage error in explain-insight:', forceError);
-        }
-      }
-      
-      // Ensure we never return empty explanation
-      const finalExplanation = explanation && explanation.trim() 
-        ? explanation 
-        : generateFallbackExplanation(insight, user, dashboardData);
-      
-      res.json({ 
-        success: true, 
-        explanation: finalExplanation,
+        explanation: explanation || generateFallbackExplanation(insight, user, dashboardData),
         insight: insight,
         aiGenerated: true,
         specificRecommendations
@@ -5943,6 +5863,75 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
     
     return explanations[insight.title] || `This recommendation is important for your success at ${university}. Take action on this to stay on track with your goals.`;
   }
+
+  // AI Roommate Matching Endpoints
+  app.use('/api/ai/roommate', aiRoommateEndpoints);
+
+  // Remove Fake Listings Endpoint
+  app.post('/api/admin/remove-fake-listings', authenticateToken, async (req, res) => {
+    try {
+      console.log('🧹 Removing fake listings from database...');
+      
+      // Remove the specific fake properties shown in the image
+      const fakePropertyTitles = [
+        'Campus View 2BR',
+        'Barsema Hall', 
+        'Lincolnshire West',
+        'Stadium View II Apartment',
+        'Downtown Studio Apartment',
+        'Student Housing Complex',
+        'Sathya Keshav\'s Apt',
+        'Campus View',
+        'Test Property',
+        'Demo Apartment'
+      ];
+      
+      const deletedProperties = await Property.deleteMany({
+        title: { $in: fakePropertyTitles }
+      });
+      
+      console.log(`✅ Removed ${deletedProperties.deletedCount} fake properties`);
+      
+      // Also remove any properties with fake contact info
+      const deletedFakeContacts = await Property.deleteMany({
+        $or: [
+          { 'contactInfo.email': { $regex: /@example\.com$/ } },
+          { 'contactInfo.name': { $in: ['Sathya Keshav', 'Property Manager', 'Test Landlord', 'Demo Owner'] } }
+        ]
+      });
+      
+      console.log(`✅ Removed ${deletedFakeContacts.deletedCount} properties with fake contact info`);
+      
+      // Remove properties with system-seed userId
+      const deletedSystemProperties = await Property.deleteMany({
+        userId: 'system-seed'
+      });
+      
+      console.log(`✅ Removed ${deletedSystemProperties.deletedCount} system-seeded properties`);
+      
+      const totalRemoved = deletedProperties.deletedCount + deletedFakeContacts.deletedCount + deletedSystemProperties.deletedCount;
+      
+      res.json({
+        success: true,
+        message: 'Fake listings removed successfully',
+        summary: {
+          fakeProperties: deletedProperties.deletedCount,
+          fakeContacts: deletedFakeContacts.deletedCount,
+          systemProperties: deletedSystemProperties.deletedCount,
+          totalRemoved: totalRemoved
+        }
+      });
+      
+    } catch (error) {
+      console.error('❌ Error removing fake listings:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error removing fake listings',
+        error: error.message
+      });
+    }
+  });
+
 
   // AI Tool Endpoints for Database Interaction
   // These endpoints allow the AI to query the database and provide specific recommendations
@@ -7004,7 +6993,9 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
     }
   });
 
-  // ==================== TRANSPORTATION ENDPOINTS ====================
+  // ==================== TRANSPORTATION ENDPOINTS (DISABLED) ====================
+  // Temporarily disabled - moved to Upcoming Features directory
+  /*
   
   // Import transportation models
   const Route = require('./models/route.model');
@@ -7597,8 +7588,12 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
 
   const PORT = process.env.PORT || 8000;
 
+  */
+  
+  const PORT = process.env.PORT || 8000;
+  
   server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });
-
+  
   module.exports = app;
