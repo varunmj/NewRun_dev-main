@@ -1,5 +1,29 @@
 const nodemailer = require('nodemailer');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
+
+// Email assets configuration
+const EMAIL_ASSETS_DIR = process.env.EMAIL_ASSETS_DIR || path.join(__dirname, '../email_assets');
+
+function loadIcon(name) {
+  const p = path.join(EMAIL_ASSETS_DIR, name);
+  try {
+    const buf = fs.readFileSync(p);
+    console.log(`✓ loaded email asset ${name} (${buf.length} bytes)`);
+    return buf;
+  } catch (e) {
+    console.warn(`✗ missing email asset ${name} at ${p}: ${e.message}`);
+    return null;
+  }
+}
+
+// Load social media icons at startup
+const ICONS = {
+  x: loadIcon('twitter.png'),
+  linkedin: loadIcon('linkedin.png'),
+  instagram: loadIcon('instagram.png'),
+};
 
 class EmailService {
   constructor() {
@@ -101,26 +125,34 @@ class EmailService {
 
   // Helper method to get social media icon attachments
   getSocialMediaAttachments() {
-    const path = require('path');
-    const iconsPath = path.join(__dirname, '../../frontend/src/assets/icons');
+    const atts = [];
     
-    return [
-      {
-        filename: 'twitter.png',
-        path: path.join(iconsPath, 'twitter.png'),
-        cid: 'nr_x_32'
-      },
-      {
+    if (ICONS.x) {
+      atts.push({ 
+        filename: 'twitter.png', 
+        content: ICONS.x, 
+        cid: 'nr_x_32' 
+      });
+    }
+    
+    if (ICONS.linkedin) {
+      atts.push({ 
         filename: 'linkedin.png', 
-        path: path.join(iconsPath, 'linkedin.png'),
-        cid: 'nr_linkedin_32'
-      },
-      {
-        filename: 'instagram.png',
-        path: path.join(iconsPath, 'instagram.png'), 
-        cid: 'nr_instagram_32'
-      }
-    ];
+        content: ICONS.linkedin, 
+        cid: 'nr_linkedin_32' 
+      });
+    }
+    
+    if (ICONS.instagram) {
+      atts.push({ 
+        filename: 'instagram.png', 
+        content: ICONS.instagram, 
+        cid: 'nr_instagram_32' 
+      });
+    }
+    
+    console.log('🖼  Inline attachments:', atts.map(a => `${a.cid}:${a.filename}`));
+    return atts;
   }
 
   // Email Templates
