@@ -45,7 +45,7 @@ class EmailService {
     }
   }
 
-  async sendEmail(to, subject, html, text = null) {
+  async sendEmail(to, subject, html, text = null, attachments = []) {
     try {
       console.log('📧 Attempting to send email...');
       console.log('📨 To:', to);
@@ -74,7 +74,8 @@ class EmailService {
         html: html,
         text: text || this.stripHtml(html),
         headers,
-        replyTo: "support@www.newrun.club"
+        replyTo: "support@www.newrun.club",
+        attachments
       };
 
       console.log('📋 Mail options prepared, sending...');
@@ -96,6 +97,30 @@ class EmailService {
 
   stripHtml(html) {
     return html.replace(/<[^>]*>/g, '');
+  }
+
+  // Helper method to get social media icon attachments
+  getSocialMediaAttachments() {
+    const path = require('path');
+    const iconsPath = path.join(__dirname, '../../frontend/src/assets/icons');
+    
+    return [
+      {
+        filename: 'twitter.png',
+        path: path.join(iconsPath, 'twitter.png'),
+        cid: 'nr_x_32'
+      },
+      {
+        filename: 'linkedin.png', 
+        path: path.join(iconsPath, 'linkedin.png'),
+        cid: 'nr_linkedin_32'
+      },
+      {
+        filename: 'instagram.png',
+        path: path.join(iconsPath, 'instagram.png'), 
+        cid: 'nr_instagram_32'
+      }
+    ];
   }
 
   // Email Templates
@@ -366,10 +391,10 @@ class EmailService {
               <tr>
                 <td style="font:700 18px Inter,Arial,Helvetica,sans-serif;color:#fff">Connect with ${wordmark}</td>
                 <td align="right">
-                  ${opts.social?.x ? `<a href="${opts.social.x}"><img src="https://www.newrun.club/assets/icons/twitter.png" height="32" alt="X"></a>`:''}
-                  ${opts.social?.linkedin ? `<a href="${opts.social.linkedin}" style="margin-left:8px"><img src="https://www.newrun.club/assets/icons/linkedin.png" height="32" alt="LinkedIn"></a>`:''}
-                  ${opts.social?.instagram ? `<a href="${opts.social.instagram}" style="margin-left:8px"><img src="https://www.newrun.club/assets/icons/instagram.png" height="32" alt="Instagram"></a>`:''}
-                  ${opts.social?.rss ? `<a href="${opts.social.rss}" style="margin-left:8px"><img src="https://www.newrun.club/assets/icons/rss.png" height="32" alt="Blog"></a>`:''}
+                  ${opts.social?.x ? `<a href="${opts.social.x}"><img src="cid:nr_x_32" width="32" height="32" alt="X" style="display:block;border:0;outline:none"></a>`:''}
+                  ${opts.social?.linkedin ? `<a href="${opts.social.linkedin}" style="margin-left:8px"><img src="cid:nr_linkedin_32" width="32" height="32" alt="LinkedIn" style="display:block;border:0;outline:none"></a>`:''}
+                  ${opts.social?.instagram ? `<a href="${opts.social.instagram}" style="margin-left:8px"><img src="cid:nr_instagram_32" width="32" height="32" alt="Instagram" style="display:block;border:0;outline:none"></a>`:''}
+                  ${opts.social?.rss ? `<a href="${opts.social.rss}" style="margin-left:8px"><img src="cid:nr_rss_32" width="32" height="32" alt="Blog" style="display:block;border:0;outline:none"></a>`:''}
                 </td>
               </tr>
             </table>
@@ -693,31 +718,36 @@ class EmailService {
   async sendEmailVerification(userEmail, userName, verificationLink) {
     const subject = 'Verify Your NewRun Account';
     const html = this.generateEmailVerificationTemplate(userName, verificationLink);
-    return await this.sendEmail(userEmail, subject, html);
+    const attachments = this.getSocialMediaAttachments();
+    return await this.sendEmail(userEmail, subject, html, null, attachments);
   }
 
   async sendOTP(userEmail, userName, otp) {
     const subject = 'Account Verification Required - NewRun';
     const html = this.generateOTPVerificationTemplate(userName, otp);
-    return await this.sendEmail(userEmail, subject, html);
+    const attachments = this.getSocialMediaAttachments();
+    return await this.sendEmail(userEmail, subject, html, null, attachments);
   }
 
   async sendPasswordReset(userEmail, userName, resetLink) {
     const subject = 'Reset Your NewRun Password';
     const html = this.generatePasswordResetTemplate(userName, resetLink);
-    return await this.sendEmail(userEmail, subject, html);
+    const attachments = this.getSocialMediaAttachments();
+    return await this.sendEmail(userEmail, subject, html, null, attachments);
   }
 
   async sendWelcomeEmail(userEmail, userName) {
     const subject = 'Account Activated - NewRun';
     const html = this.generateWelcomeTemplate(userName);
-    return await this.sendEmail(userEmail, subject, html);
+    const attachments = this.getSocialMediaAttachments();
+    return await this.sendEmail(userEmail, subject, html, null, attachments);
   }
 
   async sendEmailVerificationWithCode(userEmail, userName, verificationLink, verificationCode) {
     const subject = 'Account Verification Required - NewRun';
     const html = this.generateOTPVerificationTemplate(userName, verificationCode);
-    return await this.sendEmail(userEmail, subject, html);
+    const attachments = this.getSocialMediaAttachments();
+    return await this.sendEmail(userEmail, subject, html, null, attachments);
   }
 
   // Expose initialization method for manual reinitialization
