@@ -366,10 +366,10 @@ class EmailService {
               <tr>
                 <td style="font:700 18px Inter,Arial,Helvetica,sans-serif;color:#fff">Connect with ${wordmark}</td>
                 <td align="right">
-                  ${opts.social?.x ? `<a href="${opts.social.x}"><img src="https://newrun.club/assets/icons/twitter.svg" height="32" alt="X"></a>`:''}
-                  ${opts.social?.linkedin ? `<a href="${opts.social.linkedin}" style="margin-left:8px"><img src="https://newrun.club/assets/icons/linkedin.svg" height="32" alt="LinkedIn"></a>`:''}
-                  ${opts.social?.instagram ? `<a href="${opts.social.instagram}" style="margin-left:8px"><img src="https://newrun.club/assets/icons/instagram.svg" height="32" alt="Instagram"></a>`:''}
-                  ${opts.social?.rss ? `<a href="${opts.social.rss}" style="margin-left:8px"><img src="https://newrun.club/assets/icons/rss.svg" height="32" alt="Blog"></a>`:''}
+                  ${opts.social?.x ? `<a href="${opts.social.x}"><img src="https://newrun.club/assets/icons/twitter.png" height="32" alt="X"></a>`:''}
+                  ${opts.social?.linkedin ? `<a href="${opts.social.linkedin}" style="margin-left:8px"><img src="https://newrun.club/assets/icons/linkedin.png" height="32" alt="LinkedIn"></a>`:''}
+                  ${opts.social?.instagram ? `<a href="${opts.social.instagram}" style="margin-left:8px"><img src="https://newrun.club/assets/icons/instagram.png" height="32" alt="Instagram"></a>`:''}
+                  ${opts.social?.rss ? `<a href="${opts.social.rss}" style="margin-left:8px"><img src="https://newrun.club/assets/icons/rss.png" height="32" alt="Blog"></a>`:''}
                 </td>
               </tr>
             </table>
