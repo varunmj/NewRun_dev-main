@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useUnifiedState } from '../context/UnifiedStateContext';
+import dataSyncService from '../services/DataSyncService';
 
 /**
  * Unified Dashboard Hook

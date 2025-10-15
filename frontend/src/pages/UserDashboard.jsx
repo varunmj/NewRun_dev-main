@@ -20,8 +20,10 @@ import PropertyDrawer from "../components/Property/PropertyDrawer";
 import ListingDrawer from "../components/marketplace/ListingDrawer";
 import { useUnifiedState } from "../context/UnifiedStateContext";
 import IntelligentInsights from "../components/AI/IntelligentInsights";
+import AIRoommateInsights from "../components/AI/AIRoommateInsights";
 import axiosInstance from "../utils/axiosInstance";
 import "../styles/newrun-hero.css";
+
 
 // Multi-language Welcome Component with Typewriter Effect
 const TypewriterWelcome = () => {
@@ -142,14 +144,15 @@ export default function UserDashboard() {
     showPropertyDrawer: false,
     showMarketplaceDrawer: false,
     agentMode: false,
-    prompt: ""
+    prompt: "",
+    debugMode: localStorage.getItem('debug_mode') === 'true'
   });
 
   // Destructure local state
   const {
     notifications, showNotifications, refreshing,
     showPropertyManager, showMarketplaceManager, editingProperty, editingItem,
-    showPropertyDrawer, showMarketplaceDrawer, agentMode, prompt
+    showPropertyDrawer, showMarketplaceDrawer, agentMode, prompt, debugMode
   } = localState;
 
   // Update local state
@@ -171,44 +174,119 @@ export default function UserDashboard() {
   }, [aiInsights]);
 
 
-  // Static fallback actions with CORRECT routes
+  // Enhanced static fallback actions with specific descriptions
   const getStaticActions = () => {
     if (!onboardingData) {
       return [
-        { label: "List Property", icon: MdHome, path: "/dashboard", color: "from-blue-500 to-cyan-500" }, // Will open property drawer
-        { label: "Browse Properties", icon: MdSearch, path: "/all-properties", color: "from-indigo-500 to-blue-500" },
-        { label: "Find Roommate", icon: MdGroups, path: "/Synapse", color: "from-purple-500 to-pink-500" },
-        { label: "Browse Community", icon: MdChat, path: "/community", color: "from-orange-500 to-red-500" }
+        { 
+          label: "Verify Email for Access", 
+          icon: MdCheckCircle, 
+          path: "/dashboard", 
+          color: "from-blue-500 to-cyan-500",
+          description: "Complete email verification to unlock all NewRun features and personalized recommendations."
+        },
+        { 
+          label: "Explore Housing Options", 
+          icon: MdHome, 
+          path: "/all-properties", 
+          color: "from-indigo-500 to-blue-500",
+          description: "Browse AI-recommended properties based on your budget and location preferences."
+        },
+        { 
+          label: "Connect with Roommates", 
+          icon: MdGroups, 
+          path: "/Synapse", 
+          color: "from-purple-500 to-pink-500",
+          description: "Complete your Synapse profile to find compatible roommates and potential housing partners."
+        },
+        { 
+          label: "Browse Community", 
+          icon: MdChat, 
+          path: "/community", 
+          color: "from-orange-500 to-red-500",
+          description: "Join university community discussions and connect with fellow students."
+        }
       ];
     }
 
     const focus = onboardingData.focus;
+    const arrivalDate = onboardingData.arrivalDate;
+    const budgetRange = onboardingData.budgetRange;
     const actions = [];
 
-    // Base actions for everyone
-    actions.push({ label: "List Property", icon: MdHome, path: "/dashboard", color: "from-blue-500 to-cyan-500" }); // Will open property drawer
-    actions.push({ label: "Browse Properties", icon: MdSearch, path: "/all-properties", color: "from-indigo-500 to-blue-500" });
+    // Calculate days until arrival for personalized messaging
+    let daysUntilArrival = null;
+    if (arrivalDate) {
+      daysUntilArrival = Math.ceil((new Date(arrivalDate) - new Date()) / (1000 * 60 * 60 * 24));
+    }
 
-    // Add focus-specific actions
+    // Priority actions based on timing and focus
+    if (daysUntilArrival && daysUntilArrival <= 30) {
+      actions.push({ 
+        label: "Secure Housing Immediately", 
+        icon: MdHome, 
+        path: "/all-properties", 
+        color: "from-red-500 to-orange-500",
+        description: `Only ${daysUntilArrival} days until arrival! Browse available properties and secure housing quickly.`
+      });
+    }
+
     if (focus === 'Housing' || focus === 'Everything') {
-      actions.push({ label: "Browse Properties", icon: MdSearch, path: "/all-properties", color: "from-indigo-500 to-blue-500" });
-      actions.push({ label: "Schedule Tours", icon: MdSchedule, path: "/all-properties", color: "from-teal-500 to-cyan-500" });
+      actions.push({ 
+        label: "Find Your Perfect Home", 
+        icon: MdSearch, 
+        path: "/all-properties", 
+        color: "from-indigo-500 to-blue-500",
+        description: `Browse ${budgetRange ? `properties within $${budgetRange.min}-$${budgetRange.max}` : 'available properties'} near your university.`
+      });
+      
+      actions.push({ 
+        label: "Connect with Roommates", 
+        icon: MdGroups, 
+        path: "/Synapse", 
+        color: "from-purple-500 to-pink-500",
+        description: "Complete your Synapse profile to find compatible roommates and split housing costs."
+      });
     }
 
     if (focus === 'Roommate' || focus === 'Everything') {
-      actions.push({ label: "Find Roommate", icon: MdGroups, path: "/Synapse", color: "from-purple-500 to-pink-500" });
-      actions.push({ label: "Complete Profile", icon: MdPerson, path: "/Synapse", color: "from-rose-500 to-pink-500" });
+      actions.push({ 
+        label: "Complete Synapse Profile", 
+        icon: MdPerson, 
+        path: "/Synapse", 
+        color: "from-rose-500 to-pink-500",
+        description: "Complete your detailed profile to unlock AI-powered roommate matching and personalized recommendations."
+      });
     }
 
     if (focus === 'Essentials' || focus === 'Everything') {
-      actions.push({ label: "Browse Essentials", icon: MdShoppingBag, path: "/marketplace", color: "from-green-500 to-emerald-500" });
-      actions.push({ label: "Smart Pack", icon: MdLightbulb, path: "/marketplace", color: "from-yellow-500 to-orange-500" });
+      actions.push({ 
+        label: "Prepare for Essentials", 
+        icon: MdShoppingBag, 
+        path: "/marketplace", 
+        color: "from-green-500 to-emerald-500",
+        description: "Create a checklist of essential items you'll need for your university transition and campus life."
+      });
     }
 
     if (focus === 'Community' || focus === 'Everything') {
-      actions.push({ label: "Browse Community", icon: MdChat, path: "/community", color: "from-orange-500 to-red-500" });
-      actions.push({ label: "Join Events", icon: MdEvent, path: "/community", color: "from-red-500 to-pink-500" });
+      actions.push({ 
+        label: "Join University Community", 
+        icon: MdChat, 
+        path: "/community", 
+        color: "from-orange-500 to-red-500",
+        description: "Connect with fellow students, ask questions, and get advice from the university community."
+      });
     }
+
+    // Add essential actions
+    actions.push({ 
+      label: "Establish Bank Account", 
+      icon: MdAttachMoney, 
+      path: "/dashboard", 
+      color: "from-emerald-500 to-green-500",
+      description: "Set up a local bank account for easy financial management during your studies."
+    });
 
     return actions.slice(0, 6); // Limit to 6 actions
   };
@@ -338,6 +416,22 @@ export default function UserDashboard() {
     loadDashboard();
   }, []);
 
+  // Listen for authentication changes and refresh data
+  useEffect(() => {
+    const handleAuthChange = (event) => {
+      if (event.detail?.type === 'login') {
+        console.log('🔄 Dashboard: Login detected, refreshing data...');
+        // Small delay to ensure token is available
+        setTimeout(() => {
+          refreshAll();
+        }, 200);
+      }
+    };
+
+    window.addEventListener('authStateChange', handleAuthChange);
+    return () => window.removeEventListener('authStateChange', handleAuthChange);
+  }, [refreshAll]);
+
   // Auto-refresh every 30 seconds with proper cleanup
   useEffect(() => {
     let intervalId;
@@ -442,6 +536,15 @@ export default function UserDashboard() {
       }
     }
   }, [refreshDashboardData, invalidateCache]);
+
+  // Force refresh if user data is missing but we have a token
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    if (token && !userInfo && !loading.user && !isLoading) {
+      console.log('🔄 Dashboard: Token found but no user data, forcing refresh...');
+      refreshUserData();
+    }
+  }, [userInfo, loading.user, isLoading, refreshUserData]);
 
   // Safety check for loading state - moved to end to fix hooks order violation
   if (isLoading && !isFullyInitialized) {
@@ -647,6 +750,23 @@ export default function UserDashboard() {
                 </div>
                   </h1>
                 </motion.div>
+
+
+                {/* Debug Mode Toggle (Hidden) */}
+                {!debugMode && (
+                  <div className="mx-auto mt-4 w-full max-w-4xl text-center">
+                    <button
+                      onClick={() => {
+                        localStorage.setItem('debug_mode', 'true');
+                        updateLocalState({ debugMode: true });
+                      }}
+                      className="text-white/20 hover:text-white/40 text-xs transition-colors"
+                      title="Enable debug mode"
+                    >
+                      🔧
+                    </button>
+                  </div>
+                )}
 
 
                 {/* Chat Input Box - Box inside box design */}
@@ -895,6 +1015,53 @@ export default function UserDashboard() {
           </section>
         )}
 
+        {/* AI Roommate Matching Section */}
+        {onboardingData && userInfo?.synapse && (
+          <section className="mx-auto max-w-7xl px-4 py-8">
+            <AIRoommateInsights 
+              userInfo={userInfo} 
+              dashboardData={dashboardData} 
+              onboardingData={onboardingData}
+            />
+          </section>
+        )}
+
+        {/* Debug Panel */}
+        {debugMode && (
+          <div className="mx-auto max-w-7xl px-4 py-4">
+            <div className="rounded-2xl border border-yellow-500/20 bg-yellow-500/5 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-yellow-500/20">
+                    <MdSettings className="text-xl text-yellow-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-yellow-400">Debug Mode</h3>
+                    <p className="text-yellow-300/70 text-sm">Developer tools and testing utilities</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      localStorage.setItem('debug_mode', 'false');
+                      updateLocalState({ debugMode: false });
+                    }}
+                    className="px-3 py-1.5 bg-yellow-500/20 text-yellow-400 rounded-lg font-medium hover:bg-yellow-500/30 transition-colors text-sm"
+                  >
+                    Disable Debug
+                  </button>
+                  <button
+                    onClick={() => navigate('/onboarding?force=true')}
+                    className="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg font-medium hover:bg-blue-500/30 transition-colors text-sm"
+                  >
+                    Test Onboarding
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Dashboard Content - Hero with Side Data Boxes */}
         <div className="mx-auto max-w-7xl px-4 py-8">
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -1059,7 +1226,15 @@ export default function UserDashboard() {
               {/* AI-Powered Quick Actions */}
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-white">Quick Actions</h3>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-blue-500/20">
+                      <MdRocket className="text-xl text-blue-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-white">AI-Recommended Actions</h3>
+                      <p className="text-xs text-white/60">Smart actions tailored to your profile</p>
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2">
                     {actionsLoading && (
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>

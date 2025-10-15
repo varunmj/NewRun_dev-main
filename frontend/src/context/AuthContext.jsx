@@ -92,6 +92,11 @@ export const AuthProvider = ({ children }) => {
       setUser(userData);
       setIsAuthenticated(true);
       
+      // Dispatch custom event to notify UnifiedStateContext
+      window.dispatchEvent(new CustomEvent('authStateChange', {
+        detail: { type: 'login', user: userData, token: authToken }
+      }));
+      
       return { success: true };
     } catch (error) {
       console.error('Login error:', error);
@@ -113,6 +118,11 @@ export const AuthProvider = ({ children }) => {
       
       // Clear any cached data
       sessionStorage.clear();
+      
+      // Dispatch custom event to notify UnifiedStateContext
+      window.dispatchEvent(new CustomEvent('authStateChange', {
+        detail: { type: 'logout' }
+      }));
       
       return { success: true };
     } catch (error) {

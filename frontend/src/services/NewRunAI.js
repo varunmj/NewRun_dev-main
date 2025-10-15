@@ -18,6 +18,35 @@ class NewRunAI {
   // ---------------------------
 
   /**
+   * Unified GET helper for new real data AI endpoints
+   */
+  async _get(url) {
+    try {
+      const res = await this.axios.get(url);
+      return { ok: true, data: res.data, status: res.status };
+    } catch (err) {
+      const status = err?.response?.status;
+      const msg = err?.response?.data?.message || err.message || 'Unknown error';
+
+      // Let auth failures bubble up (handled by interceptor -> redirect)
+      if (status === 401) {
+        // eslint-disable-next-line no-console
+        console.warn(`[AI] 401 on ${url} — bubbling to interceptor`);
+        throw err;
+      }
+
+      // Rate limit / server / network → optionally recoverable with fallback
+      const recoverable =
+        status === 429 || (status >= 500 || !status /* network */);
+
+      // eslint-disable-next-line no-console
+      console.warn(`[AI] GET ${url} failed`, { status, msg, recoverable });
+
+      return { ok: false, status, message: msg, recoverable };
+    }
+  }
+
+  /**
    * Unified POST helper that:
    *  - calls the API
    *  - if 401 → rethrow (let global interceptor do logout/redirect)
@@ -52,6 +81,61 @@ class NewRunAI {
 
   _validateArray(data, key) {
     return data && Array.isArray(data[key]) ? data[key] : null;
+  }
+
+  /**
+   * Transform real data AI insights into the format expected by the frontend
+   */
+  _transformRealDataInsights(realDataResponse, userData) {
+    try {
+      const insights = realDataResponse.insights || '';
+      const confidence = realDataResponse.confidence || 0.85;
+      const dataSource = realDataResponse.dataSource || 'Real NewRun Database';
+      
+      // Transform the AI insights text into the expected format
+      const transformedInsights = [
+        {
+          id: 'real-data-insight-1',
+          title: 'AI-Powered Insights from Your Real Data',
+          description: insights,
+          type: 'insight',
+          priority: 'high',
+          confidence: confidence,
+          dataSource: dataSource,
+          timestamp: new Date().toISOString(),
+          category: 'ai-analysis',
+          icon: 'MdInsights',
+          actionable: true,
+          personalized: true
+        }
+      ];
+
+      // Add database statistics as additional insights
+      if (realDataResponse.realData) {
+        const stats = realDataResponse.realData;
+        transformedInsights.push({
+          id: 'real-data-stats-1',
+          title: 'Your Platform Statistics',
+          description: `Your platform has ${stats.totalUsers} users, ${stats.totalProperties} properties, and ${stats.totalMarketplaceItems} marketplace items.`,
+          type: 'statistics',
+          priority: 'medium',
+          confidence: 1.0,
+          dataSource: 'Real Database',
+          timestamp: new Date().toISOString(),
+          category: 'platform-stats',
+          icon: 'MdAnalytics',
+          actionable: false,
+          personalized: false,
+          stats: stats
+        });
+      }
+
+      console.log('🤖 Transformed real data insights:', transformedInsights);
+      return transformedInsights;
+    } catch (error) {
+      console.error('❌ Error transforming real data insights:', error);
+      return this.getFallbackInsights(userData, {});
+    }
   }
 
   _validateString(data, key) {
@@ -100,7 +184,9 @@ class NewRunAI {
     // eslint-disable-next-line no-console
     console.debug('🤖 NewRunAI: generatePersonalizedActions()');
 
-    const resp = await this._post('/api/ai/actions', undefined);
+    const dashboardData = userData?.dashboardData || userData?.dashboardStats || {};
+    console.debug('🤖 NewRunAI: Sending dashboardData:', dashboardData);
+    const resp = await this._post('/api/ai/actions', { dashboardData });
 
     if (resp.ok) {
       const actions = this._validateArray(resp.data, 'actions');
@@ -168,6 +254,7 @@ class NewRunAI {
           insight: resp.data?.insight ?? insight,
           aiGenerated: Boolean(resp.data?.aiGenerated),
           fallback: Boolean(resp.data?.fallback),
+          structured: resp.data?.structured ?? null,
         };
       }
 

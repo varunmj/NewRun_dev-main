@@ -35,7 +35,6 @@ const useHistoryBlocker = (shouldBlock = false) => {
       const protectedRoutes = [
         '/dashboard',
         '/profile',
-        '/chatbot',
         '/messaging',
         '/Synapse',
         '/marketplace/item',
@@ -74,7 +73,6 @@ const useHistoryBlocker = (shouldBlock = false) => {
       const protectedRoutes = [
         '/dashboard',
         '/profile',
-        '/chatbot',
         '/messaging',
         '/Synapse',
         '/marketplace/item',

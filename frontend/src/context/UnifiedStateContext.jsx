@@ -649,6 +649,62 @@ export const UnifiedStateProvider = ({ children }) => {
     }
   }, []);
 
+  // Listen for custom authentication events
+  useEffect(() => {
+    const handleAuthChange = (event) => {
+      if (event.detail?.type === 'login') {
+        console.log('🔄 Login event detected, triggering re-initialization...');
+        hasInitialized.current = false;
+        setTimeout(() => {
+          hasInitialized.current = true;
+          initializeAll();
+        }, 100); // Small delay to ensure token is set
+      } else if (event.detail?.type === 'logout') {
+        console.log('🔄 Logout event detected, clearing state...');
+        hasInitialized.current = false;
+        updateState({
+          userInfo: null,
+          onboardingData: null,
+          dashboardData: null,
+          conversations: [],
+          synapseProfile: null,
+          aiInsights: [],
+          aiActions: [],
+          aiTimeline: null,
+          aiMarketAnalysis: null,
+          aiPredictions: null,
+          initialized: {
+            user: false,
+            dashboard: false,
+            ai: false,
+            onboarding: false,
+            conversations: false,
+            synapse: false
+          },
+          loading: {
+            user: false,
+            dashboard: false,
+            ai: false,
+            onboarding: false,
+            conversations: false,
+            synapse: false
+          },
+          errors: {
+            user: null,
+            dashboard: null,
+            ai: null,
+            onboarding: null,
+            conversations: null,
+            synapse: null
+          }
+        });
+      }
+    };
+
+    window.addEventListener('authStateChange', handleAuthChange);
+    return () => window.removeEventListener('authStateChange', handleAuthChange);
+  }, [updateState, initializeAll]);
+
   // Listen for authentication state changes
   useEffect(() => {
     const handleStorageChange = (e) => {
@@ -692,13 +748,18 @@ export const UnifiedStateProvider = ({ children }) => {
               synapse: null
             }
           });
+        } else if (e.newValue && !hasInitialized.current) {
+          // Token was added, trigger re-initialization
+          console.log('🔄 Token detected, triggering re-initialization...');
+          hasInitialized.current = true;
+          initializeAll();
         }
       }
     };
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [updateState]);
+  }, [updateState, initializeAll]);
 
   // Auto-refresh when data changes
   useEffect(() => {

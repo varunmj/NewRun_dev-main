@@ -132,6 +132,10 @@ export default function Marketplace() {
 
   // drawer state
   const [isListingDrawerOpen, setIsListingDrawerOpen] = useState(false);
+  
+  // scroll detection for filter behavior
+  const [showFilterButton, setShowFilterButton] = useState(false);
+  const [isFilterCollapsed, setIsFilterCollapsed] = useState(false);
 
   // derived
   const filters = useMemo(() => {
@@ -194,6 +198,50 @@ export default function Marketplace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
+  // Scroll detection for filter behavior
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY;
+      const filterSection = document.getElementById('filter-section');
+      
+      if (filterSection) {
+        const filterRect = filterSection.getBoundingClientRect();
+        const filterBottom = filterRect.bottom;
+        
+        // Show collapsed button when filter section is out of view
+        if (filterBottom < 0) {
+          setShowFilterButton(true);
+          setIsFilterCollapsed(false);
+        } else {
+          setShowFilterButton(false);
+          setIsFilterCollapsed(false);
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Close panel when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isFilterCollapsed && showFilterButton) {
+        const button = document.querySelector('[data-filter-button]');
+        const panel = document.querySelector('[data-filter-panel]');
+        
+        if (button && panel && 
+            !button.contains(event.target) && 
+            !panel.contains(event.target)) {
+          setIsFilterCollapsed(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isFilterCollapsed, showFilterButton]);
+
   // Reset pagination when sort/filter changes
   useEffect(() => { 
     setCursor(null); 
@@ -219,6 +267,22 @@ export default function Marketplace() {
         return next;
       });
     } catch {}
+  };
+
+  const scrollToFilters = () => {
+    const filterSection = document.getElementById('filter-section');
+    if (filterSection) {
+      filterSection.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+      });
+      setIsFilterCollapsed(false);
+    }
+  };
+
+  const handleFilterButtonClick = () => {
+    // Toggle the panel state
+    setIsFilterCollapsed(prev => !prev);
   };
 
 
@@ -262,7 +326,7 @@ export default function Marketplace() {
       <main className="mx-auto max-w-7xl px-4 pb-16 overflow-visible">
 
         {/* Enhanced Filter Toolbar */}
-        <section className="relative z-50 sticky top-[68px] mb-8 rounded-2xl border border-white/10 bg-[#0f1115]/90 backdrop-blur-xl shadow-2xl overflow-visible">
+        <section id="filter-section" className="relative z-50 mb-8 rounded-2xl border border-white/10 bg-[#0f1115]/95 backdrop-blur-xl shadow-2xl overflow-visible">
           <div className="p-4">
             {/* Active Filters Row */}
             <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -615,6 +679,100 @@ export default function Marketplace() {
           load(false);
         }}
       />
+
+      {/* Floating Filter Button */}
+      {showFilterButton && (
+        <div className="fixed left-4 top-1/2 -translate-y-1/2 z-40">
+          <button
+            data-filter-button
+            onClick={handleFilterButtonClick}
+            className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 flex items-center justify-center"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* Collapsed Filter Panel */}
+      {showFilterButton && (
+        <div className="fixed left-20 top-1/2 -translate-y-1/2 z-40">
+          <div 
+            data-filter-panel 
+            className={`w-80 max-w-80 rounded-2xl border border-white/20 bg-white/5 backdrop-blur-xl shadow-2xl p-6 transition-all duration-500 ease-out transform overflow-hidden ${
+              isFilterCollapsed 
+                ? 'translate-x-0 opacity-100 scale-100' 
+                : '-translate-x-full opacity-0 scale-95 pointer-events-none'
+            }`}
+          >
+            <div className={`flex items-center justify-between mb-4 transition-all duration-700 ease-out ${
+              isFilterCollapsed ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'
+            }`}>
+              <h3 className="text-lg font-semibold text-white">Quick Filters</h3>
+              <button
+                onClick={scrollToFilters}
+                className="text-xs text-orange-400 hover:text-orange-300 transition-colors"
+              >
+                View All Filters
+              </button>
+            </div>
+            
+            {/* Quick Filter Options */}
+            <div className={`space-y-3 transition-all duration-700 ease-out delay-100 ${
+              isFilterCollapsed ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
+            }`}>
+              {/* Search */}
+              <div className="w-full">
+                <label className="block text-sm font-medium text-white/70 mb-2">Search</label>
+                <input
+                  type="text"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Search items..."
+                  className="w-full max-w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none placeholder:text-white/40 focus:border-sky-500"
+                />
+              </div>
+              
+              {/* Category */}
+              <div className="w-full">
+                <label className="block text-sm font-medium text-white/70 mb-2">Category</label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full max-w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
+                >
+                  <option value="">All Categories</option>
+                  {CATEGORIES.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Price Range */}
+              <div className="w-full">
+                <label className="block text-sm font-medium text-white/70 mb-2">Price Range</label>
+                <div className="flex gap-2 w-full">
+                  <input
+                    type="number"
+                    value={minPrice}
+                    onChange={(e) => setMinPrice(e.target.value)}
+                    placeholder="Min"
+                    className="flex-1 min-w-0 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none placeholder:text-white/40 focus:border-sky-500"
+                  />
+                  <input
+                    type="number"
+                    value={maxPrice}
+                    onChange={(e) => setMaxPrice(e.target.value)}
+                    placeholder="Max"
+                    className="flex-1 min-w-0 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white outline-none placeholder:text-white/40 focus:border-sky-500"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

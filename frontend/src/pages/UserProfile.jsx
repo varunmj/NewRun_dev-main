@@ -20,8 +20,87 @@ import {
   MdOutlinePlayCircle,
   MdOutlineBolt,
   MdEdit,
+  MdGroups,
+  MdSettings,
 } from "react-icons/md";
 import { FaWhatsapp, FaInstagram, FaYoutube, FaDribbble, FaPinterest } from "react-icons/fa6";
+
+// Synapse Completion Status Component
+const SynapseCompletionStatus = ({ onEditPreferences }) => {
+  const [completionData, setCompletionData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCompletionStatus = async () => {
+      try {
+        const response = await axiosInstance.get('/synapse/completion-status');
+        setCompletionData(response.data);
+      } catch (error) {
+        console.error('Error fetching completion status:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCompletionStatus();
+  }, []);
+
+  if (loading) return null;
+
+  if (!completionData) return null;
+
+  return (
+    <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-xl p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+            <MdGroups className="text-blue-400 text-xl" />
+          </div>
+          <div>
+            <h3 className="text-white font-semibold">Synapse Profile</h3>
+            <p className="text-gray-400 text-sm">
+              {completionData.completed 
+                ? `Completed on ${new Date(completionData.completedAt).toLocaleDateString()}`
+                : `${completionData.completionPercentage}% Complete`
+              }
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {completionData.completed ? (
+            <div className="flex items-center gap-2 text-green-400">
+              <MdCheckCircle className="text-lg" />
+              <span className="text-sm font-medium">Complete</span>
+            </div>
+          ) : (
+            <div className="w-16 bg-gray-700 rounded-full h-2">
+              <div 
+                className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${completionData.completionPercentage}%` }}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+      
+      <div className="flex gap-2">
+        <button
+          onClick={() => window.location.href = completionData.completed ? '/Synapsematches' : '/Synapse'}
+          className="flex-1 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+        >
+          {completionData.completed ? 'View Matches' : 'Complete Profile'}
+        </button>
+        <button
+          onClick={onEditPreferences}
+          className="bg-gray-500/20 text-gray-400 hover:bg-gray-500/30 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
+        >
+          <MdSettings className="text-sm" />
+          Edit
+        </button>
+      </div>
+    </div>
+  );
+};
 
 // Normalize and parse "Spring 2023" → { season: "Spring", year: "2023" }
 const parseTerm = (term = "") => {
@@ -654,6 +733,10 @@ export default function UserProfile() {
             <StatCard value={"3"} label="Listings posted" icon={MdOutlinePlayCircle} />
             <StatCard value={"12"} label="Saved properties" icon={MdStar} />
             <StatCard value={"5"} label="Active chats" icon={MdOutlineAccessTime} />
+
+            <SynapseCompletionStatus 
+              onEditPreferences={() => window.location.href = '/Synapse?edit=true'} 
+            />
 
             <Shell>
               <SectionLabel icon={MdDesignServices}>Services</SectionLabel>

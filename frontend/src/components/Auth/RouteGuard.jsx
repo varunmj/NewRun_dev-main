@@ -94,7 +94,6 @@ const RouteGuard = ({ children }) => {
       const protectedRoutes = [
         '/dashboard',
         '/profile',
-        '/chatbot',
         '/messaging',
         '/Synapse',
         '/marketplace/item',

@@ -57,6 +57,7 @@ const UniversityBranding = require('./models/universityBranding.model');
 const Newsletter = require('./models/newsletter.model');
 const UserBookmark = require('./models/userBookmark.model');
 const RoommateRequest = require('./models/RoommateRequest.model');
+const EmailOTP = require('./models/emailOTP.model');
 const { extractHousingCriteria } = require('./services/newrun-llm/newrunLLM');
 const emailService = require('./services/emailService');
 
@@ -177,25 +178,25 @@ const s3 = new AWS.S3();
 
 // Multer storage for S3
 const upload = multer({
-  storage: multerS3({
-    s3: s3Client,
-    bucket: process.env.AWS_S3_BUCKET,
+    storage: multerS3({
+      s3: s3Client,
+      bucket: process.env.AWS_S3_BUCKET,
     // Adjust based on the access level you need
-    key: function (req, file, cb) {
-      const filename = Date.now().toString() + "-" + file.originalname;
+      key: function (req, file, cb) {
+        const filename = Date.now().toString() + "-" + file.originalname;
       cb(null, filename); // File name format
-    },
-  }),
-  fileFilter: (req, file, cb) => {
+      },
+    }),
+    fileFilter: (req, file, cb) => {
     // Accept only image files
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed!'), false);
-    }
-  },
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed!'), false);
+      }
+    },
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB limit
   }
 });
 
@@ -1378,6 +1379,41 @@ app.post("/create-account", async(req,res)=>{
 
     await user.save();
 
+    // Generate both verification methods
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationToken = jwt.sign(
+      { userId: user._id, email: user.email },
+      process.env.ACCESS_TOKEN_SECRET,
+      { expiresIn: '24h' }
+    );
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    // Set both verification methods in user record
+    user.emailVerificationCode = verificationCode;
+    user.emailVerificationToken = verificationToken;
+    user.emailVerificationExpires = expiresAt;
+    await user.save();
+
+    // Send verification email with BOTH options
+    const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`;
+    
+    try {
+      const emailResult = await emailService.sendEmailVerificationWithCode(
+        user.email, 
+        user.firstName, 
+        verificationLink,
+        verificationCode
+      );
+
+      if (!emailResult.success) {
+        console.error('Failed to send verification email:', emailResult.error);
+        // Continue with registration even if email fails
+      }
+    } catch (emailError) {
+      console.error('Email service error:', emailError);
+      // Continue with registration even if email fails
+    }
+
     // Fix JWT expiry - use 24h instead of 25 days
     const accessToken = jwt.sign({user},process.env.ACCESS_TOKEN_SECRET,{
         expiresIn: '24h',
@@ -1387,8 +1423,237 @@ app.post("/create-account", async(req,res)=>{
         error:false,
         user,
         accessToken,
-        message: "Registration Successful",
+        message: "Registration Successful! Please check your email to verify your account. You can either click the link or enter the verification code.",
+        emailVerificationSent: true
     });
+});
+
+// Email verification link endpoint
+app.get('/verify-email', async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return res.status(400).json({
+        error: true,
+        message: 'Verification token is required'
+      });
+    }
+
+    // Verify the token
+    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    const { userId, email } = decoded;
+
+    // Find the user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        error: true,
+        message: 'User not found'
+      });
+    }
+
+    // Check if email matches
+    if (user.email !== email) {
+      return res.status(400).json({
+        error: true,
+        message: 'Invalid verification token'
+      });
+    }
+
+    // Check if already verified
+    if (user.emailVerified) {
+      return res.status(400).json({
+        error: true,
+        message: 'Email already verified'
+      });
+    }
+
+    // Check if token is expired
+    if (user.emailVerificationExpires && new Date() > user.emailVerificationExpires) {
+      return res.status(400).json({
+        error: true,
+        message: 'Verification token has expired. Please request a new verification email.'
+      });
+    }
+
+    // Mark email as verified
+    user.emailVerified = true;
+    user.emailVerificationToken = null;
+    user.emailVerificationCode = null;
+    user.emailVerificationExpires = null;
+    await user.save();
+
+    // Redirect to frontend with success message
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    res.redirect(`${frontendUrl}/login?verified=true&message=Email verified successfully!`);
+
+  } catch (error) {
+    console.error('Email verification error:', error);
+    
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(400).json({
+        error: true,
+        message: 'Invalid verification token'
+      });
+    }
+    
+    if (error.name === 'TokenExpiredError') {
+      return res.status(400).json({
+        error: true,
+        message: 'Verification token has expired'
+      });
+    }
+
+    res.status(500).json({
+      error: true,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Email verification code endpoint (Enterprise-grade)
+app.post('/verify-email-code', authenticateToken, async (req, res) => {
+  try {
+    const authUser = req.user?.user || req.user;
+    const { code } = req.body || {};
+    
+    if (!authUser?.email) {
+      return res.status(401).json({ 
+        error: true, 
+        message: 'Unauthorized' 
+      });
+    }
+    
+    if (!code) {
+      return res.status(400).json({ 
+        error: true, 
+        message: 'Code is required' 
+      });
+    }
+
+    const user = await User.findById(authUser._id);
+    if (!user) {
+      return res.status(404).json({ 
+        error: true, 
+        message: 'User not found' 
+      });
+    }
+    
+    if (user.emailVerified) {
+      return res.json({ 
+        error: false, 
+        message: 'Email already verified' 
+      }); // idempotent
+    }
+
+    const record = await EmailOTP.findOne({ email: user.email }).sort({ lastSentAt: -1 });
+    if (!record) {
+      return res.status(400).json({ 
+        error: true, 
+        message: 'Invalid or expired code.' 
+      });
+    }
+
+    if (record.expiresAt < now()) {
+      return res.status(400).json({ 
+        error: true, 
+        message: 'Code expired. Please request a new one.' 
+      });
+    }
+
+    if (record.attempts >= MAX_ATTEMPTS) {
+      return res.status(429).json({ 
+        error: true, 
+        message: 'Too many attempts. Request a new code.' 
+      });
+    }
+
+    // compare
+    if (record.code !== String(code)) {
+      record.attempts += 1;
+      await record.save();
+      return res.status(400).json({ 
+        error: true, 
+        message: 'That code doesn\'t look right. Try again.' 
+      });
+    }
+
+    // success
+    user.emailVerified = true;
+    await user.save();
+    await EmailOTP.deleteMany({ email: user.email });
+
+    // welcome email (async but awaited for simplicity)
+    try {
+      await emailService.sendWelcomeEmail(user.email, user.firstName || 'there');
+      console.log('Welcome email sent to:', user.email);
+    } catch (welcomeEmailError) {
+      console.error('Failed to send welcome email:', welcomeEmailError);
+      // Don't fail the verification if welcome email fails
+    }
+
+    return res.json({ 
+      error: false, 
+      message: 'Email verified successfully! Welcome to NewRun!' 
+    });
+  } catch (error) {
+    console.error('Email verification error:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Internal Server Error'
+    });
+  }
+});
+
+// Resend email verification code endpoint
+app.post('/resend-email-verification', authenticateToken, async (req, res) => {
+  try {
+    const { user } = req.user;
+
+    if (user.emailVerified) {
+      return res.status(400).json({
+        error: true,
+        message: 'Email already verified'
+      });
+    }
+
+    // Generate new verification code
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Update user record
+    user.emailVerificationCode = verificationCode;
+    user.emailVerificationExpires = expiresAt;
+    await user.save();
+
+    // Send verification code email
+    const emailResult = await emailService.sendOTP(
+      user.email, 
+      user.firstName, 
+      verificationCode
+    );
+
+    if (!emailResult.success) {
+      return res.status(500).json({
+        error: true,
+        message: 'Failed to send verification code',
+        details: emailResult.error
+      });
+    }
+
+    res.json({
+      error: false,
+      message: 'Verification code sent successfully'
+    });
+
+  } catch (error) {
+    console.error('Resend verification error:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Internal server error'
+    });
+  }
 });
 
 // Live username availability check
@@ -1769,11 +2034,36 @@ app.post('/verify-otp', async (req, res) => {
   }
 });
 
+// Enterprise-grade OTP system constants
+const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const RESEND_COOLDOWN_MS = 60 * 1000; // 60 seconds
+const MAX_ATTEMPTS = 5;
+const DAILY_CAP = 10;
+
+const now = () => new Date();
+
 // Send email verification
 app.post('/send-email-verification', authenticateToken, async (req, res) => {
   try {
-    const { user } = req.user;
+    const authUser = req.user?.user || req.user;
     
+    // Safety validation
+    if (!authUser || !authUser.email) {
+      return res.status(401).json({
+        error: true,
+        message: 'Unauthorized or invalid token'
+      });
+    }
+    
+    // Fetch the actual user document from database
+    const user = await User.findById(authUser._id);
+    if (!user) {
+      return res.status(404).json({
+        error: true,
+        message: 'User not found'
+      });
+    }
+
     if (user.emailVerified) {
       return res.status(400).json({
         error: true,
@@ -1781,31 +2071,67 @@ app.post('/send-email-verification', authenticateToken, async (req, res) => {
       });
     }
 
-    // Generate verification token
-    const verificationToken = jwt.sign(
-      { userId: user._id, email: user.email },
-      process.env.ACCESS_TOKEN_SECRET,
-      { expiresIn: '24h' }
-    );
+    const dayKey = new Date().toISOString().slice(0, 10);
 
-    const verificationLink = `${process.env.FRONTEND_URL || 'http://www.newrun.club'}/verify-email?token=${verificationToken}`;
+    let record = await EmailOTP.findOne({ email: user.email, dayKey });
 
-    // Update user with verification token
-    user.emailVerificationToken = verificationToken;
-    user.emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-    await user.save();
+    // Enforce cooldown
+    if (record && record.lastSentAt && now() - record.lastSentAt < RESEND_COOLDOWN_MS) {
+      const retryAfter = Math.ceil((RESEND_COOLDOWN_MS - (now() - record.lastSentAt)) / 1000);
+      return res.status(429).json({ 
+        error: true, 
+        message: `Please wait ${retryAfter}s before requesting again.`, 
+        retryAfterSecs: retryAfter 
+      });
+    }
 
-    // Send verification email
-    const emailResult = await emailService.sendEmailVerification(
+    // Enforce daily cap
+    const count = record?.dailyCount ?? 0;
+    if (count >= DAILY_CAP) {
+      return res.status(429).json({ 
+        error: true, 
+        message: 'Daily limit reached. Try again tomorrow.' 
+      });
+    }
+
+    // Generate new code
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = new Date(Date.now() + OTP_TTL_MS);
+
+    // upsert
+    if (!record) {
+      record = await EmailOTP.create({
+        email: user.email,
+        code,
+        expiresAt,
+        attempts: 0,
+        lastSentAt: new Date(),
+        dailyCount: 1,
+        dayKey
+      });
+    } else {
+      record.code = code;
+      record.expiresAt = expiresAt;
+      record.attempts = 0;
+      record.lastSentAt = new Date();
+      record.dailyCount = count + 1;
+      await record.save();
+    }
+
+    // Send OTP-only email
+    const emailResult = await emailService.sendEmailVerificationWithCode(
       user.email, 
       user.firstName, 
-      verificationLink
+      null, // no link needed
+      code
     );
 
     if (emailResult.success) {
       res.json({
         error: false,
-        message: 'Verification email sent successfully'
+        message: 'Verification email sent successfully!',
+        cooldownSecs: Math.floor(RESEND_COOLDOWN_MS / 1000),
+        ttlSecs: Math.floor(OTP_TTL_MS / 1000)
       });
     } else {
       console.error('Failed to send verification email:', emailResult.error);
@@ -2223,190 +2549,11 @@ app.get('/onboarding-data', authenticateToken, async (req, res) => {
   }
 });
 
-// Test endpoint to verify user data structure
-app.get('/test-user-data', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.user.user?._id || req.user._id;
-    console.log('Test user data request - JWT token:', JSON.stringify(req.user, null, 2));
-    
-    // Fetch full user from database
-    const user = await User.findById(userId);
-    console.log('Test user data request - Full user from DB:', JSON.stringify(user, null, 2));
-    
-    res.json({
-      error: false,
-      jwtUser: req.user,
-      dbUser: user,
-      hasOnboardingData: !!user?.onboardingData,
-      onboardingData: user?.onboardingData || {}
-    });
-  } catch (error) {
-    console.error('Error in test-user-data:', error);
-    res.status(500).json({
-      error: true,
-      message: 'Internal Server Error'
-    });
-  }
-});
 
-// Simple test endpoint to check database connection
-app.get('/test-db', async (req, res) => {
-  try {
-    const userCount = await User.countDocuments();
-    const sampleUser = await User.findOne();
-    
-    res.json({
-      error: false,
-      message: 'Database connection successful',
-      userCount: userCount,
-      sampleUser: sampleUser ? {
-        _id: sampleUser._id,
-        firstName: sampleUser.firstName,
-        hasOnboardingData: !!sampleUser.onboardingData,
-        onboardingData: sampleUser.onboardingData || {}
-      } : null
-    });
-  } catch (error) {
-    console.error('Database test error:', error);
-    res.status(500).json({
-      error: true,
-      message: 'Database connection failed',
-      details: error.message
-    });
-  }
-});
 
-// Manual test endpoint to save onboarding data
-app.post('/test-save-onboarding', authenticateToken, async (req, res) => {
-  try {
-    const { user } = req.user;
-    
-    console.log('🧪 TEST SAVE ONBOARDING - Manual test');
-    console.log('👤 User ID:', user._id);
-    console.log('📊 Current onboarding data:', JSON.stringify(user.onboardingData, null, 2));
 
-    // Set test onboarding data
-    user.onboardingData = {
-      focus: 'Housing',
-      arrivalDate: new Date(),
-      city: 'Test City',
-      university: 'Test University',
-      budgetRange: {
-        min: 1000,
-        max: 2000
-      },
-      housingNeed: 'Off-campus',
-      roommateInterest: true,
-      essentials: ['SIM', 'Bank'],
-      completed: true,
-      completedAt: new Date()
-    };
 
-    console.log('💾 Setting test data:', JSON.stringify(user.onboardingData, null, 2));
-    await user.save();
-    console.log('✅ Test data saved');
 
-    res.json({
-      error: false,
-      message: 'Test onboarding data saved successfully',
-      user: {
-        id: user._id,
-        onboardingData: user.onboardingData
-      }
-    });
-  } catch (error) {
-    console.error('❌ Error in test save:', error);
-    res.status(500).json({
-      error: true,
-      message: 'Internal Server Error'
-    });
-  }
-});
-
-// Test email service endpoint
-app.post('/test-email', async (req, res) => {
-  try {
-    const { email } = req.body;
-    
-    if (!email) {
-      return res.status(400).json({
-        error: true,
-        message: 'Email is required for testing'
-      });
-    }
-
-    console.log('🧪 Testing email service...');
-    console.log('📧 Target email:', email);
-    console.log('🔧 SMTP Config:', {
-      host: process.env.SES_SMTP_HOST,
-      port: process.env.SES_SMTP_PORT,
-      username: process.env.SES_SMTP_USERNAME ? 'Set' : 'Not Set',
-      password: process.env.SES_SMTP_PASSWORD ? 'Set' : 'Not Set'
-    });
-
-    // Check if transporter exists
-    console.log('📡 Transporter status:', emailService.transporter ? 'Initialized' : 'Not initialized');
-    
-    // Force reinitialize if needed
-    if (!emailService.transporter) {
-      console.log('🔄 Forcing transporter initialization...');
-      emailService.reinitialize();
-    }
-
-    // Test sending a simple OTP email
-    const testOTP = '123456';
-    const emailResult = await emailService.sendOTP(email, 'Test User', testOTP);
-    
-    if (emailResult.success) {
-      console.log('✅ Email sent successfully!');
-      console.log('📨 Message ID:', emailResult.messageId);
-      
-      res.json({
-        error: false,
-        message: 'Email test successful!',
-        messageId: emailResult.messageId,
-        config: {
-          host: process.env.SES_SMTP_HOST,
-          port: process.env.SES_SMTP_PORT,
-          fromEmail: process.env.FROM_EMAIL
-        }
-      });
-    } else {
-      console.error('❌ Email test failed:', emailResult.error);
-      
-      res.status(500).json({
-        error: true,
-        message: 'Email test failed',
-        errorDetails: emailResult.error,
-        config: {
-          host: process.env.SES_SMTP_HOST,
-          port: process.env.SES_SMTP_PORT,
-          fromEmail: process.env.FROM_EMAIL
-        }
-      });
-    }
-  } catch (error) {
-    console.error('❌ Email test error:', error);
-    res.status(500).json({
-      error: true,
-      message: 'Email test failed',
-      errorDetails: error.message,
-      stack: error.stack
-    });
-  }
-});
-
-// Check environment variables endpoint
-app.get('/check-env', (req, res) => {
-  res.json({
-    SES_SMTP_HOST: process.env.SES_SMTP_HOST,
-    SES_SMTP_PORT: process.env.SES_SMTP_PORT,
-    SES_SMTP_USERNAME: process.env.SES_SMTP_USERNAME ? 'Set' : 'Not Set',
-    SES_SMTP_PASSWORD: process.env.SES_SMTP_PASSWORD ? 'Set' : 'Not Set',
-    FROM_EMAIL: process.env.FROM_EMAIL,
-    FRONTEND_URL: process.env.FRONTEND_URL
-  });
-});
 
 // Get user API:
 // app.get("/get-user", authenticateToken, async (req, res) => {
@@ -3172,13 +3319,80 @@ app.set('io', io);
 const activityRouter = require('./routes/activity');
 app.use('/activity', activityRouter);
 
-// New Platform Entity Routes
-const studentFinanceRouter = require('./routes/studentFinance');
-const academicHubRouter = require('./routes/academicHub');
-const academicRoutes = require('./routes/academicRoutes');
-app.use('/api/finance', studentFinanceRouter);
-app.use('/api/academic', academicHubRouter);
-app.use('/api/academic', academicRoutes);
+// Phone verification routes
+const phoneVerificationRouter = require('./routes/phoneVerification');
+app.use('/api/phone', phoneVerificationRouter);
+
+// Notifications routes (includes verification + contact requests)
+const notificationsRouter = require('./routes/notifications');
+app.use('/api/notifications', notificationsRouter);
+
+// User verification status and notifications
+app.get('/api/user/verification-status', authenticateToken, async (req, res) => {
+  try {
+    const { user } = req.user;
+    
+    const verificationStatus = {
+      emailVerified: user.emailVerified,
+      phoneVerified: user.phoneVerified,
+      hasUnverifiedEmail: !user.emailVerified,
+      hasUnverifiedPhone: !user.phoneVerified,
+      needsVerification: !user.emailVerified || !user.phoneVerified
+    };
+
+    // Generate notifications for unverified users
+    const notifications = [];
+    
+    if (!user.emailVerified) {
+      notifications.push({
+        id: 'email_verification',
+        type: 'warning',
+        title: 'Email Verification Required',
+        message: 'Please verify your email address to access all features',
+        action: 'Verify Email',
+        actionUrl: '/verify-email',
+        priority: 'high',
+        dismissible: false
+      });
+    }
+    
+    if (!user.phoneVerified) {
+      notifications.push({
+        id: 'phone_verification',
+        type: 'info',
+        title: 'Phone Verification Available',
+        message: 'Add your phone number for enhanced security and features',
+        action: 'Add Phone',
+        actionUrl: '/add-phone',
+        priority: 'medium',
+        dismissible: true
+      });
+    }
+
+    res.json({
+      error: false,
+      verificationStatus,
+      notifications,
+      unreadCount: notifications.length
+    });
+
+  } catch (error) {
+    console.error('Error getting verification status:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Failed to get verification status'
+    });
+  }
+});
+
+
+// New Platform Entity Routes - Temporarily disabled (moved to Upcoming Features)
+// const studentFinanceRouter = require('./routes/studentFinance');
+// const academicHubRouter = require('./routes/academicHub');
+// const academicRoutes = require('./routes/academicRoutes');
+// app.use('/api/finance', studentFinanceRouter);
+// app.use('/api/academic', academicHubRouter);
+// app.use('/api/academic', academicRoutes);
 
 // Financial Management Models
 const Transaction = require('./models/transaction.model');
@@ -3628,6 +3842,9 @@ app.post('/marketplace/favorites/:id', (req, res) => {
   const PropertyDataTransformer = require('./services/propertyDataTransformer');
   const AIDataValidator = require('./services/aiDataValidator');
 
+  // AI Roommate Matching System
+  const aiRoommateMatching = require('./ai-roommate-matching');
+
   // Helper function to get recommendations directly from database
   async function getRecommendationsDirectly(user, insightType) {
     try {
@@ -3683,7 +3900,7 @@ app.post('/marketplace/favorites/:id', (req, res) => {
     }
   }
 
-//   // Generate personalized insights
+//   // Generate personalized insights using unified system
   app.post('/api/ai/insights', authenticateToken, async (req, res) => {
     try {
       const userId = getAuthUserId(req);
@@ -3726,258 +3943,18 @@ app.post('/marketplace/favorites/:id', (req, res) => {
         timestamp: new Date().toISOString()
       };
 
-      // Create AI prompt for personalized insights
-      const systemPrompt = `You are an expert student advisor AI with access to a housing database. 
-
-CRITICAL INSTRUCTION: You MUST use the get_housing_recommendations tool for ANY housing-related insights. Do not provide generic housing advice.
-
-When you see housing needs, budget concerns, or roommate interests, you MUST:
-1. Call get_housing_recommendations tool with insightType: "housing" 
-2. Use the specific data returned to provide concrete recommendations
-3. Reference actual properties, prices, and roommate matches
-
-Do not provide generic advice like "start browsing housing options" - use the tool to get real data first.
-
-Focus on:
-- Housing needs and timeline (MUST use tool for specific properties)
-- Academic success factors  
-- Social integration opportunities
-- Financial planning
-- Campus life optimization
-
-CRITICAL: Generate insights with DIFFERENT content for title vs message:
-
-Format each insight as:
-1. **Title** (action-oriented, 3-5 words) - SHORT and punchy
-2. **Message** (detailed explanation, context, and specific data) - DIFFERENT from title
-3. **Priority** (HIGH/MEDIUM/LOW based on urgency)
-4. **Action** (specific next step)
-
-EXAMPLES:
-- Title: "Secure Housing Now"
-- Message: "Based on your $300-1000 budget, I found 3 properties within 2 miles of campus. Average price is $350/month. Your arrival date is approaching - secure housing this week to avoid last-minute stress."
-
-- Title: "Schedule Property Visits" 
-- Message: "Contact Dheeban Kumar at Stadium View II ($300, 1.5 miles) and Sathya Keshav at Campus Drive ($300, 1 mile). Both are within your budget and close to campus. Schedule visits this week."
-
-NEVER repeat the title in the message. The message should provide ADDITIONAL context, data, and reasoning.
-
-IMPORTANT: Always calculate arrival dates correctly. If arrival date is in the past, focus on immediate housing needs. If arrival is far in the future, focus on planning and preparation.
-
-REMEMBER: For housing insights, you MUST call the get_housing_recommendations tool first.`;
-
-      const userPrompt = `Student Profile:
-- Name: ${userContext.profile.name}
-- Email: ${userContext.profile.email}
-- University: ${userContext.profile.university}
-- Major: ${userContext.profile.major}
-- Graduation Date: ${userContext.profile.graduationDate}
-- Current Location: ${userContext.profile.currentLocation}
-- Hometown: ${userContext.profile.hometown}
-- Birthday: ${userContext.profile.birthday}
-- Campus: ${userContext.profile.campusLabel} (${userContext.profile.campusDisplayName})
-- School Department: ${userContext.profile.schoolDepartment}
-- Cohort Term: ${userContext.profile.cohortTerm}
-- Email Verified: ${userContext.profile.emailVerified}
-
-Onboarding Preferences:
-- Focus Area: ${userContext.onboarding?.focus || 'Not specified'}
-- Arrival Date: ${userContext.onboarding?.arrivalDate ? new Date(userContext.onboarding.arrivalDate).toLocaleDateString() : 'Not set'}
-- Days Until Arrival: ${userContext.onboarding?.arrivalDate ? Math.ceil((new Date(userContext.onboarding.arrivalDate) - new Date()) / (1000 * 60 * 60 * 24)) : 'Unknown'}
-- Budget Range: $${userContext.onboarding?.budgetRange?.min || 'Unknown'} - $${userContext.onboarding?.budgetRange?.max || 'Unknown'}
-- Housing Need: ${userContext.onboarding?.housingNeed || 'Not specified'}
-- Roommate Interest: ${userContext.onboarding?.roommateInterest ? 'Yes' : 'No'}
-- Essentials Needed: ${userContext.onboarding?.essentials?.join(', ') || 'None specified'}
-
-Synapse Profile (Compatibility Data):
-- Culture: ${JSON.stringify(userContext.synapse?.culture || {})}
-- Lifestyle: ${JSON.stringify(userContext.synapse?.lifestyle || {})}
-- Habits: ${JSON.stringify(userContext.synapse?.habits || {})}
-- Dealbreakers: ${JSON.stringify(userContext.synapse?.dealbreakers || [])}
-
-Current Activity:
-- Properties Listed: ${userContext.dashboard?.propertiesCount || 0}
-- Marketplace Items: ${userContext.dashboard?.marketplaceCount || 0}
-- Total Views: ${userContext.dashboard?.propertiesStats?.totalViews || 0}
-- Average Property Price: $${userContext.dashboard?.propertiesStats?.averagePrice || 0}
-
-Progress Status:
-- Has housing secured: ${userContext.dashboard?.propertiesCount > 0 ? 'Yes' : 'No'}
-- Has roommate connections: ${userContext.onboarding?.roommateInterest ? 'Interested' : 'Not specified'}
-- Has essentials planned: ${userContext.onboarding?.essentials?.length > 0 ? 'Yes' : 'No'}
-- Email verified: ${userContext.profile.emailVerified ? 'Yes' : 'No'}
-
-This student needs housing help. You MUST use the get_housing_recommendations tool to find specific properties and roommates.
-
-DO NOT provide generic advice like "start browsing housing options" or "contact landlords directly". 
-
-You MUST:
-1. Call get_housing_recommendations tool with insightType: "housing"
-2. Use the returned data to provide specific property names, prices, and roommate matches
-3. Reference actual addresses, distances from campus, and compatibility scores
-
-Provide 3-5 specific, actionable insights that will help this student succeed. Focus on their biggest gaps and most urgent needs.`;
-
-      // Call GPT-4o for insights with function calling
-      const aiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
-        model: "gpt-4o",
-        temperature: 0.7,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "get_housing_recommendations",
-              description: "Get specific housing and roommate recommendations for the student",
-              parameters: {
-                type: "object",
-                properties: {
-                  insightType: {
-                    type: "string",
-                    enum: ["housing", "roommate", "both"],
-                    description: "Type of recommendations needed"
-                  },
-                  userProfile: {
-                    type: "object",
-                    description: "User profile data for recommendations"
-                  }
-                },
-                required: ["insightType", "userProfile"]
-              }
-            }
-          }
-        ],
-        tool_choice: "auto"
-      }, {
-        headers: {
-          Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const aiMessage = aiResponse?.data?.choices?.[0]?.message;
-      const aiContent = aiMessage?.content || '';
+      // Use unified AI insights system
+      const unifiedAIInsights = require('./services/unifiedAIInsights');
+      const result = await unifiedAIInsights.generateUnifiedInsights(user, dashboardData, userContext);
       
-      let insights = [];
-      let specificRecommendations = null;
-      
-      // Check if AI wants to use tools
-      if (aiMessage?.tool_calls && aiMessage.tool_calls.length > 0) {
-        console.log('🔧 AI wants to use tools:', aiMessage.tool_calls);
-        const toolCall = aiMessage.tool_calls[0];
-        
-        if (toolCall.function.name === 'get_housing_recommendations') {
-          try {
-            const toolArgs = JSON.parse(toolCall.function.arguments);
-            console.log('🔧 Tool arguments:', toolArgs);
-            
-            // Get specific recommendations directly from database
-            console.log('🔧 Getting recommendations directly from database...');
-            specificRecommendations = await getRecommendationsDirectly(user, toolArgs.insightType);
-            console.log('🔧 Recommendations found:', specificRecommendations);
-            
-            // Generate insights with specific recommendations
-            const enhancedPrompt = `${userPrompt}\n\nBased on the specific recommendations found:\n${JSON.stringify(specificRecommendations, null, 2)}\n\nProvide insights that reference these specific options.`;
-            
-            const enhancedResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
-              model: "gpt-4o",
-              temperature: 0.7,
-              messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: enhancedPrompt }
-              ]
-            }, {
-              headers: {
-                Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
-                'Content-Type': 'application/json',
-              },
-            });
-            
-            const enhancedContent = enhancedResponse?.data?.choices?.[0]?.message?.content || '';
-            insights = parseAIInsights(enhancedContent, userContext);
-            
-            // Add specific recommendations to insights
-            insights = insights.map(insight => ({
-              ...insight,
-              hasSpecificRecommendations: true,
-              specificRecommendations: specificRecommendations
-            }));
-            
-          } catch (toolError) {
-            console.error('Tool execution error:', toolError);
-            insights = parseAIInsights(aiContent, userContext);
-          }
-        }
-      } else {
-        // AI didn't call tools - force it to use tools for housing insights
-        console.log('🔧 AI didn\'t call tools, forcing tool usage for housing...');
-        
-        try {
-          // Force call the recommendations tool
-          const recommendationsResponse = await axios.post(`${req.protocol}://${req.get('host')}/api/ai/tools/get-recommendations`, {
-            insightType: "housing",
-            userProfile: userContext
-          }, {
-            headers: {
-              'Authorization': req.headers.authorization,
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          specificRecommendations = recommendationsResponse.data;
-          console.log('🔧 Forced recommendations response:', specificRecommendations);
-          
-          // Generate insights with specific recommendations
-          const enhancedPrompt = `${userPrompt}\n\nBased on the specific recommendations found:\n${JSON.stringify(specificRecommendations, null, 2)}\n\nProvide insights that reference these specific options.`;
-          
-          const enhancedResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
-            model: "gpt-4o",
-            temperature: 0.7,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: enhancedPrompt }
-            ]
-          }, {
-            headers: {
-              Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-          });
-          
-          const enhancedContent = enhancedResponse?.data?.choices?.[0]?.message?.content || '';
-          insights = parseAIInsights(enhancedContent, userContext);
-          
-          // Add specific recommendations to insights
-          insights = insights.map(insight => ({
-            ...insight,
-            hasSpecificRecommendations: true,
-            specificRecommendations: specificRecommendations
-          }));
-          
-        } catch (forceError) {
-          console.error('Force tool usage error:', forceError);
-          insights = parseAIInsights(aiContent, userContext);
-        }
-      }
-      
-      // Validate and fix any duplicate content
-      const validatedInsights = AIDataValidator.validateInsights(insights);
-      
-      res.json({ 
-        success: true, 
-        insights: validatedInsights, 
-        aiGenerated: true,
-        specificRecommendations 
-      });
+      res.json(result);
     } catch (error) {
       console.error('AI Insights Error:', error);
       
-      // Fallback insights based on user data
-      const fallbackInsights = generateFallbackInsights(user, dashboardData);
-      res.json({ success: true, insights: fallbackInsights, fallback: true });
+      // Use unified system fallback
+      const unifiedAIInsights = require('./services/unifiedAIInsights');
+      const fallbackResult = unifiedAIInsights.generateFallbackInsights(user, dashboardData);
+      res.json(fallbackResult);
     }
   });
 
@@ -4015,32 +3992,36 @@ Provide 3-5 specific, actionable insights that will help this student succeed. F
       };
 
       // Create AI prompt for personalized actions
-      const systemPrompt = `You are an expert student advisor AI. Based on the student's profile and current situation, provide 4-6 personalized, actionable next steps that will help them succeed.
+      const systemPrompt = `You are an expert student advisor AI. Generate 4-6 personalized, actionable next steps for university students.
 
-CRITICAL: Generate actions with DIFFERENT content for label vs description:
+CRITICAL FORMAT: Each action must follow this EXACT structure:
+**Label: [Short Action Name]**
+**Description: [Detailed explanation with specific steps and context]**
 
-Format each action as:
-1. **Label** (action name, 2-4 words) - SHORT and clear
-2. **Description** (detailed explanation, context, and specific steps) - DIFFERENT from label
-3. **Priority** (HIGH/MEDIUM/LOW based on urgency)
-4. **Path** (specific route or action to take)
+MANDATORY: You MUST generate actions in this exact format. Do NOT include any other text or explanations.
 
-EXAMPLES:
-- Label: "Schedule Property Visits"
-- Description: "Contact the 3 properties I found within your budget. Call Dheeban Kumar at Stadium View II ($300, 1.5 miles) and Sathya Keshav at Campus Drive ($300, 1 mile). Schedule visits this week to secure housing before your arrival date."
+PRIORITY FOCUS: Since this user has "Housing" in their focus areas, prioritize housing-related actions.
 
-- Label: "Complete Onboarding"
-- Description: "Finish your profile setup to get personalized recommendations. Add your budget range, arrival date, and housing preferences to unlock AI-powered property matches and roommate suggestions."
+EXAMPLES (follow this exact format):
+**Label: Browse Available Properties**
+**Description: Check out properties in your budget range. Look for options near your university with good amenities and transportation access.**
 
-NEVER repeat the label in the description. The description should provide ADDITIONAL context, specific steps, and reasoning.
+**Label: Find Compatible Roommates**
+**Description: Use the Synapse matching system to connect with potential roommates who share your lifestyle preferences and budget.**
+
+**Label: Prepare Housing Essentials**
+**Description: Gather essential items like bedding, cookware, and electronics for your new place. Check the marketplace for student deals.**
+
+**Label: Explore Community Resources**
+**Description: Join university groups and forums to get housing recommendations and connect with other students in your area.**
 
 Focus on:
-- Immediate priorities based on their timeline
-- Their focus area (Housing, Roommate, Essentials, Community)
-- Current activity and engagement level
-- University-specific opportunities
+- Housing and roommate matching (since user has "Housing" and "Roommate" in focus)
+- Budget-friendly options within their range
+- University-specific resources and communities
+- Essential items for housing setup
 
-Be specific, actionable, and prioritize based on urgency and importance.`;
+Generate ONLY housing-related actions. Do NOT include banking, financial, or other non-housing actions.`;
 
       const userPrompt = `Student Profile:
 - Name: ${userContext.profile.name}
@@ -5121,7 +5102,146 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
   }
 });
 
+// =====================
+// SYNAPSE COMPLETION TRACKING
+// =====================
 
+// GET: Check Synapse completion status
+app.get("/synapse/completion-status", authenticateToken, async (req, res) => {
+  try {
+    const userId = getAuthUserId(req);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const user = await User.findById(userId, {
+      synapseCompletion: 1,
+      synapse: 1
+    }).lean();
+
+    const completion = user?.synapseCompletion || {};
+    const synapse = user?.synapse || {};
+
+    // Calculate completion percentage based on filled fields
+    const completionPercentage = calculateSynapseCompletion(synapse);
+    
+    // Update completion status if needed
+    const isCompleted = completionPercentage >= 80; // 80% threshold for completion
+    
+    if (isCompleted && !completion.completed) {
+      await User.findByIdAndUpdate(userId, {
+        $set: {
+          'synapseCompletion.completed': true,
+          'synapseCompletion.completedAt': new Date(),
+          'synapseCompletion.completionPercentage': completionPercentage
+        }
+      });
+    }
+
+    res.json({
+      completed: isCompleted,
+      completionPercentage,
+      lastStep: completion.lastStep || 0,
+      completedAt: completion.completedAt,
+      totalSteps: completion.totalSteps || 11
+    });
+  } catch (error) {
+    console.error('GET /synapse/completion-status error:', error);
+    res.status(500).json({ message: 'Failed to get completion status' });
+  }
+});
+
+// POST: Update Synapse progress
+app.post("/synapse/progress", authenticateToken, async (req, res) => {
+  try {
+    const userId = getAuthUserId(req);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const { step, completionPercentage } = req.body;
+    
+    const updateData = {
+      'synapseCompletion.lastStep': step || 0,
+      'synapseCompletion.completionPercentage': completionPercentage || 0
+    };
+
+    // If completion is 100%, mark as completed
+    if (completionPercentage >= 100) {
+      updateData['synapseCompletion.completed'] = true;
+      updateData['synapseCompletion.completedAt'] = new Date();
+    }
+
+    await User.findByIdAndUpdate(userId, { $set: updateData });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('POST /synapse/progress error:', error);
+    res.status(500).json({ message: 'Failed to update progress' });
+  }
+});
+
+// POST: Mark Synapse as completed
+app.post("/synapse/mark-complete", authenticateToken, async (req, res) => {
+  try {
+    const userId = getAuthUserId(req);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    await User.findByIdAndUpdate(userId, {
+      $set: {
+        'synapseCompletion.completed': true,
+        'synapseCompletion.completedAt': new Date(),
+        'synapseCompletion.completionPercentage': 100,
+        'synapseCompletion.lastStep': 10 // Final step
+      }
+    });
+
+    res.json({ success: true, message: 'Synapse marked as completed' });
+  } catch (error) {
+    console.error('POST /synapse/mark-complete error:', error);
+    res.status(500).json({ message: 'Failed to mark as complete' });
+  }
+});
+
+// Helper function to calculate completion percentage
+function calculateSynapseCompletion(synapse) {
+  let completedFields = 0;
+  let totalFields = 0;
+
+  // Culture section
+  if (synapse.culture) {
+    totalFields += 3;
+    if (synapse.culture.primaryLanguage) completedFields++;
+    if (synapse.culture.home?.country) completedFields++;
+    if (synapse.culture.home?.region) completedFields++;
+  }
+
+  // Logistics section
+  if (synapse.logistics) {
+    totalFields += 3;
+    if (synapse.logistics.moveInMonth) completedFields++;
+    if (synapse.logistics.budgetMax !== null) completedFields++;
+    if (synapse.logistics.commuteMode?.length > 0) completedFields++;
+  }
+
+  // Lifestyle section
+  if (synapse.lifestyle) {
+    totalFields += 2;
+    if (synapse.lifestyle.sleepPattern) completedFields++;
+    if (synapse.lifestyle.cleanliness) completedFields++;
+  }
+
+  // Habits section
+  if (synapse.habits) {
+    totalFields += 2;
+    if (synapse.habits.diet) completedFields++;
+    if (synapse.habits.smoking) completedFields++;
+  }
+
+  // Pets section
+  if (synapse.pets) {
+    totalFields += 1;
+    if (synapse.pets.hasPets !== undefined) completedFields++;
+  }
+
+  return totalFields > 0 ? Math.round((completedFields / totalFields) * 100) : 0;
+}
 
   // --- Synapse (roommate) matches ---
   // Query params:
@@ -5503,15 +5623,63 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
   function parseAIActions(aiContent, userContext) {
     try {
       const actions = [];
+      
+      // Split content into sections and look for **Label:** and **Description:** patterns
+      const sections = aiContent.split(/\*\*Label:/);
+      
+      sections.forEach((section, index) => {
+        if (index === 0) return; // Skip first empty section
+        
+        const lines = section.split('\n');
+        let label = '';
+        let description = '';
+        
+        // Extract label (first line after **Label:)
+        const labelLine = lines[0]?.trim();
+        if (labelLine) {
+          label = labelLine.replace(/\*\*$/, '').trim();
+        }
+        
+        // Look for **Description:** in the section
+        const descriptionMatch = section.match(/\*\*Description:\s*(.+?)(?=\*\*|$)/s);
+        if (descriptionMatch) {
+          description = descriptionMatch[1].trim();
+        } else {
+          // Fallback: use the rest of the content as description
+          const remainingLines = lines.slice(1).join('\n').trim();
+          description = remainingLines || label;
+        }
+        
+        if (label && description && label !== description) {
+          actions.push({
+            label: label.length > 30 ? label.substring(0, 30) + '...' : label,
+            description: description,
+            path: getActionPath(label, userContext),
+            icon: getActionIcon(label),
+            color: getActionColor(index - 1),
+            priority: index <= 2 ? 'high' : 'medium',
+            aiGenerated: true
+          });
+        }
+      });
+
+      // Fallback: if no structured actions found, try the old format
+      if (actions.length === 0) {
       const lines = aiContent.split('\n').filter(line => line.trim());
       
       lines.forEach((line, index) => {
         if (line.match(/^\d+\.|^[-*]|^•/)) {
           const cleanLine = line.replace(/^\d+\.|^[-*]|^•/, '').trim();
           if (cleanLine.length > 10) {
+              const labelMatch = cleanLine.match(/^([^:]+?)(?:\s*:|\s*\.|$)/);
+              const label = labelMatch ? labelMatch[1].trim() : cleanLine.substring(0, 25);
+              
+              const descriptionMatch = cleanLine.match(/^[^:]+:\s*(.+)$/);
+              const description = descriptionMatch ? descriptionMatch[1].trim() : cleanLine;
+              
             actions.push({
-              label: cleanLine.substring(0, 30) + (cleanLine.length > 30 ? '...' : ''),
-              description: cleanLine,
+                label: label.length > 30 ? label.substring(0, 30) + '...' : label,
+                description: description,
               path: getActionPath(cleanLine, userContext),
               icon: getActionIcon(cleanLine),
               color: getActionColor(index),
@@ -5521,6 +5689,7 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
           }
         }
       });
+      }
 
       if (actions.length === 0) {
         actions.push({
@@ -5721,27 +5890,36 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
         timestamp: new Date().toISOString()
       };
 
-      const systemPrompt = `You are a helpful student advisor AI with access to a housing database. 
+      // Category-aware tool instruction for explanations
+      const category = insight?.category || (insight?.title || '').toLowerCase().includes('roommate') ? 'roommate' : 'housing';
+      let toolDirective = '';
+      if (category === 'housing') {
+        toolDirective = `CRITICAL: For housing-related insights, you MUST call get_housing_recommendations to fetch specific properties (and related roommate context if needed).`;
+      } else if (category === 'roommate') {
+        toolDirective = `CRITICAL: For roommate-related insights, you MUST call get_roommate_recommendations to fetch specific candidates and compatibility details. Do not invent matches.`;
+      } else {
+        toolDirective = `CRITICAL: Use the appropriate tool for this category to fetch concrete data before explaining.`;
+      }
 
-CRITICAL: For housing-related insights, you MUST use the get_housing_recommendations tool to find specific properties and roommates. Do not provide generic advice.
+      const systemPrompt = `You are a helpful NewRun advisor AI.
 
-When explaining housing insights, you MUST:
-1. Call get_housing_recommendations tool with insightType: "housing"
-2. Use the specific data returned to provide concrete recommendations
-3. Reference actual properties, prices, and roommate matches
+${toolDirective}
 
-Be conversational, motivating, and specific. ALWAYS start with a friendly greeting using the student's first name (e.g., "Hey [Name]!" or "Hi [Name]!"). Reference their arrival date, budget, preferences, and current status. Keep it concise (120-180 words) and end with 2-3 actionable next steps.`;
+When explaining an insight:
+1) Call the appropriate tool first
+2) Use returned data to ground your explanation (names, scores, prices)
+3) Reference concrete items and matches
 
-      const userPrompt = `Student: ${userContext.profile.name}
-University: ${userContext.profile.university} (${userContext.profile.campusDisplayName})
-Major: ${userContext.profile.major}
-Arrival Date: ${userContext.onboarding?.arrivalDate || 'Not set'}
-Budget: $${userContext.onboarding?.budgetRange?.min || 'Unknown'} - $${userContext.onboarding?.budgetRange?.max || 'Unknown'}
-Current Status: ${userContext.dashboard?.propertiesCount || 0} properties listed, ${userContext.onboarding?.roommateInterest ? 'Interested in roommates' : 'No roommate interest'}
+Be conversational, motivating, and specific. ALWAYS start with a friendly greeting using the student's first name (e.g., "Hey [Name]!" or "Hi [Name]!"). Reference their timeline, budget, preferences, and current status. Keep it concise (120-180 words) and end with 2-3 actionable next steps.`;
 
-Recommendation to explain: "${insight.title}" (Priority: ${insight.priority})
+              const userPrompt = `Student: ${userContext.profile.name}
+        University: ${userContext.profile.university} (${userContext.profile.campusDisplayName})
+        Major: ${userContext.profile.major}
+        Arrival Date: ${userContext.onboarding?.arrivalDate || 'Not set'}
+        Budget: $${userContext.onboarding?.budgetRange?.min || 'Unknown'} - $${userContext.onboarding?.budgetRange?.max || 'Unknown'}
+        Current Status: ${userContext.dashboard?.propertiesCount || 0} properties listed, ${userContext.onboarding?.roommateInterest ? 'Interested in roommates' : 'No roommate interest'}
 
-This is a housing-related insight. You MUST use the get_housing_recommendations tool to find specific properties and roommates, then explain why this recommendation is important using the actual data found.`;
+        Recommendation to explain: "${insight.title}" (Priority: ${insight.priority})`;
 
       const aiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
         model: "gpt-4o",
@@ -5755,21 +5933,28 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
             type: "function",
             function: {
               name: "get_housing_recommendations",
-              description: "Get specific housing and roommate recommendations for the student",
+              description: "Get specific housing recommendations for the student",
               parameters: {
                 type: "object",
                 properties: {
-                  insightType: {
-                    type: "string",
-                    enum: ["housing", "roommate", "both"],
-                    description: "Type of recommendations needed"
-                  },
-                  userProfile: {
-                    type: "object",
-                    description: "User profile data for recommendations"
-                  }
+                  insightType: { type: "string", enum: ["housing"] },
+                  userProfile: { type: "object" }
                 },
                 required: ["insightType", "userProfile"]
+              }
+            }
+          },
+          {
+            type: "function",
+            function: {
+              name: "get_roommate_recommendations",
+              description: "Get specific roommate candidates and compatibility details",
+              parameters: {
+                type: "object",
+                properties: {
+                  userProfile: { type: "object" }
+                },
+                required: ["userProfile"]
               }
             }
           }
@@ -5783,33 +5968,48 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
       });
 
       const aiMessage = aiResponse?.data?.choices?.[0]?.message;
-      const explanation = aiMessage?.content || '';
+      let explanation = aiMessage?.content || '';
+      // Sanitize any literal tool placeholders that some models emit in content
+      // e.g., "[get_housing_recommendations insightType: \"housing\"]"
+      const toolPlaceholderRegex = /\[get_[^\]]+\]/gi;
+      if (toolPlaceholderRegex.test(explanation)) {
+        explanation = explanation.replace(toolPlaceholderRegex, '').trim();
+      }
+      // Also catch bare tool-call style text without brackets
+      const bareToolCallRegex = /(^|\n)\s*get_[a-zA-Z0-9_]+[^\n]*/g;
+      if (bareToolCallRegex.test(explanation)) {
+        explanation = explanation.replace(bareToolCallRegex, '').trim();
+      }
       
       let specificRecommendations = null;
+      let structured = null;
       
-      // Check if AI wants to use tools
-      if (aiMessage?.tool_calls && aiMessage.tool_calls.length > 0) {
-        console.log('🔧 AI wants to use tools for explain-insight:', aiMessage.tool_calls);
-        const toolCall = aiMessage.tool_calls[0];
+      // Generate explanation directly without complex data fetching
+      try {
+        // Simple, reliable explanation generation
+        const simplePrompt = `Please explain this insight in detail for ${userContext.profile.name}:
+
+        Insight: ${insight.title}
+        Message: ${insight.message}
+        Priority: ${insight.priority}
+        Category: ${insight.category}
         
-        if (toolCall.function.name === 'get_housing_recommendations') {
-          try {
-            const toolArgs = JSON.parse(toolCall.function.arguments);
-            console.log('🔧 Tool arguments for explain-insight:', toolArgs);
-            
-            // Get specific recommendations directly from database
-            specificRecommendations = await getRecommendationsDirectly(user, toolArgs.insightType);
-            console.log('🔧 Recommendations response for explain-insight:', specificRecommendations);
-            
-            // Generate explanation with specific recommendations
-            const enhancedPrompt = `${userPrompt}\n\nBased on the specific recommendations found:\n${JSON.stringify(specificRecommendations, null, 2)}\n\nExplain why this recommendation is important using these specific options.`;
-            
-            const enhancedResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
+        User Context:
+        - University: ${userContext.profile.university}
+        - Major: ${userContext.profile.major}
+        - Arrival Date: ${userContext.arrivalDate || 'Not specified'}
+        - Days until arrival: ${userContext.daysUntilArrival || 'Not calculated'}
+        - Budget: $${userContext.onboardingData?.budget?.min || 'Not specified'} - $${userContext.onboardingData?.budget?.max || 'Not specified'}
+        - Current Location: ${userContext.profile.currentLocation || 'Not specified'}
+        
+        Please provide a detailed, personalized explanation of why this recommendation is important for ${userContext.profile.name} and what they should do next.`;
+        
+        const response = await axios.post('https://api.openai.com/v1/chat/completions', {
               model: "gpt-4o",
               temperature: 0.7,
               messages: [
                 { role: "system", content: systemPrompt },
-                { role: "user", content: enhancedPrompt }
+            { role: "user", content: simplePrompt }
               ]
             }, {
               headers: {
@@ -5818,74 +6018,117 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
               },
             });
             
-            const enhancedExplanation = enhancedResponse?.data?.choices?.[0]?.message?.content || '';
-            
-            res.json({ 
-              success: true, 
-              explanation: enhancedExplanation,
-              insight: insight,
-              aiGenerated: true,
-              specificRecommendations: specificRecommendations
-            });
-            return;
-            
-          } catch (toolError) {
-            console.error('Tool execution error in explain-insight:', toolError);
-          }
-        }
-      } else {
-        // AI didn't call tools - force it to use tools for housing insights
-        console.log('🔧 AI didn\'t call tools for explain-insight, forcing tool usage...');
+        explanation = response?.data?.choices?.[0]?.message?.content || '';
         
+        // Final cleanup: strip any tool call artifacts
+        explanation = explanation.replace(/\[get_[^\]]+\]/gi, '').replace(/(^|\n)\s*get_[a-zA-Z0-9_]+[^\n]*/g, '').trim();
+        
+      } catch (error) {
+        console.error('Failed to generate explanation:', error);
+        explanation = generateFallbackExplanation(insight, user, dashboardData);
+      }
+
+      // If this is a grouped insight, also return a structured payload the UI can render as mini-cards
+      if (insight?.type === 'grouped' && insight?.group?.items && Array.isArray(insight.group.items)) {
+        const items = insight.group.items.map((it) => {
+          const base = {
+            id: it.id,
+            rank: it.rank,
+            priority: it.priority || 'medium',
+            href: it.href || null
+          };
+          if (insight.category === 'roommate') {
+            return {
+              ...base,
+              name: it.name,
+              score: it.score,
+              reasons: Array.isArray(it.reasons) ? it.reasons : (typeof it.reasons === 'string' ? it.reasons.split(',').map(s=>s.trim()).filter(Boolean) : [])
+            };
+          }
+          if (insight.category === 'housing') {
+            return {
+              ...base,
+              title: it.title,
+              price: it.price,
+              distance: it.distance,
+              description: it.description
+            };
+          }
+          return base;
+        });
+
+        structured = {
+          group: {
+            kind: insight.category,
+            title: insight.title,
+            summary: insight.message,
+          },
+          items
+        };
+      }
+
+      // Try to infer category if missing (roommate/housing) from title/message
+      let inferredCategory = insight?.category;
+      if (!inferredCategory) {
+        const t = `${insight?.title || ''} ${insight?.message || ''}`.toLowerCase();
+        if (/roommate|room\s*mate|match(es)?/i.test(t)) inferredCategory = 'roommate';
+        else if (/housing|apartment|property|rent|lease/i.test(t)) inferredCategory = 'housing';
+      }
+
+      // Backend fallback: if no structured block was built, synthesize one from live recommendations
+      if (!structured && insight && (inferredCategory === 'roommate' || inferredCategory === 'housing')) {
         try {
-          // Force get recommendations directly from database
-          specificRecommendations = await getRecommendationsDirectly(user, "housing");
-          console.log('🔧 Forced recommendations response for explain-insight:', specificRecommendations);
-          
-          // Generate explanation with specific recommendations
-          const enhancedPrompt = `${userPrompt}\n\nBased on the specific recommendations found:\n${JSON.stringify(specificRecommendations, null, 2)}\n\nExplain why this recommendation is important using these specific options.`;
-          
-          const enhancedResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
-            model: "gpt-4o",
-            temperature: 0.7,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: enhancedPrompt }
-            ]
-          }, {
-            headers: {
-              Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-          });
-          
-          const enhancedExplanation = enhancedResponse?.data?.choices?.[0]?.message?.content || '';
+          const unifiedAIInsights = require('./services/unifiedAIInsights');
+          if (inferredCategory === 'roommate') {
+            const rec = await unifiedAIInsights.getRoommateRecommendations(user);
+            const roommates = Array.isArray(rec?.roommates) ? rec.roommates.slice(0, 3) : [];
+            if (roommates.length > 0) {
+              const items = roommates.map((r, idx) => ({
+                id: r._id,
+                rank: idx + 1,
+                name: `${r.firstName || ''} ${r.lastName || ''}`.trim(),
+                score: Math.round(r.totalScore || r.score || 0),
+                reasons: (unifiedAIInsights.getSharedPreferences(user, r) || '').split(',').map(s => s.trim()).filter(Boolean),
+                priority: idx === 0 ? 'high' : 'medium',
+                href: `/roommate/${r._id}`
+              }));
+              structured = {
+                group: { kind: 'roommate', title: insight.title, summary: insight.message },
+                items
+              };
+            }
+          } else if (inferredCategory === 'housing') {
+            const rec = await unifiedAIInsights.getHousingRecommendations(user);
+            const properties = Array.isArray(rec?.properties) ? rec.properties.slice(0, 3) : [];
+            if (properties.length > 0) {
+              const items = properties.map((p, idx) => ({
+                id: p._id,
+                rank: idx + 1,
+                title: p.name,
+                price: p.price,
+                distance: p.distance,
+                description: p.description || 'Available property',
+                priority: idx === 0 ? 'high' : 'medium',
+                href: `/property/${p._id}`
+              }));
+              structured = {
+                group: { kind: 'housing', title: insight.title, summary: insight.message },
+                items
+              };
+            }
+          }
+        } catch (e) {
+          console.error('Explain structured fallback failed:', e);
+        }
+      }
           
           res.json({ 
             success: true, 
-            explanation: enhancedExplanation,
-            insight: insight,
-            aiGenerated: true,
-            specificRecommendations: specificRecommendations
-          });
-          return;
-          
-        } catch (forceError) {
-          console.error('Force tool usage error in explain-insight:', forceError);
-        }
-      }
-      
-      // Ensure we never return empty explanation
-      const finalExplanation = explanation && explanation.trim() 
-        ? explanation 
-        : generateFallbackExplanation(insight, user, dashboardData);
-      
-      res.json({ 
-        success: true, 
-        explanation: finalExplanation,
+        explanation: explanation || generateFallbackExplanation(insight, user, dashboardData),
         insight: insight,
         aiGenerated: true,
-        specificRecommendations
+        specificRecommendations,
+        structured
       });
     } catch (error) {
       console.error('AI Explain Insight Error:', error);
@@ -5943,6 +6186,415 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
     
     return explanations[insight.title] || `This recommendation is important for your success at ${university}. Take action on this to stay on track with your goals.`;
   }
+
+  // =====================
+  // UNIFIED ROOMMATE MATCHING ENDPOINT
+  // =====================
+  
+  /**
+   * POST /api/ai/roommate/match
+   * Unified roommate matching with comprehensive input and output
+   * Takes everything possible: user data, onboarding, synapse, dashboard, search criteria
+   * Returns complete roommate matching results with AI insights and explanations
+   */
+  app.post('/api/ai/roommate/match', authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      const user = await User.findById(userId);
+      
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Extract comprehensive input data
+      const {
+        // User profile data
+        userProfile,
+        // Onboarding information
+        onboardingData,
+        // Synapse preferences
+        synapseData,
+        // Dashboard data
+        dashboardData,
+        // Search criteria
+        searchCriteria: {
+          campusId,
+          budgetRange,
+          lifestyleFilters = {},
+          language,
+          dealbreakers = [],
+          limit = 20,
+          scope = 'all' // 'all', 'nearby', 'campus'
+        } = {}
+      } = req.body;
+
+      // Use provided data or fallback to user data
+      const userContext = {
+        profile: userProfile || {
+          name: user.firstName + ' ' + user.lastName,
+          email: user.email,
+          university: user.university,
+          major: user.major,
+          graduationDate: user.graduationDate,
+          currentLocation: user.currentLocation,
+          hometown: user.hometown,
+          birthday: user.birthday,
+          campusLabel: user.campusLabel,
+          campusDisplayName: user.campusDisplayName,
+          schoolDepartment: user.schoolDepartment,
+          cohortTerm: user.cohortTerm,
+          emailVerified: user.emailVerified
+        },
+        onboarding: onboardingData || user.onboardingData,
+        synapse: synapseData || user.synapse || {},
+        dashboard: dashboardData,
+        timestamp: new Date().toISOString()
+      };
+
+      // Build comprehensive roommate query
+      let query = { 
+        'synapse.visibility.showAvatarInPreviews': true,
+        university: campusId || user.university,
+        _id: { $ne: userId } // Exclude current user
+      };
+      
+      // Budget filtering
+      if (budgetRange) {
+        query['onboardingData.budgetRange'] = {
+          $gte: budgetRange.min,
+          $lte: budgetRange.max
+        };
+      }
+
+      // Lifestyle filtering
+      if (lifestyleFilters.sleepPattern) {
+        query['synapse.lifestyle.sleepPattern'] = lifestyleFilters.sleepPattern;
+      }
+      if (lifestyleFilters.cleanliness) {
+        query['synapse.lifestyle.cleanliness'] = {
+          $gte: lifestyleFilters.cleanliness - 1,
+          $lte: lifestyleFilters.cleanliness + 1
+        };
+      }
+      if (lifestyleFilters.smoking !== undefined) {
+        query['synapse.habits.smoking'] = lifestyleFilters.smoking;
+      }
+      if (lifestyleFilters.partying !== undefined) {
+        query['synapse.habits.partying'] = {
+          $gte: lifestyleFilters.partying - 1,
+          $lte: lifestyleFilters.partying + 1
+        };
+      }
+
+      // Language filtering
+      if (language) {
+        query['synapse.culture.primaryLanguage'] = language;
+      }
+
+      // Dealbreakers filtering
+      if (dealbreakers.length > 0) {
+        const dealbreakerQuery = dealbreakers.map(dealbreaker => ({
+          [`synapse.habits.${dealbreaker}`]: { $ne: true }
+        }));
+        if (dealbreakerQuery.length > 0) {
+          query.$and = dealbreakerQuery;
+        }
+      }
+
+      // Find potential roommates
+      let roommates = await User.find(query)
+        .select('firstName lastName email university major synapse onboardingData avatarUrl lastActive')
+        .limit(limit)
+        .lean();
+
+      
+
+      // Calculate comprehensive compatibility scores and explanations
+      const scoredRoommates = roommates.map(roommate => {
+        const compatibilityScore = calculateCompatibilityScore(user, roommate, lifestyleFilters, dealbreakers);
+        const lifestyleMatch = calculateLifestyleMatch(user.synapse, roommate.synapse);
+        const budgetMatch = calculateBudgetCompatibility(user.onboardingData?.budgetRange, roommate.onboardingData?.budgetRange);
+        const socialMatch = calculateSocialCompatibility(user.synapse, roommate.synapse);
+        
+        // Generate match reasons
+        const reasons = generateMatchReasons(user, roommate, {
+          compatibilityScore,
+          lifestyleMatch,
+          budgetMatch,
+          socialMatch
+        });
+
+        return {
+          userId: roommate._id,
+          firstName: roommate.firstName,
+          lastName: roommate.lastName,
+          name: `${roommate.firstName} ${roommate.lastName}`,
+          avatarUrl: roommate.avatarUrl || "",
+          university: roommate.university,
+          graduation: roommate.synapse?.education?.graduation,
+          verified: { edu: !!roommate.university },
+          lastActive: roommate.lastActive,
+          distanceMi: calculateDistance(user.currentLocation, roommate.currentLocation),
+          budget: roommate.onboardingData?.budgetRange?.max || 0,
+          keyTraits: extractKeyTraits(roommate.synapse),
+          languages: roommate.synapse?.culture?.otherLanguages || [],
+          petsOk: !!(roommate.synapse?.pets?.okWithPets),
+          sleepStyle: roommate.synapse?.lifestyle?.sleepPattern,
+          matchScore: Math.min(compatibilityScore / 100, 1), // Normalize to 0-1
+          reasons: reasons,
+          synapse: roommate.synapse,
+          compatibilityBreakdown: {
+            compatibilityScore,
+            lifestyleMatch,
+            budgetMatch,
+            socialMatch,
+            totalScore: (compatibilityScore + lifestyleMatch + budgetMatch + socialMatch) / 4
+          }
+        };
+      }).filter(roommate => roommate.matchScore > 0.3); // Filter out low compatibility
+
+      // Generate AI insights based on results
+      const aiInsights = await generateRoommateInsights(user, userContext, scoredRoommates);
+      const aiRecommendations = await generateRoommateRecommendations(user, userContext, scoredRoommates);
+
+      res.json({
+        success: true,
+        results: scoredRoommates,
+        total: scoredRoommates.length,
+        criteria: {
+          campusId: campusId || user.university,
+          budgetRange,
+          lifestyleFilters,
+          language,
+          dealbreakers,
+          scope
+        },
+        aiInsights: aiInsights,
+        aiRecommendations: aiRecommendations,
+        userContext: {
+          profile: userContext.profile,
+          onboarding: userContext.onboarding,
+          synapse: userContext.synapse
+        },
+        aiGenerated: true,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      console.error('Unified Roommate Matching Error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to find roommate matches',
+        fallback: true
+      });
+    }
+  });
+
+  // =====================
+  // HELPER FUNCTIONS FOR UNIFIED ROOMMATE MATCHING
+  // =====================
+
+  // Calculate comprehensive compatibility score
+  function calculateCompatibilityScore(user, roommate, lifestyleFilters, dealbreakers) {
+    let score = 0;
+    const weights = {
+      language: 25,
+      lifestyle: 20,
+      budget: 15,
+      habits: 15,
+      social: 10,
+      academic: 10,
+      location: 5
+    };
+
+    // Language compatibility
+    if (user.synapse?.culture?.primaryLanguage === roommate.synapse?.culture?.primaryLanguage) {
+      score += weights.language;
+    }
+
+    // Lifestyle compatibility
+    if (user.synapse?.lifestyle?.sleepPattern === roommate.synapse?.lifestyle?.sleepPattern) {
+      score += weights.lifestyle * 0.5;
+    }
+    if (Math.abs((user.synapse?.lifestyle?.cleanliness || 3) - (roommate.synapse?.lifestyle?.cleanliness || 3)) <= 1) {
+      score += weights.lifestyle * 0.5;
+    }
+
+    // Budget compatibility
+    const userBudget = user.onboardingData?.budgetRange;
+    const roommateBudget = roommate.onboardingData?.budgetRange;
+    if (userBudget && roommateBudget) {
+      const overlap = Math.min(userBudget.max, roommateBudget.max) - Math.max(userBudget.min, roommateBudget.min);
+      if (overlap > 0) {
+        score += weights.budget * (overlap / Math.max(userBudget.max - userBudget.min, roommateBudget.max - roommateBudget.min));
+      }
+    }
+
+    // Habits compatibility
+    const userHabits = user.synapse?.habits || {};
+    const roommateHabits = roommate.synapse?.habits || {};
+    const habitMatches = ['smoking', 'drinking', 'partying'].filter(habit => 
+      userHabits[habit] === roommateHabits[habit]
+    ).length;
+    score += weights.habits * (habitMatches / 3);
+
+    // Social compatibility
+    if (user.synapse?.pets?.okWithPets === roommate.synapse?.pets?.okWithPets) {
+      score += weights.social;
+    }
+
+    // Academic compatibility
+    if (user.university === roommate.university) {
+      score += weights.academic;
+    }
+
+    return Math.min(score, 100);
+  }
+
+  // Calculate lifestyle match score
+  function calculateLifestyleMatch(userSynapse, roommateSynapse) {
+    let match = 0;
+    const factors = ['sleepPattern', 'cleanliness', 'smoking', 'partying'];
+    factors.forEach(factor => {
+      if (userSynapse?.lifestyle?.[factor] === roommateSynapse?.lifestyle?.[factor]) {
+        match += 25;
+      }
+    });
+    return Math.min(match, 100);
+  }
+
+  // Calculate budget compatibility
+  function calculateBudgetCompatibility(userBudget, roommateBudget) {
+    if (!userBudget || !roommateBudget) return 50;
+    const overlap = Math.min(userBudget.max, roommateBudget.max) - Math.max(userBudget.min, roommateBudget.min);
+    if (overlap <= 0) return 0;
+    return Math.min((overlap / Math.max(userBudget.max - userBudget.min, roommateBudget.max - roommateBudget.min)) * 100, 100);
+  }
+
+  // Calculate social compatibility
+  function calculateSocialCompatibility(userSynapse, roommateSynapse) {
+    let compatibility = 0;
+    if (userSynapse?.pets?.okWithPets === roommateSynapse?.pets?.okWithPets) compatibility += 50;
+    if (userSynapse?.culture?.primaryLanguage === roommateSynapse?.culture?.primaryLanguage) compatibility += 50;
+    return compatibility;
+  }
+
+  // Generate match reasons
+  function generateMatchReasons(user, roommate, scores) {
+    const reasons = [];
+    
+    if (user.synapse?.culture?.primaryLanguage === roommate.synapse?.culture?.primaryLanguage) {
+      reasons.push({ type: "positive", text: "Same daily language" });
+    }
+    
+    if (user.synapse?.lifestyle?.sleepPattern === roommate.synapse?.lifestyle?.sleepPattern) {
+      reasons.push({ type: "positive", text: "Similar sleep schedule" });
+    }
+    
+    if (Math.abs((user.synapse?.lifestyle?.cleanliness || 3) - (roommate.synapse?.lifestyle?.cleanliness || 3)) <= 1) {
+      reasons.push({ type: "positive", text: "Compatible cleanliness levels" });
+    }
+    
+    if (user.synapse?.pets?.okWithPets === roommate.synapse?.pets?.okWithPets) {
+      reasons.push({ type: "positive", text: "Pet compatibility" });
+    }
+    
+    if (user.university === roommate.university) {
+      reasons.push({ type: "positive", text: "Same university" });
+    }
+    
+    return reasons;
+  }
+
+  // Extract key traits from synapse data
+  function extractKeyTraits(synapse) {
+    const traits = [];
+    if (synapse?.lifestyle?.cleanliness >= 4) traits.push("clean");
+    if (synapse?.lifestyle?.sleepPattern === "early_bird") traits.push("early_riser");
+    if (synapse?.lifestyle?.sleepPattern === "night_owl") traits.push("night_owl");
+    if (synapse?.habits?.smoking === false) traits.push("non_smoker");
+    if (synapse?.pets?.okWithPets) traits.push("pet_friendly");
+    return traits;
+  }
+
+  // Calculate distance between users
+  function calculateDistance(userLocation, roommateLocation) {
+    // Simplified distance calculation - in real app, use proper geolocation
+    if (!userLocation || !roommateLocation) return 0;
+    return Math.random() * 10; // Mock distance
+  }
+
+  // Generate AI insights for roommate matching
+  async function generateRoommateInsights(user, userContext, roommates) {
+    try {
+      if (!process.env.NEWRUN_APP_OPENAI_API_KEY) {
+        return ["Complete your Synapse profile for better matches", "Consider your budget range when searching"];
+      }
+
+      const prompt = `Based on this user profile and ${roommates.length} potential roommates, provide 3-5 personalized insights for finding the best roommate match:
+
+User Profile: ${JSON.stringify(userContext.profile)}
+Onboarding: ${JSON.stringify(userContext.onboarding)}
+Synapse: ${JSON.stringify(userContext.synapse)}
+
+Top matches found: ${roommates.slice(0, 3).map(r => `${r.name} (${Math.round(r.matchScore * 100)}% match)`).join(', ')}
+
+Provide actionable insights for better roommate matching.`;
+
+      const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 500,
+        temperature: 0.7
+      }, {
+        headers: {
+          Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        }
+      });
+
+      return response.data.choices[0].message.content.split('\n').filter(line => line.trim());
+    } catch (error) {
+      console.error('AI Insights Error:', error);
+      return ["Complete your profile for better matches", "Consider lifestyle compatibility"];
+    }
+  }
+
+  // Generate AI recommendations
+  async function generateRoommateRecommendations(user, userContext, roommates) {
+    try {
+      if (!process.env.NEWRUN_APP_OPENAI_API_KEY) {
+        return ["Update your Synapse profile", "Expand your search criteria"];
+      }
+
+      const prompt = `Based on this roommate search results, provide 3-5 specific recommendations for the user:
+
+User: ${userContext.profile.name}
+Results: ${roommates.length} matches found
+Top match: ${roommates[0]?.name} (${Math.round(roommates[0]?.matchScore * 100)}% compatibility)
+
+Provide specific, actionable recommendations for improving roommate matching.`;
+
+      const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 400,
+        temperature: 0.7
+      }, {
+        headers: {
+          Authorization: `Bearer ${process.env.NEWRUN_APP_OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        }
+      });
+
+      return response.data.choices[0].message.content.split('\n').filter(line => line.trim());
+    } catch (error) {
+      console.error('AI Recommendations Error:', error);
+      return ["Complete your profile", "Try different search criteria"];
+    }
+  }
+
+  // Legacy roommate endpoints removed - using unified endpoint above
 
   // AI Tool Endpoints for Database Interaction
   // These endpoints allow the AI to query the database and provide specific recommendations
@@ -7004,7 +7656,9 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
     }
   });
 
-  // ==================== TRANSPORTATION ENDPOINTS ====================
+  // ==================== TRANSPORTATION ENDPOINTS (DISABLED) ====================
+  // Temporarily disabled - moved to Upcoming Features directory
+  /*
   
   // Import transportation models
   const Route = require('./models/route.model');
@@ -7597,8 +8251,12 @@ This is a housing-related insight. You MUST use the get_housing_recommendations 
 
   const PORT = process.env.PORT || 8000;
 
+  */
+  
+  const PORT = process.env.PORT || 8000;
+  
   server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });
-
+  
   module.exports = app;

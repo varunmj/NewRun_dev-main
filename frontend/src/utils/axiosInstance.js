@@ -86,8 +86,14 @@ axiosInstance.interceptors.response.use(
     const status = err?.response?.status;
     const errorMessage = err?.response?.data?.message || err.message || 'An error occurred';
     
-    // Handle 401 Unauthorized
-    if (status === 401 && !isHandling401) {
+    // Handle 401 Unauthorized (but whitelist verification endpoints)
+    const url = err?.config?.url || '';
+    const shouldLogout = status === 401 && 
+      !url.includes('/send-email-verification') && 
+      !url.includes('/verify-email-code') &&
+      !url.includes('/verify-email');
+    
+    if (shouldLogout && !isHandling401) {
       isHandling401 = true;
       console.warn('401 Unauthorized - clearing tokens and redirecting to login');
       
