@@ -168,7 +168,7 @@ class EmailService {
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
           .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
           .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
-          .header h1 { margin: 0; font-size: 28px; font-weight: 700; }
+          .header h1 { margin: 0; font-size: 30px; font-weight: 700; }
           .content { padding: 40px 30px; }
           .content h2 { color: #333; margin-bottom: 20px; font-size: 24px; }
           .content p { margin-bottom: 20px; font-size: 16px; color: #666; }
@@ -220,7 +220,7 @@ class EmailService {
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
           .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
           .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
-          .header h1 { margin: 0; font-size: 28px; font-weight: 700; }
+          .header h1 { margin: 0; font-size: 30px; font-weight: 700; }
           .content { padding: 40px 30px; }
           .content h2 { color: #333; margin-bottom: 20px; font-size: 24px; }
           .content p { margin-bottom: 20px; font-size: 16px; color: #666; }
@@ -270,7 +270,7 @@ class EmailService {
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
           .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
           .header { background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); color: white; padding: 30px; text-align: center; }
-          .header h1 { margin: 0; font-size: 28px; font-weight: 700; }
+          .header h1 { margin: 0; font-size: 30px; font-weight: 700; }
           .content { padding: 40px 30px; }
           .content h2 { color: #333; margin-bottom: 20px; font-size: 24px; }
           .content p { margin-bottom: 20px; font-size: 16px; color: #666; }
@@ -369,8 +369,8 @@ class EmailService {
       <table role="presentation" class="outer" cellpadding="0" cellspacing="0">
         <!-- Wordmark -->
         <tr>
-          <td style="padding:0 0 16px 8px;font:700 28px/1.1 Inter,Arial,Helvetica,sans-serif;color:${BRAND.blue}">
-            <a href="${siteHref}" style="display:inline-block;font:700 28px Inter,Arial,Helvetica,sans-serif;background:linear-gradient(90deg,#007bff,#00e6ff);-webkit-background-clip:text;background-clip:text;color:transparent">
+          <td style="padding:0 0 16px 8px;font:700 30px/1.1 Inter,Arial,Helvetica,sans-serif;color:${BRAND.blue}">
+            <a href="${siteHref}" style="display:inline-block;font:700 30px Inter,Arial,Helvetica,sans-serif;background:linear-gradient(90deg,#007bff,#00e6ff);-webkit-background-clip:text;background-clip:text;color:transparent">
               ${wordmark}
             </a>
           </td>
@@ -386,7 +386,7 @@ class EmailService {
 
         <!-- Card -->
         <tr>
-          <td style="background:#fff;border-radius:${opts.heroUrl?'0 0 20px 20px':'20px'};border:1px solid ${BRAND.border};border-top:${opts.heroUrl?'0':'1px'};padding:28px 26px">
+          <td style="background:#fff;border-radius:${opts.heroUrl?'0 0 20px 20px':'20px'};border:1px solid ${BRAND.border};border-top:${opts.heroUrl?'0':'1px'};padding:30px 26px">
             <div style="font:600 32px/1.2 Montserrat,Arial,Helvetica,sans-serif;color:${BRAND.textDark};margin:0 0 10px">
               ${opts.headline || ""}
             </div>
@@ -404,7 +404,7 @@ class EmailService {
                       <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:700;">${ctaLabel}</center>
                     </v:roundrect>
                   <![endif]-->
-                  <a href="${ctaHref}" style="display:inline-block;padding:14px 28px;border-radius:100px;color:#fff;font:700 16px Arial,Helvetica,sans-serif;mso-hide:all">${ctaLabel}</a>
+                  <a href="${ctaHref}" style="display:inline-block;padding:14px 30px;border-radius:100px;color:#fff;font:700 16px Arial,Helvetica,sans-serif;mso-hide:all">${ctaLabel}</a>
                 </td>
               </tr>
             </table>
@@ -418,15 +418,17 @@ class EmailService {
 
         <!-- Social strip (blue band) -->
         <tr>
-          <td style="background:${BRAND.blue};border-radius:20px;padding:16px 22px;color:#fff">
+          <td style="background:${BRAND.blue};border-radius:16px;padding:12px 20px;color:#000">
             <table role="presentation" width="100%">
               <tr>
-                <td style="font:700 18px Inter,Arial,Helvetica,sans-serif;color:#fff">Connect with ${wordmark}</td>
-                <td align="right">
-                  ${opts.social?.x ? `<a href="${opts.social.x}"><img src="cid:nr_x_32" width="32" height="32" alt="X" style="display:block;border:0;outline:none"></a>`:''}
-                  ${opts.social?.linkedin ? `<a href="${opts.social.linkedin}" style="margin-left:8px"><img src="cid:nr_linkedin_32" width="32" height="32" alt="LinkedIn" style="display:block;border:0;outline:none"></a>`:''}
-                  ${opts.social?.instagram ? `<a href="${opts.social.instagram}" style="margin-left:8px"><img src="cid:nr_instagram_32" width="32" height="32" alt="Instagram" style="display:block;border:0;outline:none"></a>`:''}
-                  ${opts.social?.rss ? `<a href="${opts.social.rss}" style="margin-left:8px"><img src="cid:nr_rss_32" width="32" height="32" alt="Blog" style="display:block;border:0;outline:none"></a>`:''}
+                <td style="font:700 16px Inter,Arial,Helvetica,sans-serif;color:#fff;vertical-align:middle">Connect with ${wordmark}</td>
+                <td align="right" style="vertical-align:middle">
+                  <div style="display:inline-flex;gap:28px;align-items:center">
+                    ${opts.social?.x ? `<a href="${opts.social.x}" style="display:inline-block;transition:opacity 0.2s;background:white;border-radius:50%;padding:6px;box-shadow:0 2px 4px rgba(0,0,0,0.1)"><img src="cid:nr_x_32" width="32" height="32" alt="X" style="display:block;border:0;outline:none;filter:brightness(0) invert(1)"></a>`:''}
+                    ${opts.social?.linkedin ? `<a href="${opts.social.linkedin}" style="display:inline-block;transition:opacity 0.2s;background:white;border-radius:50%;padding:6px;box-shadow:0 2px 4px rgba(0,0,0,0.1)"><img src="cid:nr_linkedin_32" width="32" height="32" alt="LinkedIn" style="display:block;border:0;outline:none;filter:brightness(0) invert(1)"></a>`:''}
+                    ${opts.social?.instagram ? `<a href="${opts.social.instagram}" style="display:inline-block;transition:opacity 0.2s;background:white;border-radius:50%;padding:6px;box-shadow:0 2px 4px rgba(0,0,0,0.1)"><img src="cid:nr_instagram_32" width="32" height="32" alt="Instagram" style="display:block;border:0;outline:none;filter:brightness(0) invert(1)"></a>`:''}
+                    ${opts.social?.rss ? `<a href="${opts.social.rss}" style="display:inline-block;transition:opacity 0.2s;background:white;border-radius:50%;padding:6px;box-shadow:0 2px 4px rgba(0,0,0,0.1)"><img src="cid:nr_rss_32" width="32" height="32" alt="Blog" style="display:block;border:0;outline:none;filter:brightness(0) invert(1)"></a>`:''}
+                  </div>
                 </td>
               </tr>
             </table>
@@ -434,7 +436,7 @@ class EmailService {
         </tr>
 
         <!-- Footer -->
-        <tr><td style="padding:16px 8px 28px 8px;text-align:center;color:#B6B6C2;font:400 13px/18px Inter,Arial,Helvetica,sans-serif">
+        <tr><td style="padding:16px 8px 30px 8px;text-align:center;color:#B6B6C2;font:400 13px/18px Inter,Arial,Helvetica,sans-serif">
           Visit <a href="${siteHref}" style="color:#94a3b8;text-decoration:underline">${siteHref.replace(/^https?:\/\//,'')}</a><br/>
           <a href="${phoneHref}" style="color:#94a3b8;text-decoration:none">${phoneText}</a><br/>
           ${addressHtml}<br/><br/>
@@ -466,7 +468,7 @@ class EmailService {
       headline: "Account activated",
       bodyHtml,
       cta: { label: "Open Dashboard", href: process.env.FRONTEND_URL || "https://www.newrun.club", color: "#0B5CFF" },
-      social: { x:"https://x.com/newrun", linkedin:"https://linkedin.com/company/newrun", instagram:"https://instagram.com/newrun" },
+      social: { x:"https://x.com/newrunnnnn", linkedin:"https://linkedin.com/company/newrun-ed-ed", instagram:"https://instagram.com/newrun" },
       company: {
         siteHref: process.env.FRONTEND_URL || "https://www.newrun.club",
         phoneHref: "tel:+18885550123",
@@ -487,7 +489,7 @@ class EmailService {
         <tr><td align="center" style="padding:24px;border:2px solid #0B5CFF;border-radius:16px;background:#fff;box-shadow:0 6px 20px rgba(11,92,255,.15);">
           <div style="text-transform:uppercase;color:#64748b;font-size:12px;letter-spacing:1px;font-weight:700;margin-bottom:12px;">Verification Code</div>
           <div style="font-family:'Courier New',monospace;font-weight:800;font-size:48px;letter-spacing:12px;color:#111827;margin:8px 0;">${String(code)}</div>
-          <div style="color:#6b7280;font-size:14px;margin-top:8px;">Enter this on NewRun to finish setup</div>
+          <div style="color:#6b7300;font-size:14px;margin-top:8px;">Enter this on NewRun to finish setup</div>
         </td></tr>
       </table>
 
@@ -507,16 +509,16 @@ class EmailService {
         </td></tr>
       </table>
 
-      <p style="margin:20px 0 0 0;color:#6b7280;font-size:14px;">Didn't sign up? You can safely ignore this email.</p>
+      <p style="margin:20px 0 0 0;color:#6b7300;font-size:14px;">Didn't sign up? You can safely ignore this email.</p>
     `;
 
     return this.renderNRLayout({
       preheader: "Verify your email to activate your NewRun account",
-      heroUrl: "https://www.newrun.club/assets/email/hero-verify.png",
+      heroUrl: "https://www.newrun.club/assets/email/nr-logo.png",
       headline: "Account Verification Required",
       bodyHtml,
       cta: { label: "Verify Email", href: process.env.FRONTEND_URL + "/verify-email" || "https://www.newrun.club/verify-email", color: "#0B5CFF" },
-      social: { x:"https://x.com/newrun", linkedin:"https://linkedin.com/company/newrun", instagram:"https://instagram.com/newrun" },
+      social: { x:"https://x.com/newrunnn", linkedin:"https://linkedin.com/company/newrun-ed", instagram:"https://instagram.com/newrun" },
       company: {
         siteHref: process.env.FRONTEND_URL || "https://www.newrun.club",
         phoneHref: "tel:+18885550123",
@@ -540,11 +542,11 @@ class EmailService {
 
     return this.renderNRLayout({
       preheader: "Verify your email to activate NewRun",
-      heroUrl: "https://www.newrun.club/assets/email/hero-verify.png",
+      heroUrl: "https://www.newrun.club/assets/email/nr-logo.png",
       headline: "Verify your email",
       bodyHtml,
       cta: { label: "Verify Email", href: verificationLink, color: "#0B5CFF" },
-      social: { x:"https://x.com/newrun", linkedin:"https://linkedin.com/company/newrun", instagram:"https://instagram.com/newrun" },
+      social: { x:"https://x.com/newrunnn", linkedin:"https://linkedin.com/company/newrun-ed", instagram:"https://instagram.com/newrun" },
       company: {
         siteHref: process.env.FRONTEND_URL || "https://www.newrun.club",
         phoneHref: "tel:+18885550123",
@@ -572,7 +574,7 @@ class EmailService {
       headline: "Reset your password",
       bodyHtml,
       cta: { label: "Reset Password", href: resetLink, color: "#9A67FB" },
-      social: { x:"https://x.com/newrun", linkedin:"https://linkedin.com/company/newrun", instagram:"https://instagram.com/newrun" },
+      social: { x:"https://x.com/newrunnn", linkedin:"https://linkedin.com/company/newrun-ed", instagram:"https://instagram.com/newrun" },
       company: {
         siteHref: process.env.FRONTEND_URL || "https://www.newrun.club",
         phoneHref: "tel:+18885550123",
@@ -628,8 +630,8 @@ class EmailService {
               <td style="padding:0 25px">
                 <table role="presentation" width="100%" bgcolor="#ffffff" style="border-radius:0 0 20px 20px">
                   <tr>
-                    <td style="padding:28px 30px 34px 30px;font-family:Arial,Helvetica,sans-serif;color:#10134A">
-                      <div style="font-weight:700;font-size:28px;line-height:34px">Verify your email</div>
+                    <td style="padding:30px 30px 34px 30px;font-family:Arial,Helvetica,sans-serif;color:#10134A">
+                      <div style="font-weight:700;font-size:30px;line-height:34px">Verify your email</div>
                       <div style="color:#334155;font-size:16px;line-height:24px;margin-top:6px">
                         Hi ${userName}, tap the button below to confirm your email and activate your NewRun account.
                       </div>
@@ -638,7 +640,7 @@ class EmailService {
                         <tr>
                           <td bgcolor="${brandBlue}" style="border-radius:100px">
                             <a class="btn" href="${verificationLink}" target="_blank"
-                               style="display:inline-block;padding:16px 28px;font-family:Arial,Helvetica,sans-serif;color:#fff;font-weight:700;border-radius:100px">
+                               style="display:inline-block;padding:16px 30px;font-family:Arial,Helvetica,sans-serif;color:#fff;font-weight:700;border-radius:100px">
                                Verify Email
                             </a>
                           </td>
