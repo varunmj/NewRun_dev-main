@@ -63,6 +63,9 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
   const [hoveredInsight, setHoveredInsight] = useState(null);
   const [displayedText, setDisplayedText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  // Chat compose UX state
+  const [composeText, setComposeText] = useState('');
+  const [composerExpanded, setComposerExpanded] = useState(false);
 
   // Helper functions for polished UI
   const scoreColor = (p) =>
@@ -1262,6 +1265,69 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
                         return null;
                       })()}
                       
+                      {/* Roommate mini-cards from structured block */}
+                      {!isTyping && aiExplanation?.structured?.group?.kind === 'roommate' && (
+                        <div className="mt-6">
+                          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                            Recommended Roommates
+                          </h3>
+                          <div className="space-y-3">
+                            {aiExplanation.structured.items.map((m) => {
+                              const score = Number(m.score) || 0;
+                              const hue = Math.round(Math.max(0, Math.min(100, score)) * 1.2); // 0-120 → red→green
+                              const initials = (m.name || '?').trim().charAt(0).toUpperCase();
+                              return (
+                                <div key={m.id} className={`relative rounded-xl border border-white/10 p-3 ${m.rank === 1 ? 'ring-5 ring-blue-500/70 bg-blue-500/5' : 'bg-black/5'}`}>
+                                  {m.rank === 1 && (
+                                    <div className="absolute -top-3.5 -right-2 z-10">
+                                      <div className="bg-gradient-to-r from-blue-500 to-blue-900 text-white text-[10px] font-bold px-5 py-1 rounded-full shadow-lg">
+                                        TOP MATCH
+                                      </div>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-3">
+                                    {/* Avatar */}
+                                    <div className="relative">
+                                      <div className="w-10 h-10 rounded-full bg-white/10 border border-white/15 flex items-center justify-center text-white/80 font-semibold">
+                                        {initials}
+                                      </div>
+                                      {/* {m.rank === 1 && (
+                                        <span className="absolute -top-1 -right-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-500 text-black font-bold"></span>
+                                      )} */}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center justify-between">
+                                        <div className="text-white font-bold truncate">
+                                          {m.rank === 1 ? '#1' : `#${m.rank}`} · {m.name}
+                                        </div>
+                                        {/* HSL circle */}
+                                        <div className="w-10 h-10 rounded-full grid place-items-center" style={{
+                                          background: `conic-gradient(hsl(${hue} 85% 55%) ${score * 3.6}deg, #1f2937 0)`
+                                        }}>
+                                          <div className="w-8 h-8 rounded-full bg-[#0f1115] grid place-items-center text-[11px] text-white/90">
+                                            {score}%
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="mt-1 flex flex-wrap gap-1">
+                                        {(m.reasons || []).slice(0, 2).map((r, i) => (
+                                          <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/80">{r}</span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {m.href && (
+                                    <a href={m.href} className="mt-2 inline-block text-sm text-blue-300">
+                                      View profile →
+                                    </a>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      
                       {/* Next Steps Section - ONLY SHOW AFTER CARDS ARE DISPLAYED */}
                       {!isTyping && (() => {
                         const detectedProperties = PropertyTextParser.parsePropertiesFromText(displayedText);
@@ -1392,9 +1458,13 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
               </div>
             </div>
 
-            {/* Cursor-style Input Box */}
+            {/* Cursor-style Input Box with smooth expand animation */}
             <div className="border-t border-white/10 bg-[#0f1115]">
-              <div className="p-4">
+              <motion.div
+                layout
+                transition={{ type: 'spring', stiffness: 220, damping: 28 }}
+                className={composerExpanded ? 'p-5' : 'p-4'}
+              >
                 <div className="flex items-center gap-2 mb-3">
                   <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-300 text-sm font-medium hover:bg-blue-500/30 transition-colors">
                     <span className="text-xs">∞</span>
@@ -1411,12 +1481,28 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
                   </button>
                 </div>
                 
-                <div className="relative">
+                <motion.div
+                  layout
+                  animate={composerExpanded ? { scale: 1.01, boxShadow: '0 24px 60px rgba(0,0,0,0.35)' } : { scale: 1, boxShadow: '0 0 0 rgba(0,0,0,0)' }}
+                  transition={{ type: 'spring', stiffness: 220, damping: 28 }}
+                  className="relative"
+                >
                   <textarea
                     placeholder="Ask AI about this insight or get more personalized advice..."
                     className="w-full p-4 pr-12 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/50 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
-                    rows="3"
-                    style={{ minHeight: '80px' }}
+                    rows={composerExpanded ? 6 : 3}
+                    style={{ minHeight: composerExpanded ? '140px' : '80px' }}
+                    value={composeText}
+                    onChange={(e) => {
+                      setComposeText(e.target.value);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!composerExpanded) setComposerExpanded(true);
+                        // Optional: hook submit here
+                      }
+                    }}
                   />
                   <div className="absolute bottom-3 right-3 flex items-center gap-2">
                     <button className="p-2 rounded-lg hover:bg-white/10 transition-colors">
@@ -1424,15 +1510,15 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
                         <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
                       </svg>
                     </button>
-                    <button className="p-2 rounded-lg bg-blue-500 hover:bg-blue-600 transition-colors">
+                    <button className="p-2 rounded-lg bg-blue-500 hover:bg-blue-600 transition-colors" onClick={() => setComposerExpanded(true)}>
                       <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
                       </svg>
                     </button>
                   </div>
-                </div>
+                </motion.div>
                 
-              </div>
+              </motion.div>
             </div>
           </div>
         )}

@@ -31,29 +31,60 @@ const userSchema = new Schema({
 
   // onboarding preferences
   onboardingData: {
-    focus: { type: String, enum: ['Housing', 'Roommate', 'Essentials', 'Community', 'Everything'], default: null },
-    arrivalDate: { type: Date, default: null },
+    // Basic info
+    birthday: { type: Date, default: null },
+    
+    // Academic info
+    academicLevel: { type: String, enum: ['undergraduate', 'graduate', 'alumni'], default: null },
+    university: { type: String, default: '' },
+    major: { type: String, default: '' },
+    intake: { type: String, default: null },
+    graduationDate: { type: Date, default: null },
+    graduationSemester: { type: String, default: '' },
+    graduationYear: { type: String, default: '' },
+    
+    // Current situation
+    currentSituation: { type: String, enum: ['incoming', 'current', 'transfer', 'working', 'relocation', 'grad_school', 'job_search'], default: null },
+    usStatus: { type: String, enum: ['in_us', 'coming_to_us'], default: null },
+    usEntryDate: { type: Date, default: null },
+    
+    // Visa and status
+    visaStatus: { type: String, enum: ['F1', 'CPT', 'OPT_STEM', 'H1B', 'citizen'], default: null },
+    
+    // Location and budget
     city: { type: String, default: '' },
     budgetRange: {
       min: { type: Number, default: null },
       max: { type: Number, default: null }
     },
-    housingNeed: { type: String, enum: ['On-campus', 'Off-campus', 'Sublet', 'Undecided'], default: null },
-    roommateInterest: { type: Boolean, default: null },
-    essentials: [{ type: String, enum: ['SIM', 'Bedding', 'Bank', 'Cookware', 'Transit'] }],
+    
+    // Housing and essentials
+    housingNeeds: { type: String, enum: ['On-campus', 'Off-campus', 'Sublet', 'Need roommate', 'Have roommate', 'Undecided'], default: null },
+    essentials: [{ type: String, enum: ['sim_card', 'banking', 'cookware', 'transportation', 'bedding', 'electronics', 'clothing', 'study_materials'] }],
+    
+    // Focus and completion
+    focus: [{ type: String, enum: ['Housing', 'Roommate', 'Essentials', 'Community', 'Everything'] }],
+    arrivalAnniversaryMMDD: { type: String, default: null }, // e.g., "08-21"
     completed: { type: Boolean, default: false },
     completedAt: { type: Date, default: null }
   },
 
+  // Phone number
+  phoneNumber:        { type: String, default: null },
+  phoneVerified:      { type: Boolean, default: false },
+  phoneVerificationCode: { type: String, default: null },
+  phoneVerificationExpires: { type: Date, default: null },
+
   // Email verification and security
   emailVerified:      { type: Boolean, default: false },
+  emailVerificationCode: { type: String, default: null },
   emailVerificationToken: { type: String, default: null },
   emailVerificationExpires: { type: Date, default: null },
   
   // OTP for various purposes
   otp:                { type: String, default: null },
   otpExpires:         { type: Date, default: null },
-  otpPurpose:         { type: String, enum: ['email_verification', 'password_reset', 'login', 'two_factor'], default: null },
+  otpPurpose:         { type: String, enum: ['email_verification', 'password_reset', 'login', 'two_factor', 'phone_verification'], default: null },
   
   // Password reset
   passwordResetToken: { type: String, default: null },

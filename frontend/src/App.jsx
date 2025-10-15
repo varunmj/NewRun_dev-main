@@ -10,14 +10,11 @@ import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import EmailVerification from './pages/EmailVerification';
-import EmailTestPage from './pages/EmailTestPage';
 import ResetPassword from './pages/ResetPassword';
 import AllProperties from './pages/AllProperties';
 import UserDashboard from './pages/UserDashboard';
 import SignUp from './pages/SignUp';
 import UniversityPage from './pages/University';
-import StudentPage from './pages/Student';
-import ChatbotPage from './pages/Chatbot';
 import Blogs from './pages/Blogs';
 import Community from './pages/Community';
 import Thread from './pages/Thread';
@@ -26,8 +23,6 @@ import MarketplaceItemDetails from './pages/MarketplaceItemDetails';
 import AddEditItem from './pages/AddEditItem';
 import PropertyDetails from './pages/PropertyDetails';
 import UserProfile from './pages/UserProfile';
-import ChatbotUI from './components/ChatBotUI/ChatbotUI';
-import Welcome from './pages/welcomepage';
 import MessagingPage from './pages/MessagingPage';
 import Roommate from './pages/Roommate';
 import Waitlist from "./pages/Waitlist";
@@ -64,7 +59,6 @@ const App = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/forgot" element={<ForgotPassword />} />
           <Route path="/verify-email" element={<EmailVerification />} />
-          <Route path="/email-test" element={<EmailTestPage />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/help" element={<HelpCenter />} />
@@ -77,9 +71,6 @@ const App = () => {
           <Route path="/community" element={<Community />} />
           <Route path="/community/thread/:id" element={<Thread />} />
           <Route path="/university" element={<UniversityPage />} />
-          <Route path="/students" element={<StudentPage />} />
-          <Route path="/welcome" element={<ChatbotPage />} />
-          <Route path="/experiment" element={<Welcome />} />
           <Route path="/all-properties" element={<AllProperties />} />
           <Route
             path="/onboarding"
@@ -137,14 +128,6 @@ const App = () => {
             element={
               <ProtectedRoute>
                 <UserProfile />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/chatbot"
-            element={
-              <ProtectedRoute>
-                <ChatbotUI />
               </ProtectedRoute>
             }
           />

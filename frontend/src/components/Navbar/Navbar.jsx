@@ -163,6 +163,8 @@ function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [items, setItems] = useState([]);
+  const [verificationNotifications, setVerificationNotifications] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
   const panelRef = useRef(null);
   const btnRef = useRef(null);
 
@@ -178,10 +180,20 @@ function NotificationBell() {
     }
   };
 
+  const loadVerificationNotifications = async () => {
+    try {
+      const r = await axiosInstance.get("/api/user/verification-status");
+      const notifications = r?.data?.notifications || [];
+      setVerificationNotifications(notifications);
+    } catch {
+      setVerificationNotifications([]);
+    }
+  };
+
   useEffect(() => {
     let s;
     (async () => {
-      await loadPending();
+      await Promise.all([loadPending(), loadVerificationNotifications()]);
       try {
         const { io } = await import("socket.io-client");
         const url =
@@ -217,6 +229,24 @@ function NotificationBell() {
       document.removeEventListener("keydown", onEsc);
     };
   }, []);
+
+  // Calculate total count whenever counts change
+  useEffect(() => {
+    setTotalCount(pendingCount + verificationNotifications.length);
+  }, [pendingCount, verificationNotifications.length]);
+
+  const handleVerificationAction = (notification) => {
+    switch (notification.id) {
+      case 'email_verification':
+        window.location.href = '/verify-email';
+        break;
+      case 'phone_verification':
+        window.location.href = '/add-phone';
+        break;
+      default:
+        console.log('Unknown verification notification:', notification);
+    }
+  };
 
   const approve = async (requestId) => {
     await axiosInstance.post("/contact-access/approve", { requestId });
@@ -274,9 +304,9 @@ function NotificationBell() {
         aria-label="Notifications"
       >
         <MdNotificationsNone className="text-xl" />
-        {pendingCount > 0 && (
+        {totalCount > 0 && (
           <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-gradient-to-r from-red-500 to-pink-500 px-1.5 text-[10px] font-bold text-white shadow-lg animate-pulse border-2 border-white/20">
-            {pendingCount > 9 ? "9+" : pendingCount}
+            {totalCount > 9 ? "9+" : totalCount}
           </span>
         )}
       </button>
@@ -293,7 +323,7 @@ function NotificationBell() {
           }}
         >
 
-          {items.length === 0 ? (
+          {items.length === 0 && verificationNotifications.length === 0 ? (
             <div className="px-4 py-8 text-center">
               <div className="text-sm text-white/60">No notifications</div>
             </div>
@@ -386,6 +416,54 @@ function NotificationBell() {
                   </div>
                 );
               })}
+
+              {/* Verification Notifications */}
+              {verificationNotifications.map((notification, index) => (
+                <div key={notification.id}>
+                  <div className="px-4 py-3 hover:bg-white/5 transition-colors duration-200">
+                    <div className="flex gap-3">
+                      {/* Verification icon */}
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg border border-white/10"
+                           style={{
+                             background: notification.type === 'warning' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                             color: notification.type === 'warning' ? '#f59e0b' : '#3b82f6'
+                           }}>
+                        {notification.avatar}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-semibold text-white truncate">
+                            {notification.title}
+                          </span>
+                        </div>
+
+                        <div className="text-xs text-white/70 mb-3">
+                          {notification.message}
+                        </div>
+
+                        {/* Action button */}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleVerificationAction(notification)}
+                            className="flex-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-all duration-200"
+                            style={{
+                              background: notification.type === 'warning' ? '#f59e0b' : '#3b82f6'
+                            }}
+                          >
+                            {notification.action}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Horizontal fading separator */}
+                  {index < verificationNotifications.length - 1 && (
+                    <div className="mx-4 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>

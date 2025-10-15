@@ -256,7 +256,7 @@ function SolveHero({
             aria-expanded={open}
             className="inline-flex items-center gap-1 rounded-md bg-white/10 px-2.5 py-1 text-xs hover:bg-white/15"
           >
-            <MdTune className="text-sm" /> Tools
+            <MdTune className="text-sm" /> Templates
           </button>
 
           {open && (
@@ -306,8 +306,6 @@ function SolveHero({
         </div>
       );
     }
-
-
 
     // tidy up on unmount
     useEffect(() => () => {
@@ -1768,6 +1766,533 @@ const buildDefaultMessages = (data) => {
   );
 }
 
+/* ====================== Solve Marketplace Panel ====================== */
+function SolveMarketplacePanel({ initialText, onCreateItem, onClose }) {
+  const [loading, setLoading] = useState(true);
+  const [criteria, setCriteria] = useState(null);
+  const [cands, setCands] = useState([]);
+  const [plan, setPlan] = useState([]);
+  const [threadId, setThreadId] = useState(null);
+
+  const fetchSolve = async (opts = {}) => {
+    try {
+      setLoading(true);
+
+      const body = {
+        prompt: initialText || "",
+        page: opts.page ?? 1,
+        limit: 24,
+      };
+      if (opts.filters) body.filters = opts.filters;
+
+      const { data } = await axiosInstance.post("/solve/marketplace", body);
+
+      setThreadId(data?.threadId || null);
+      setCriteria(data?.criteria || null);
+      setPlan(Array.isArray(data?.plan) ? data.plan : []);
+
+      const next = Array.isArray(data?.candidates) ? data.candidates : [];
+      setCands((prev) => (opts.append ? [...prev, ...next] : next));
+
+    } catch {
+      if (!opts.append) setCands([]);
+      setPlan([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSolve({ page: 1, append: false });
+  }, [initialText]);
+
+  return (
+    <div className="max-h-[80vh] overflow-y-auto">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Marketplace Search</h3>
+        <button
+          onClick={onClose}
+          className="grid h-8 w-8 place-items-center rounded-full bg-black/5"
+        >
+          <MdClose />
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="text-white/70">Searching marketplace...</div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Plan Steps */}
+          {plan.length > 0 && (
+            <div className="rounded-lg bg-blue-50 p-4">
+              <h4 className="font-medium text-blue-900 mb-2">Your Search Plan:</h4>
+              <ul className="space-y-1 text-sm text-blue-800">
+                {plan.map((step, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="text-blue-600 font-medium">{i + 1}.</span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Criteria */}
+          {criteria && (
+            <div className="rounded-lg bg-gray-50 p-4">
+              <h4 className="font-medium text-gray-900 mb-2">Search Criteria:</h4>
+              <div className="text-sm text-gray-700">
+                {criteria.maxPrice && <div>Max Price: ${criteria.maxPrice}</div>}
+                {criteria.minPrice && <div>Min Price: ${criteria.minPrice}</div>}
+                {criteria.category && <div>Category: {criteria.category}</div>}
+                {criteria.condition && <div>Condition: {criteria.condition}</div>}
+                {criteria.delivery && <div>Delivery: {criteria.delivery}</div>}
+              </div>
+            </div>
+          )}
+
+          {/* Results */}
+          <div className="space-y-3">
+            <h4 className="font-medium text-gray-900">Found {cands.length} items:</h4>
+            {cands.map((item, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg border p-3">
+                <div className="h-12 w-12 rounded-lg bg-gray-200 flex items-center justify-center">
+                  {item.thumbnailUrl ? (
+                    <img src={item.thumbnailUrl} alt="" className="h-full w-full rounded-lg object-cover" />
+                  ) : (
+                    <span className="text-gray-500">📦</span>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h5 className="font-medium">{item.title}</h5>
+                  <p className="text-sm text-gray-600">{item.description}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-lg font-bold text-green-600">${item.price}</span>
+                    <span className="text-xs text-gray-500">{item.category}</span>
+                    <span className="text-xs text-gray-500">{item.condition}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => onCreateItem?.(item)}
+                  className="rounded-lg bg-blue-500 px-3 py-1 text-sm text-white hover:bg-blue-600"
+                >
+                  Contact
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 pt-2">
+        <button onClick={onClose} className="rounded-lg bg-black px-4 py-2 text-sm text-white hover:bg-black/90">
+          Done
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ====================== Solve Auto Panel (Unified) ====================== */
+function SolveAutoPanel({ initialText, onCreateProperty, onCreateItem, onConnect, onClose }) {
+  const [loading, setLoading] = useState(true);
+  const [category, setCategory] = useState(null);
+  const [criteria, setCriteria] = useState(null);
+  const [cands, setCands] = useState([]);
+  const [plan, setPlan] = useState([]);
+  const [threadId, setThreadId] = useState(null);
+
+  const fetchSolve = async (opts = {}) => {
+    try {
+      setLoading(true);
+
+      const body = {
+        prompt: initialText || "",
+        page: opts.page ?? 1,
+        limit: 24,
+      };
+      if (opts.filters) body.filters = opts.filters;
+
+      const { data } = await axiosInstance.post("/solve/auto", body);
+
+      setThreadId(data?.threadId || null);
+      setCategory(data?.category || null);
+      setCriteria(data?.criteria || null);
+      setPlan(Array.isArray(data?.plan) ? data.plan : []);
+
+      const next = Array.isArray(data?.candidates) ? data.candidates : [];
+      setCands((prev) => (opts.append ? [...prev, ...next] : next));
+
+    } catch {
+      if (!opts.append) setCands([]);
+      setPlan([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSolve({ page: 1, append: false });
+  }, [initialText]);
+
+  const getCategoryIcon = (cat) => {
+    switch (cat) {
+      case 'housing': return '🏠';
+      case 'marketplace': return '🛒';
+      case 'roommate': return '👥';
+      default: return '🔍';
+    }
+  };
+
+  const getCategoryTitle = (cat) => {
+    switch (cat) {
+      case 'housing': return 'Housing Search';
+      case 'marketplace': return 'Marketplace Search';
+      case 'roommate': return 'Roommate Search';
+      default: return 'Search Results';
+    }
+  };
+
+  const getCategoryColor = (cat) => {
+    switch (cat) {
+      case 'housing': return 'blue';
+      case 'marketplace': return 'green';
+      case 'roommate': return 'purple';
+      default: return 'gray';
+    }
+  };
+
+  return (
+    <div className="max-h-[80vh] overflow-y-auto">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">{getCategoryIcon(category)}</span>
+          <h3 className="text-lg font-semibold">{getCategoryTitle(category)}</h3>
+        </div>
+        <button
+          onClick={onClose}
+          className="grid h-8 w-8 place-items-center rounded-full bg-black/5"
+        >
+          <MdClose />
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="text-white/70">Analyzing your request...</div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Plan Steps */}
+          {plan.length > 0 && (
+            <div className={`rounded-lg p-4 ${
+              category === 'housing' ? 'bg-blue-50' :
+              category === 'marketplace' ? 'bg-green-50' :
+              category === 'roommate' ? 'bg-purple-50' : 'bg-gray-50'
+            }`}>
+              <h4 className={`font-medium mb-2 ${
+                category === 'housing' ? 'text-blue-900' :
+                category === 'marketplace' ? 'text-green-900' :
+                category === 'roommate' ? 'text-purple-900' : 'text-gray-900'
+              }`}>Your Search Plan:</h4>
+              <ul className={`space-y-1 text-sm ${
+                category === 'housing' ? 'text-blue-800' :
+                category === 'marketplace' ? 'text-green-800' :
+                category === 'roommate' ? 'text-purple-800' : 'text-gray-800'
+              }`}>
+                {plan.map((step, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className={`font-medium ${
+                      category === 'housing' ? 'text-blue-600' :
+                      category === 'marketplace' ? 'text-green-600' :
+                      category === 'roommate' ? 'text-purple-600' : 'text-gray-600'
+                    }`}>{i + 1}.</span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Criteria */}
+          {criteria && (
+            <div className="rounded-lg bg-gray-50 p-4">
+              <h4 className="font-medium text-gray-900 mb-2">Search Criteria:</h4>
+              <div className="text-sm text-gray-700">
+                {category === 'housing' && (
+                  <>
+                    {criteria.maxPrice && <div>Max Price: ${criteria.maxPrice}</div>}
+                    {criteria.bedrooms && <div>Bedrooms: {criteria.bedrooms}</div>}
+                    {criteria.bathrooms && <div>Bathrooms: {criteria.bathrooms}</div>}
+                    {criteria.distanceMiles && <div>Distance: {criteria.distanceMiles} miles</div>}
+                    {criteria.moveIn && <div>Move-in: {criteria.moveIn}</div>}
+                  </>
+                )}
+                {category === 'marketplace' && (
+                  <>
+                    {criteria.maxPrice && <div>Max Price: ${criteria.maxPrice}</div>}
+                    {criteria.minPrice && <div>Min Price: ${criteria.minPrice}</div>}
+                    {criteria.category && <div>Category: {criteria.category}</div>}
+                    {criteria.condition && <div>Condition: {criteria.condition}</div>}
+                    {criteria.delivery && <div>Delivery: {criteria.delivery}</div>}
+                  </>
+                )}
+                {category === 'roommate' && (
+                  <>
+                    {criteria.budgetRange && (
+                      <div>Budget: ${criteria.budgetRange.min} - ${criteria.budgetRange.max}</div>
+                    )}
+                    {criteria.lifestyle?.cleanliness && (
+                      <div>Cleanliness: {criteria.lifestyle.cleanliness}/5</div>
+                    )}
+                    {criteria.lifestyle?.sleepPattern && (
+                      <div>Sleep Pattern: {criteria.lifestyle.sleepPattern}</div>
+                    )}
+                    {criteria.academic?.level && (
+                      <div>Academic Level: {criteria.academic.level}</div>
+                    )}
+                  </>
+                )}
+                {criteria.keywords && criteria.keywords.length > 0 && (
+                  <div>Keywords: {criteria.keywords.join(', ')}</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Results */}
+          <div className="space-y-3">
+            <h4 className="font-medium text-gray-900">Found {cands.length} {category === 'roommate' ? 'compatible roommates' : 'items'}:</h4>
+            {cands.map((item, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg border p-3">
+                <div className={`h-12 w-12 rounded-lg bg-gray-200 flex items-center justify-center ${
+                  category === 'roommate' ? 'rounded-full' : ''
+                }`}>
+                  {category === 'roommate' ? (
+                    item.avatar ? (
+                      <img src={item.avatar} alt="" className="h-full w-full rounded-full object-cover" />
+                    ) : (
+                      <span className="text-gray-500">👤</span>
+                    )
+                  ) : (
+                    item.thumbnailUrl ? (
+                      <img src={item.thumbnailUrl} alt="" className="h-full w-full rounded-lg object-cover" />
+                    ) : (
+                      <span className="text-gray-500">📦</span>
+                    )
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h5 className="font-medium">
+                    {category === 'roommate' 
+                      ? `${item.firstName} ${item.lastName}`
+                      : item.title
+                    }
+                  </h5>
+                  <p className="text-sm text-gray-600">
+                    {category === 'roommate' 
+                      ? item.university
+                      : item.description
+                    }
+                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    {category === 'roommate' ? (
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        item.compatibilityLevel === 'Excellent' ? 'bg-green-100 text-green-800' :
+                        item.compatibilityLevel === 'Good' ? 'bg-blue-100 text-blue-800' :
+                        item.compatibilityLevel === 'Fair' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {item.compatibilityLevel} ({item.compatibilityScore}%)
+                      </span>
+                    ) : (
+                      <>
+                        <span className="text-lg font-bold text-green-600">${item.price}</span>
+                        <span className="text-xs text-gray-500">{item.category}</span>
+                        <span className="text-xs text-gray-500">{item.condition}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (category === 'housing') {
+                      onCreateProperty?.(item);
+                    } else if (category === 'marketplace') {
+                      onCreateItem?.(item);
+                    } else if (category === 'roommate') {
+                      onConnect?.(item);
+                    }
+                  }}
+                  className={`rounded-lg px-3 py-1 text-sm text-white hover:opacity-90 ${
+                    category === 'housing' ? 'bg-blue-500 hover:bg-blue-600' :
+                    category === 'marketplace' ? 'bg-green-500 hover:bg-green-600' :
+                    category === 'roommate' ? 'bg-purple-500 hover:bg-purple-600' :
+                    'bg-gray-500 hover:bg-gray-600'
+                  }`}
+                >
+                  {category === 'housing' ? 'Contact' :
+                   category === 'marketplace' ? 'Contact' :
+                   category === 'roommate' ? 'Connect' : 'Action'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 pt-2">
+        <button onClick={onClose} className="rounded-lg bg-black px-4 py-2 text-sm text-white hover:bg-black/90">
+          Done
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ====================== Solve Synapse Panel ====================== */
+function SolveSynapsePanel({ initialText, onConnect, onClose }) {
+  const [loading, setLoading] = useState(true);
+  const [criteria, setCriteria] = useState(null);
+  const [cands, setCands] = useState([]);
+  const [plan, setPlan] = useState([]);
+  const [threadId, setThreadId] = useState(null);
+
+  const fetchSolve = async (opts = {}) => {
+    try {
+      setLoading(true);
+
+      const body = {
+        prompt: initialText || "",
+        page: opts.page ?? 1,
+        limit: 24,
+      };
+      if (opts.filters) body.filters = opts.filters;
+
+      const { data } = await axiosInstance.post("/solve/synapse", body);
+
+      setThreadId(data?.threadId || null);
+      setCriteria(data?.criteria || null);
+      setPlan(Array.isArray(data?.plan) ? data.plan : []);
+
+      const next = Array.isArray(data?.candidates) ? data.candidates : [];
+      setCands((prev) => (opts.append ? [...prev, ...next] : next));
+
+    } catch {
+      if (!opts.append) setCands([]);
+      setPlan([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSolve({ page: 1, append: false });
+  }, [initialText]);
+
+  return (
+    <div className="max-h-[80vh] overflow-y-auto">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Roommate Search</h3>
+        <button
+          onClick={onClose}
+          className="grid h-8 w-8 place-items-center rounded-full bg-black/5"
+        >
+          <MdClose />
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="text-white/70">Finding compatible roommates...</div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Plan Steps */}
+          {plan.length > 0 && (
+            <div className="rounded-lg bg-purple-50 p-4">
+              <h4 className="font-medium text-purple-900 mb-2">Your Search Plan:</h4>
+              <ul className="space-y-1 text-sm text-purple-800">
+                {plan.map((step, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="text-purple-600 font-medium">{i + 1}.</span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Criteria */}
+          {criteria && (
+            <div className="rounded-lg bg-gray-50 p-4">
+              <h4 className="font-medium text-gray-900 mb-2">Search Criteria:</h4>
+              <div className="text-sm text-gray-700">
+                {criteria.budgetRange && (
+                  <div>Budget: ${criteria.budgetRange.min} - ${criteria.budgetRange.max}</div>
+                )}
+                {criteria.lifestyle?.cleanliness && (
+                  <div>Cleanliness: {criteria.lifestyle.cleanliness}/5</div>
+                )}
+                {criteria.lifestyle?.sleepPattern && (
+                  <div>Sleep Pattern: {criteria.lifestyle.sleepPattern}</div>
+                )}
+                {criteria.academic?.level && (
+                  <div>Academic Level: {criteria.academic.level}</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Results */}
+          <div className="space-y-3">
+            <h4 className="font-medium text-gray-900">Found {cands.length} compatible roommates:</h4>
+            {cands.map((roommate, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg border p-3">
+                <div className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center">
+                  {roommate.avatar ? (
+                    <img src={roommate.avatar} alt="" className="h-full w-full rounded-full object-cover" />
+                  ) : (
+                    <span className="text-gray-500">👤</span>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h5 className="font-medium">{roommate.firstName} {roommate.lastName}</h5>
+                  <p className="text-sm text-gray-600">{roommate.university}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      roommate.compatibilityLevel === 'Excellent' ? 'bg-green-100 text-green-800' :
+                      roommate.compatibilityLevel === 'Good' ? 'bg-blue-100 text-blue-800' :
+                      roommate.compatibilityLevel === 'Fair' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {roommate.compatibilityLevel} ({roommate.compatibilityScore}%)
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => onConnect?.(roommate)}
+                  className="rounded-lg bg-purple-500 px-3 py-1 text-sm text-white hover:bg-purple-600"
+                >
+                  Connect
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 pt-2">
+        <button onClick={onClose} className="rounded-lg bg-black px-4 py-2 text-sm text-white hover:bg-black/90">
+          Done
+        </button>
+      </div>
+    </div>
+  );
+}
+
 
 /* ============================ PAGE ============================ */
 export default function SolveThreads() {
@@ -1946,6 +2471,7 @@ export default function SolveThreads() {
             }
           />
         )}
+
       </Modal>
 
       <Toast

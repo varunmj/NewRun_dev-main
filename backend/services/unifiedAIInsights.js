@@ -11,7 +11,7 @@ class UnifiedAIInsights {
     this.insightCategories = {
       HOUSING: 'housing',
       ROOMMATE: 'roommate', 
-      FINANCIAL: 'financial',
+      // FINANCIAL: 'financial',
       ACADEMIC: 'academic',
       SOCIAL: 'social',
       URGENT: 'urgent'
@@ -72,42 +72,61 @@ class UnifiedAIInsights {
       housing: false,
       roommate: false,
       financial: false,
+      visa: false,
       academic: false,
       urgent: false
     };
 
-    // Check Synapse completion
-    const synapseCompletion = this.calculateSynapseCompletion(user.synapse || {});
-    const isSynapseCompleted = synapseCompletion >= 80;
+    const onboarding = user.onboardingData || {};
+    const synapse = user.synapse || {};
+    const focus = Array.isArray(onboarding.focus) ? onboarding.focus : [];
 
-    // Housing needs
-    if (user.onboardingData?.arrivalDate) {
-      const arrivalDate = new Date(user.onboardingData.arrivalDate);
+    // Synapse readiness: lower threshold or presence of key fields
+    const synapseCompletion = this.calculateSynapseCompletion(synapse);
+    const hasKeySynapse = !!(
+      synapse?.culture?.primaryLanguage ||
+      synapse?.lifestyle?.sleepPattern ||
+      Number.isFinite(synapse?.lifestyle?.cleanliness)
+    );
+    const isSynapseReady = synapseCompletion >= 60 || hasKeySynapse;
+
+    // Urgency from arrival timeline (still valid for incoming students)
+    if (onboarding.arrivalDate) {
+      const arrivalDate = new Date(onboarding.arrivalDate);
       const daysUntilArrival = Math.ceil((arrivalDate - new Date()) / (1000 * 60 * 60 * 24));
-      
-      if (daysUntilArrival <= 30) {
-        needs.housing = true;
+      if (Number.isFinite(daysUntilArrival) && daysUntilArrival <= 30) {
         needs.urgent = true;
       }
     }
 
-    // Roommate needs
-    if (isSynapseCompleted && user.onboardingData?.roommateInterest) {
+    // Housing: focus/needs/budget/synapse logistics or urgency
+    if (
+      focus.includes('Housing') ||
+      onboarding.housingNeeds ||
+      (onboarding.budgetRange && (onboarding.budgetRange.min != null || onboarding.budgetRange.max != null)) ||
+      Number.isFinite(synapse?.logistics?.budgetMax) ||
+      needs.urgent
+    ) {
+      needs.housing = true;
+    }
+
+    // Roommate: focus or synapse readiness
+    if (focus.includes('Roommate') || isSynapseReady) {
       needs.roommate = true;
     }
 
-    // Financial needs
-    if (user.onboardingData?.budgetRange && dashboardData?.propertiesStats?.averagePrice) {
-      const avgPrice = dashboardData.propertiesStats.averagePrice;
-      const budget = user.onboardingData.budgetRange.max;
-      if (avgPrice > budget * 1.2) { // 20% over budget
+    // Financial: optional if average price known vs budget (kept as soft signal)
+    if (onboarding?.budgetRange && dashboardData?.propertiesStats?.averagePrice) {
+      const avgPrice = Number(dashboardData.propertiesStats.averagePrice);
+      const budgetMax = Number(onboarding.budgetRange.max);
+      if (Number.isFinite(avgPrice) && Number.isFinite(budgetMax) && avgPrice > budgetMax * 1.2) {
         needs.financial = true;
-        needs.urgent = true;
       }
     }
 
-    // Academic needs
-    if (user.major && !user.academicPlan) {
+    // Academic: only for active students (not alumni/working)
+    const isAlumniOrWorking = (onboarding.currentSituation === 'working') || (user.role === 'alumni');
+    if (user.major && !user.academicPlan && !isAlumniOrWorking) {
       needs.academic = true;
     }
 
@@ -175,19 +194,34 @@ class UnifiedAIInsights {
       const recommendations = await this.getHousingRecommendations(user);
       
       if (recommendations && recommendations.properties && recommendations.properties.length > 0) {
-        // Create one insight per top property
-        recommendations.properties.slice(0, 2).forEach((property, index) => {
-          insights.push({
-            id: `housing-${property._id}`,
-            title: `Consider ${property.name}`,
-            message: `${property.name} at $${property.price}/month, ${property.distance} miles from campus. ${property.description || 'Great value for your budget.'}`,
-            priority: this.priorityLevels.HIGH,
-            category: this.insightCategories.HOUSING,
-            icon: 'home',
-            type: 'info',
-            action: 'View property details',
-            propertyId: property._id
-          });
+        // Grouped insight: show top 2–3 in a single card
+        const topItems = recommendations.properties
+          .slice(0, 3)
+          .map((p, idx) => ({
+            id: p._id,
+            rank: idx + 1,
+            title: p.name,
+            price: p.price,
+            distance: p.distance,
+            description: p.description || 'Available property',
+            priority: idx === 1 ? this.priorityLevels.HIGH : this.priorityLevels.MEDIUM,
+            href: `/property/${p._id}`
+          }));
+
+        const topTitle = topItems[0]?.title || 'Top properties';
+        insights.push({
+          id: `housing-grouped`,
+          title: `Top housing picks (best: ${topTitle})`,
+          message: `We found ${topItems.length} options that fit your context. The top match is ${topTitle}.`,
+          priority: this.priorityLevels.HIGH,
+          category: this.insightCategories.HOUSING,
+          icon: 'home',
+          type: 'grouped',
+          group: {
+            kind: 'housing',
+            items: topItems
+          },
+          action: 'View housing options'
         });
       } else {
         // No real properties found - provide honest guidance
@@ -235,19 +269,32 @@ class UnifiedAIInsights {
         const validRoommates = roommateRecommendations.roommates.filter(roommate => roommate.totalScore > 0);
         
         if (validRoommates.length > 0) {
-          // Create one insight per top roommate match
-          validRoommates.slice(0, 2).forEach((roommate, index) => {
-            insights.push({
-              id: `roommate-${roommate._id}`,
-              title: `Connect with ${roommate.firstName} ${roommate.lastName}`,
-              message: `${roommate.firstName} ${roommate.lastName} (${roommate.major}, ${Math.round(roommate.totalScore)}% compatibility) shares your ${this.getSharedPreferences(user, roommate)}. ${roommate.recommendation}`,
-              priority: this.priorityLevels.HIGH,
-              category: this.insightCategories.ROOMMATE,
-              icon: 'people',
-              type: 'info',
-              action: 'View roommate profile',
-              roommateId: roommate._id
-            });
+          const topItems = validRoommates
+            .slice(0, 3)
+            .map((r, idx) => ({
+              id: r._id,
+              rank: idx + 1,
+              name: `${r.firstName} ${r.lastName}`.trim(),
+              score: Math.round(r.totalScore),
+              reasons: this.getSharedPreferences(user, r),
+              priority: idx === 0 ? this.priorityLevels.HIGH : this.priorityLevels.MEDIUM,
+              href: `/roommate/${r._id}`
+            }));
+
+          const best = topItems[0];
+          insights.push({
+            id: `roommate-grouped`,
+            title: `Top roommate matches (best: ${best?.name || 'Match'})`,
+            message: `We found ${topItems.length} strong matches. Top: ${best?.name} (${best?.score}%).`,
+            priority: this.priorityLevels.HIGH,
+            category: this.insightCategories.ROOMMATE,
+            icon: 'people',
+            type: 'grouped',
+            group: {
+              kind: 'roommate',
+              items: topItems
+            },
+            action: 'View roommate matches'
           });
         } else {
           // No valid roommates found - provide honest guidance
@@ -541,38 +588,36 @@ class UnifiedAIInsights {
 
   async getRoommateRecommendations(user) {
     try {
-      // Use the same logic as the working /synapse/matches endpoint
+      // Fetch candidates broadly (do not hard-restrict by university)
       const User = require('../models/user.model');
-      
-      // Build query similar to /synapse/matches endpoint
-      let query = {
-        _id: { $ne: user._id }, // Exclude self
-        university: user.university, // Same university
-        // Exclude obvious test accounts
-        email: { $not: /@example\.com$/ },
-        // Don't require synapse.visibility - let partial profiles through
+
+      const baseQuery = {
+        _id: { $ne: user._id },
+        email: { $not: /@example\.com$/ }
       };
 
-      // Find potential roommates using same logic as working endpoint
-      const realRoommates = await User.find(query)
+      // Soft preference for same university handled in scoring, not as a hard filter
+      const realRoommates = await User.find(baseQuery)
         .select('firstName lastName major synapse onboardingData avatar lastActive university')
-        .limit(10)
+        .limit(50)
         .lean();
 
       if (realRoommates.length === 0) {
         return { roommates: [] }; // No roommates found
       }
 
-      // Calculate compatibility scores using same logic as /synapse/matches
+      // Calculate compatibility scores using full Synapse data
       const scoredRoommates = realRoommates.map(roommate => {
         const compatibilityScore = this.calculateCompatibilityScore(user, roommate);
+        // Optional boost for same university as a soft preference
+        const universityBoost = user.university && roommate.university && user.university === roommate.university ? 5 : 0;
         return {
           ...roommate,
-          totalScore: compatibilityScore,
+          totalScore: Math.min(100, compatibilityScore + universityBoost),
           score: compatibilityScore, // Add score field for compatibility
           recommendation: this.generateRoommateRecommendation(roommate, user)
         };
-      }).filter(roommate => roommate.totalScore > 30) // Lower threshold like /synapse/matches
+      }).filter(roommate => roommate.totalScore > 30)
       .sort((a, b) => b.totalScore - a.totalScore);
 
       return { roommates: scoredRoommates };

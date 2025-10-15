@@ -13,67 +13,11 @@ const aiToolsExpansion = require('./ai-tools-expansion');
 // COMPREHENSIVE AI INSIGHTS
 // =====================
 
-/**
- * GET /api/ai/comprehensive-insights
- * Generate comprehensive AI insights covering all aspects of student life
- */
-router.post('/comprehensive-insights', async (req, res) => {
-  try {
-    const { userData, dashboardData } = req.body;
-    
-    // Generate comprehensive insights
-    const result = await enhancedAISystem.generateComprehensiveInsights(userData, dashboardData);
-    
-    res.json({
-      success: true,
-      insights: result.insights,
-      categories: result.categories,
-      aiGenerated: true,
-      comprehensive: true,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('Comprehensive AI Insights Error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to generate comprehensive insights',
-      fallback: true
-    });
-  }
-});
 
 // =====================
 // FINANCIAL AI ENDPOINTS
 // =====================
 
-/**
- * POST /api/ai/financial/budget-analysis
- * Get AI-powered budget analysis and recommendations
- */
-router.post('/financial/budget-analysis', async (req, res) => {
-  try {
-    const { user, financialData } = req.body;
-    
-    const result = await aiToolsExpansion.getBudgetAnalysis(user, financialData);
-    
-    res.json({
-      success: true,
-      insights: result.insights,
-      recommendations: result.recommendations,
-      aiGenerated: true,
-      category: 'financial'
-    });
-    
-  } catch (error) {
-    console.error('Financial Budget Analysis Error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to generate budget analysis',
-      fallback: true
-    });
-  }
-});
 
 /**
  * POST /api/ai/financial/expense-insights
@@ -456,4 +400,6 @@ router.get('/health', async (req, res) => {
 });
 
 module.exports = router;
+
+
 

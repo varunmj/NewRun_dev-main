@@ -125,12 +125,15 @@ const AIRoommateInsights = ({ userInfo, dashboardData, onboardingData }) => {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
       
       try {
-        // Call AI roommate insights endpoint
-        const response = await axiosInstance.post('/api/ai/roommate/insights', {
-          dashboardData
+        // Call unified roommate matching endpoint
+        const response = await axiosInstance.post('/api/ai/roommate/match', {
+          userProfile: userInfo,
+          onboardingData: onboardingData,
+          synapseData: userInfo?.synapse,
+          dashboardData: dashboardData
         });
 
-        const { insights, specificRecommendations } = response.data;
+        const { aiInsights: insights, results: specificRecommendations } = response.data;
         
         // Transform insights
         const transformedInsights = transformRoommateInsights(insights);
@@ -571,4 +574,6 @@ const AIRoommateInsights = ({ userInfo, dashboardData, onboardingData }) => {
 };
 
 export default memo(AIRoommateInsights);
+
+
 
