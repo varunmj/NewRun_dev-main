@@ -467,6 +467,60 @@ export const UnifiedStateProvider = ({ children }) => {
     return Math.round(totalScore);
   }, []);
 
+  // Enhanced Synapse profile management
+  const updateSynapseProfile = useCallback(async (updates) => {
+    try {
+      const response = await axiosInstance.post('/synapse/preferences', updates);
+      if (response.data?.ok) {
+        updateState({
+          synapseProfile: response.data.preferences,
+          // Update completion status if provided
+          ...(response.data.completion && {
+            synapseCompletion: response.data.completion
+          })
+        });
+        return response.data;
+      }
+      throw new Error(response.data?.message || 'Failed to update profile');
+    } catch (error) {
+      console.error('Error updating Synapse profile:', error);
+      throw error;
+    }
+  }, [updateState]);
+
+  // Get Synapse completion status
+  const getSynapseCompletion = useCallback(() => {
+    if (!state.synapseProfile) return { percentage: 0, completed: false };
+    
+    const percentage = calculateProfileCompletion(state.synapseProfile);
+    return {
+      percentage,
+      completed: percentage >= 80,
+      sections: {
+        culture: calculateSectionCompletion(state.synapseProfile, 'culture'),
+        logistics: calculateSectionCompletion(state.synapseProfile, 'logistics'),
+        lifestyle: calculateSectionCompletion(state.synapseProfile, 'lifestyle'),
+        habits: calculateSectionCompletion(state.synapseProfile, 'habits'),
+        pets: calculateSectionCompletion(state.synapseProfile, 'pets')
+      }
+    };
+  }, [state.synapseProfile, calculateProfileCompletion]);
+
+  // Calculate section completion
+  const calculateSectionCompletion = useCallback((profile, section) => {
+    if (!profile?.[section]) return 0;
+    
+    const sectionData = profile[section];
+    const fields = Object.keys(sectionData);
+    const completedFields = fields.filter(field => {
+      const value = sectionData[field];
+      return value !== null && value !== undefined && value !== '' && 
+             !(Array.isArray(value) && value.length === 0);
+    });
+    
+    return Math.round((completedFields.length / fields.length) * 100);
+  }, []);
+
   // AI data management with smart caching
   const fetchAIData = useCallback(async () => {
     const requestKey = `fetchAIData_${state.cacheVersion}`;
@@ -816,7 +870,10 @@ export const UnifiedStateProvider = ({ children }) => {
     invalidateCache,
     subscribeToCacheInvalidation,
     updateState,
-    calculateProfileCompletion
+    calculateProfileCompletion,
+    updateSynapseProfile,
+    getSynapseCompletion,
+    calculateSectionCompletion
   };
 
   return (

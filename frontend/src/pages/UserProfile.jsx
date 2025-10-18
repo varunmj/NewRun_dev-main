@@ -1,8 +1,18 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
+import * as Dialog from "@radix-ui/react-dialog";
+import { toast } from "sonner";
 import Navbar from "../components/Navbar/Navbar";
 import axiosInstance from "../utils/axiosInstance";
 import { useGoogleMapsLoader } from "../utils/googleMapsLoader";
 import { Autocomplete } from "@react-google-maps/api";
+import ProfilePictureUpload from "../components/ProfilePictureUpload/ProfilePictureUpload";
+import MatchCard from "../components/ProfileCard/MatchCard";
+import EditProfileModal from "../components/EditProfileModal/EditProfileModal";
+import { useUserStatus } from "../context/UserStatusContext";
 
 import {
   MdWeb,
@@ -22,8 +32,113 @@ import {
   MdEdit,
   MdGroups,
   MdSettings,
+  MdSupport,
+  MdHome,
+  MdPeople,
+  MdPerson,
+  MdCircle, 
+  MdAccessTime, 
+  MdDoNotDisturb, 
+  MdOfflineBolt,
+  MdKeyboardArrowDown,
+  MdPhotoCamera,
+  MdClose
 } from "react-icons/md";
 import { FaWhatsapp, FaInstagram, FaYoutube, FaDribbble, FaPinterest } from "react-icons/fa6";
+
+/* =====================================================================
+   User Status System
+   ===================================================================== */
+const USER_STATUS = {
+  ONLINE: 'online',
+  AWAY: 'away', 
+  DO_NOT_DISTURB: 'dnd',
+  OFFLINE: 'offline'
+};
+
+const STATUS_CONFIG = {
+  [USER_STATUS.ONLINE]: {
+    label: 'Online',
+    icon: MdCircle,
+    color: '#22c55e',
+    bgColor: 'rgba(34, 197, 94, 0.15)',
+    borderColor: 'rgba(34, 197, 94, 0.3)'
+  },
+  [USER_STATUS.AWAY]: {
+    label: 'Away',
+    icon: MdAccessTime,
+    color: '#f59e0b',
+    bgColor: 'rgba(245, 158, 11, 0.15)',
+    borderColor: 'rgba(245, 158, 11, 0.3)'
+  },
+  [USER_STATUS.DO_NOT_DISTURB]: {
+    label: 'Do Not Disturb',
+    icon: MdDoNotDisturb,
+    color: '#ef4444',
+    bgColor: 'rgba(239, 68, 68, 0.15)',
+    borderColor: 'rgba(239, 68, 68, 0.3)'
+  },
+  [USER_STATUS.OFFLINE]: {
+    label: 'Offline',
+    icon: MdOfflineBolt,
+    color: '#6b7280',
+    bgColor: 'rgba(107, 114, 128, 0.15)',
+    borderColor: 'rgba(107, 114, 128, 0.3)'
+  }
+};
+
+/* =====================================================================
+   University logos and utilities (from RoommateMatches)
+   ===================================================================== */
+const UNI_DOMAINS = { 
+  "Northern Illinois University": "niu.edu", 
+  "University of Illinois Urbana-Champaign": "illinois.edu", 
+  "University of Illinois Chicago": "uic.edu",
+  "Northwestern University": "northwestern.edu", 
+  "University of Chicago": "uchicago.edu", 
+  "DePaul University": "depaul.edu", 
+  "Loyola University Chicago": "luc.edu", 
+  "Illinois Institute of Technology": "iit.edu", 
+  "Stanford University": "stanford.edu", 
+  "University of California Berkeley": "berkeley.edu", 
+  "University of California Los Angeles": "ucla.edu", 
+  "University of Southern California": "usc.edu", 
+  "University of Texas Austin": "utexas.edu", 
+  "University of Texas Dallas": "utdallas.edu", 
+  "University of Texas San Antonio": "utsa.edu", 
+  "University of Texas Arlington": "uta.edu"
+};
+
+const universityLogoUrl = (name = "") => {
+  const n = String(name || "").trim();
+  if (!n) return "";
+  const domain = UNI_DOMAINS[n] || `${n.toLowerCase().replace(/[^a-z0-9]+/g, "")}.edu`;
+  return `https://logo.clearbit.com/${domain}`;
+};
+
+// Circle uni logo (no text)
+function UniversityLogoCircle({ university, size = 56 }) {
+  if (!university) return null;
+  const url = universityLogoUrl(university);
+  if (!url) return null;
+
+  return (
+    <div
+      className="shrink-0 overflow-hidden rounded-full border border-white/10 bg-transparent"
+      style={{ width: size, height: size }}
+      title={university}
+      aria-label={`University: ${university}`}
+    >
+      <img
+        src={url}
+        alt=""
+        className="h-full w-full rounded-full object-contain"
+        style={{ padding: Math.round(size * 0.06) }}
+        onError={(e)=>{ e.currentTarget.style.display="none"; }}
+      />
+    </div>
+  );
+}
 
 // Synapse Completion Status Component
 const SynapseCompletionStatus = ({ onEditPreferences }) => {
@@ -242,7 +357,132 @@ function ParticleField({
     };
   }, [count, maxSpeed, repelRadius, repelStrength]);
 
-  return <canvas ref={canvasRef} className="pointer-events-none fixed inset-0 z-0" />;
+  return <canvas ref={canvasRef} className="pointer-events-none fixed inset-0 z-0 particles" />;
+}
+
+/* =====================================================================
+   Status Selector Component
+   ===================================================================== */
+function StatusSelector({ currentStatus, onStatusChange }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const currentConfig = STATUS_CONFIG[currentStatus] || STATUS_CONFIG[USER_STATUS.ONLINE];
+  const CurrentIcon = currentConfig.icon;
+
+  const handleStatusChange = (status) => {
+    onStatusChange(status);
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors"
+        style={{
+          backgroundColor: currentConfig.bgColor,
+          borderColor: currentConfig.borderColor,
+          color: currentConfig.color
+        }}
+      >
+        <CurrentIcon className="h-4 w-4" />
+        <span>{currentConfig.label}</span>
+        <MdKeyboardArrowDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 z-50 mt-2 w-48 rounded-xl border border-white/10 bg-[#121318] p-2 shadow-xl">
+          {Object.entries(STATUS_CONFIG).map(([status, config]) => {
+            const Icon = config.icon;
+            const isSelected = status === currentStatus;
+            
+            return (
+              <button
+                key={status}
+                onClick={() => handleStatusChange(status)}
+                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                  isSelected 
+                    ? 'bg-white/10' 
+                    : 'hover:bg-white/5'
+                }`}
+              >
+                <Icon 
+                  className="h-4 w-4" 
+                  style={{ color: config.color }}
+                />
+                <span className="text-white/90">{config.label}</span>
+                {isSelected && (
+                  <MdCheckCircle className="ml-auto h-4 w-4 text-emerald-400" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* =====================================================================
+   Transform user data to match MatchCard format
+   ===================================================================== */
+// Function to determine academic status based on graduation date
+function getAcademicStatus(user) {
+  if (!user.graduationDate) return null;
+  
+  const graduationDate = new Date(user.graduationDate);
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  const graduationYear = graduationDate.getFullYear();
+  
+  // If graduation is in the future, they're still a student
+  if (graduationYear > currentYear) {
+    // Determine if undergrad or graduate based on typical graduation ages
+    const age = currentDate.getFullYear() - (new Date(user.dateOfBirth || '2000-01-01')).getFullYear();
+    return age <= 22 ? 'undergrad' : 'graduate';
+  }
+  
+  // If graduated, they're alumni
+  return 'alumni';
+}
+
+function transformUserToMatchCard(user, userStatus = USER_STATUS.ONLINE) {
+  const displayName = (u) => [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || "Complete your profile";
+  const statusConfig = STATUS_CONFIG[userStatus] || STATUS_CONFIG[USER_STATUS.ONLINE];
+  const academicStatus = getAcademicStatus(user);
+  
+  return {
+    userId: user.id || user._id || "current-user",
+    firstName: user.firstName || "",
+    lastName: user.lastName || "",
+    name: displayName(user),
+    avatarUrl: user.avatar || "",
+    university: user.university || "",
+    graduation: user.graduationDate || "",
+    verified: { edu: !!user.university },
+    lastActive: new Date().toISOString(),
+    distanceMi: 0, // Current user
+    budget: null, // Could be added to user profile
+    keyTraits: [],
+    languages: [],
+    petsOk: false,
+    sleepStyle: "",
+    matchScore: 100, // Perfect match for self
+    reasons: [
+      { type: "positive", text: "This is your profile" },
+      { type: "positive", text: "Complete your information" },
+      { type: "positive", text: "Find your perfect roommate match" }
+    ],
+    synapse: {},
+    // Add custom props for self-profile
+    isSelfProfile: true,
+    contactText: "Edit Profile",
+    // Status information
+    userStatus: userStatus,
+    statusLabel: statusConfig.label,
+    statusColor: statusConfig.color,
+    // Academic status
+    academicStatus: academicStatus
+  };
 }
 
 /* ----------------------------- tiny UI atoms ----------------------------- */
@@ -264,21 +504,33 @@ const SectionLabel = ({ icon: Icon, children }) => (
   </div>
 );
 
-const Chip = ({ icon: Icon, text }) => (
-  <div className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-white/85">
+const Chip = ({ icon: Icon, text, onClick, isActionable = false }) => (
+  <div 
+    className={`inline-flex items-center gap-2 rounded-lg border border-white/10 px-2.5 py-1 text-xs text-white/85 ${
+      isActionable 
+        ? 'bg-white/[0.04] hover:bg-white/[0.08] cursor-pointer transition-colors' 
+        : 'bg-white/[0.04]'
+    }`}
+    onClick={onClick}
+  >
     {Icon && <Icon className="h-4 w-4 text-violet-300/90" />}
     <span>{text || "—"}</span>
   </div>
 );
 
-const StatCard = ({ value, label, icon: Icon }) => (
-  <Shell className="flex h-24 items-center justify-between px-5">
-    <div className="text-4xl font-semibold text-white/95">{value}</div>
-    <div className="flex items-center gap-2 text-sm text-white/70">
-      {Icon && <Icon className="h-5 w-5 text-violet-300/90" />}
-      <span>{label}</span>
-    </div>
-  </Shell>
+const StatCard = ({ value, label, icon: Icon, href }) => (
+  <a 
+    href={href} 
+    className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/60 rounded-2xl transition-transform group-hover:translate-y-[-1px]"
+  >
+    <Shell className="flex h-24 items-center justify-between px-5">
+      <div className="text-4xl font-semibold text-white/95">{value}</div>
+      <div className="flex items-center gap-2 text-sm text-white/70">
+        {Icon && <Icon className="h-5 w-5 text-violet-300/90" />}
+        <span>{label}</span>
+      </div>
+    </Shell>
+  </a>
 );
 
 /* ----------------------------- helpers/data ------------------------------ */
@@ -314,14 +566,16 @@ const normalizeUser = (raw) => {
     campusLabel: u.campusLabel || "",
     campusPlaceId: u.campusPlaceId || "",
     campusDisplayName: u.campusDisplayName || "",
-    avatar:
-      u.avatar ||
-      "https://images.unsplash.com/photo-1628157588553-5eeea00dbf54?q=80&w=200&h=200&fit=crop&auto=format",
+    avatar: u.avatar || "", // Empty string for no avatar (will show initials)
+    // ✨ Include onboarding data
+    onboardingData: u.onboardingData || {},
   };
 };
 
 /* ----------------------------- Edit Modal -------------------------------- */
-function EditProfileModal({ open, onClose, initialUser, onSaved }) {
+// EditProfileModal is now imported from ../components/EditProfileModal/EditProfileModal
+// Old implementation removed - using modern TypeScript version
+function OldEditProfileModal({ open, onClose, initialUser, onSaved }) {
   const { isLoaded } = useGoogleMapsLoader(); // loads Places
   const [saving, setSaving] = useState(false);
   // Cohort/Term (split into season + year)
@@ -420,6 +674,8 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }) {
       const updated = normalizeUser(data?.user || { ...(initialUser || {}), ...payload });
       onSaved?.(updated);
       onClose();
+      // Show success feedback
+      alert("Profile updated successfully!");
     } catch (err) {
       const msg =
         err?.response?.data?.message ||
@@ -434,236 +690,256 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] grid place-items-center bg-black/60 px-4">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-3xl rounded-2xl border border-white/10 bg-[#121318] p-5 text-white shadow-2xl"
-      >
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-lg font-semibold">Edit profile</div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-white/10 px-2 py-1 text-sm text-white/80 hover:bg-white/[0.07]"
-          >
-            Close
-          </button>
-        </div>
-
-        {/* Basic identity */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs text-white/60">First name</label>
-            <input
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
-              placeholder="First name"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-white/60">Last name</label>
-            <input
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
-              placeholder="Last name"
-            />
-          </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs text-white/60">Current location</label>
-            <input
-              value={currentLocation}
-              onChange={(e) => setCurrentLocation(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
-              placeholder="City, State (optional)"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-white/60">Hometown</label>
-            <input
-              value={hometown}
-              onChange={(e) => setHometown(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
-              placeholder="Hometown (optional)"
-            />
-          </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs text-white/60">Birthday</label>
-            <input
-              type="date"
-              value={birthday}
-              onChange={(e) => setBirthday(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-white/60">
-              Graduation date (Month/Year)
-            </label>
-            <input
-              value={graduationDate}
-              onChange={(e) => setGraduationDate(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
-              placeholder="e.g., May 2026"
-            />
-          </div>
-        </div>
-
-        {/* University Routing (your original asks) */}
-        <div className="mt-6 border-t border-white/10 pt-4">
-          <div className="mb-3 text-sm font-medium text-white/85">
-            University (used for routing & distance on properties)
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs text-white/60">University name</label>
-              <input
-                value={university}
-                onChange={(e) => setUniversity(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
-                placeholder="e.g., Northern Illinois University"
-              />
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm px-4">
+      <div className="relative w-full max-w-4xl">
+        <form
+          onSubmit={onSubmit}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="editProfileTitle"
+          className="relative w-full rounded-xl bg-white shadow-xl overflow-hidden"
+        >
+          {/* Header with Banner */}
+          <div className="relative">
+            {/* Banner Background */}
+            <div className="h-32 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+            
+            {/* Profile Picture Overlay */}
+            <div className="absolute -bottom-8 left-6">
+              <div className="relative">
+                <img
+                  src={initialUser?.avatar || '/default-avatar.png'}
+                  alt="Profile"
+                  className="w-16 h-16 rounded-full border-4 border-white object-cover"
+                />
+                {initialUser?.avatar && (
+                  <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
+              </div>
             </div>
-            <div>
-              <label className="mb-1 block text-xs text-white/60">School / Department</label>
-              <input
-                value={schoolDepartment}
-                onChange={(e) => setSchoolDepartment(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
-                placeholder="e.g., College of Business"
-              />
-            </div>
+            
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-lg bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 transition-colors"
+            >
+              <MdClose className="h-5 w-5" />
+            </button>
           </div>
+          
+          {/* Content */}
+          <div className="pt-12 pb-6">
 
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              {/* <label className="mb-1 block text-xs text-white/60">Cohort / Term</label> */}
-              {/* Cohort / Term */}
+            {/* User Info Header */}
+            <div className="px-6 mb-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">{fullName(initialUser)}</h2>
+                  <p className="text-sm text-gray-500">@{initialUser?.firstName?.toLowerCase() || 'user'}</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <button className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Change Photo
+                  </button>
+                  <button className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit Banner
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Form Sections */}
+            <div className="px-6 space-y-6">
+              {/* Personal Information */}
               <div>
-                <label className="mb-1 block text-xs text-white/60">Cohort / Term</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Season */}
-                  <select
-                    value={cohortSeason}
-                    onChange={(e) => setCohortSeason(e.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
-                  >
-                      <option value="">Season</option>
+                <h3 className="text-sm font-medium text-gray-900 mb-4">Personal Information</h3>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">First name</label>
+                    <input
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder="Enter your first name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Last name</label>
+                    <input
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder="Enter your last name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Current location</label>
+                    <input
+                      value={currentLocation}
+                      onChange={(e) => setCurrentLocation(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder="City, State (optional)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Hometown</label>
+                    <input
+                      value={hometown}
+                      onChange={(e) => setHometown(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder="Hometown (optional)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Birthday</label>
+                    <input
+                      type="date"
+                      value={birthday}
+                      onChange={(e) => setBirthday(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Graduation date</label>
+                    <input
+                      value={graduationDate}
+                      onChange={(e) => setGraduationDate(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder="e.g., May 2026"
+                    />
+                  </div>
+                </div>
+              </div>
+
+
+              {/* University Information */}
+              <div>
+                <h3 className="text-sm font-medium text-gray-900 mb-4">University Information</h3>
+                <p className="text-sm text-gray-500 mb-4">Used for routing & distance on properties</p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">University name</label>
+                    <input
+                      value={university}
+                      onChange={(e) => setUniversity(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder="e.g., Northern Illinois University"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">School / Department</label>
+                    <input
+                      value={schoolDepartment}
+                      onChange={(e) => setSchoolDepartment(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder="e.g., College of Business"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Campus</label>
+                    {isLoaded ? (
+                      <Autocomplete
+                        onLoad={(ac) => (acRef.current = ac)}
+                        onPlaceChanged={onPlaceChanged}
+                        options={{ fields: ["place_id", "name", "formatted_address"], componentRestrictions: { country: "us" } }}
+                      >
+                        <input
+                          value={campusDisplayName}
+                          onChange={(e) => setCampusDisplayName(e.target.value)}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          placeholder="Search for building..."
+                        />
+                      </Autocomplete>
+                    ) : (
+                      <input
+                        disabled
+                        value={campusDisplayName}
+                        className="w-full cursor-not-allowed rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500 bg-gray-50"
+                        placeholder="Loading Google…"
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Cohort Season</label>
+                    <select
+                      value={cohortSeason}
+                      onChange={(e) => setCohortSeason(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">Select Season</option>
                       <option value="Spring">Spring</option>
                       <option value="Summer">Summer</option>
                       <option value="Fall">Fall</option>
                     </select>
-
-                    {/* Year */}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Cohort Year</label>
                     <select
                       value={cohortYear}
                       onChange={(e) => setCohortYear(e.target.value)}
-                      className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     >
-                      <option value="">Year</option>
-                      {yearOptions.map((y) => (
-                        <option key={y} value={y}>
-                          {y}
-                        </option>
+                      <option value="">Select Year</option>
+                      {yearOptions.map((year) => (
+                        <option key={year} value={year}>{year}</option>
                       ))}
                     </select>
                   </div>
-                  <p className="mt-1 text-[11px] text-white/40">
-                    We’ll store it as{" "}
-                    <code>
-                      {cohortSeason && cohortYear ? `${cohortSeason} ${cohortYear}` : "Season YYYY"}
-                    </code>{" "}
-                    for routing and campus grouping.
-                  </p>
-                </div>
-
-                
-              {/* Campus label */}
-                <div>
-                  <label className="mb-1 block text-xs text-white/60">
-                    Campus label (e.g., NIU College of Business)
-                  </label>
-                  <input
-                    value={campusLabel}
-                    onChange={(e) => setCampusLabel(e.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
-                    placeholder="e.g., NIU College of Business (Barsema Hall)"
-                  />
+                  <div className="sm:col-span-2">
+                    <p className="text-xs text-gray-500">
+                      Stored as: {cohortSeason} {cohortYear}
+                    </p>
+                  </div>
                 </div>
               </div>
-
-            <div>
-              <label className="mb-1 block text-xs text-white/60">
-                Campus label (e.g., NIU College of Business)
-              </label>
-              <input
-                value={campusLabel}
-                onChange={(e) => setCampusLabel(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
-                placeholder="e.g., NIU College of Business (Barsema Hall)"
-              />
             </div>
           </div>
 
-          <div className="mt-3">
-            <label className="mb-1 block text-xs text-white/60">
-              Campus (Google Maps place)
-            </label>
-            {isLoaded ? (
-              <Autocomplete
-                onLoad={(ac) => (acRef.current = ac)}
-                onPlaceChanged={onPlaceChanged}
-                options={{
-                fields: ["place_id", "name", "formatted_address"],
-                componentRestrictions: { country: "us" },
-                }}
-                >
-                <input
-                  value={campusDisplayName}
-                  onChange={(e) => setCampusDisplayName(e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
-                  placeholder="Search for the exact building (e.g., Barsema Hall)…"
-                />
-              </Autocomplete>
-            ) : (
-              <input
-                disabled
-                value={campusDisplayName}
-                className="w-full cursor-not-allowed rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none"
-                placeholder="Loading Google…"
-              />
-            )}
-            <div className="mt-1 text-xs text-white/40">
-              We store the Place ID behind the scenes for accurate routing.
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {saving ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Save Changes
+                  </>
+                )}
+              </button>
             </div>
-          </div>
-        </div>
-
-        <div className="mt-5 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/85 hover:bg-white/[0.07]"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-xl bg-violet-500 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500/90 disabled:opacity-60"
-          >
-            {saving ? "Saving…" : "Save changes"}
-          </button>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }
@@ -673,6 +949,7 @@ export default function UserProfile() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [openEdit, setOpenEdit] = useState(false);
+  const { userStatus } = useUserStatus();
 
   useEffect(() => {
     (async () => {
@@ -712,6 +989,11 @@ export default function UserProfile() {
     <div className="relative min-h-screen bg-[#0b0c0f] text-white">
       <ParticleField />
       <div className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_center,rgba(15,25,45,0)_0%,rgba(11,12,15,0.65)_70%)]" />
+      <style jsx="true">{`
+        @media (prefers-reduced-motion: reduce) {
+          .particles { display: none; }
+        }
+      `}</style>
 
       <div className="relative z-10">
         <Navbar />
@@ -721,18 +1003,65 @@ export default function UserProfile() {
           <section className="space-y-6 lg:col-span-4">
             <Shell>
               <SectionLabel icon={MdOutlineBolt}>Quick Info</SectionLabel>
-              <div className="mb-3 text-lg font-semibold">Campus profile</div>
-              <div className="grid grid-cols-2 gap-3">
-                <Chip icon={MdPlace} text={user.currentLocation || "Add location"} />
-                <Chip icon={MdSchool} text={user.university || "Add university"} />
-                <Chip icon={MdWorkOutline} text={user.major || "Add major"} />
-                <Chip icon={MdOutlineAccessTime} text={user.graduationDate || "Grad date"} />
+              <div className="mb-4 text-lg font-semibold">Campus profile</div>
+              <div className="space-y-3">
+                <div className="group rounded-lg border border-white/10 bg-white/[0.02] p-3 transition-all hover:bg-white/[0.04] hover:border-white/20 cursor-pointer" onClick={() => setOpenEdit(true)}>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-500/20">
+                      <MdPlace className="h-4 w-4 text-blue-400" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-white/90">Location</div>
+                      <div className="text-xs text-white/70">{user.currentLocation || "Add location"}</div>
+                    </div>
+                    {!user.currentLocation && <MdEdit className="h-3 w-3 text-white/40" />}
+                  </div>
+                </div>
+                
+                <div className="group rounded-lg border border-white/10 bg-white/[0.02] p-3 transition-all hover:bg-white/[0.04] hover:border-white/20 cursor-pointer" onClick={() => setOpenEdit(true)}>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-purple-500/20">
+                      <MdSchool className="h-4 w-4 text-purple-400" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-white/90">University</div>
+                      <div className="text-xs text-white/70">{user.university || "Add university"}</div>
+                    </div>
+                    {!user.university && <MdEdit className="h-3 w-3 text-white/40" />}
+                  </div>
+                </div>
+                
+                <div className="group rounded-lg border border-white/10 bg-white/[0.02] p-3 transition-all hover:bg-white/[0.04] hover:border-white/20 cursor-pointer" onClick={() => setOpenEdit(true)}>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-500/20">
+                      <MdWorkOutline className="h-4 w-4 text-emerald-400" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-white/90">Major</div>
+                      <div className="text-xs text-white/70">{user.major || "Add major"}</div>
+                    </div>
+                    {!user.major && <MdEdit className="h-3 w-3 text-white/40" />}
+                  </div>
+                </div>
+                
+                <div className="group rounded-lg border border-white/10 bg-white/[0.02] p-3 transition-all hover:bg-white/[0.04] hover:border-white/20 cursor-pointer" onClick={() => setOpenEdit(true)}>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-amber-500/20">
+                      <MdOutlineAccessTime className="h-4 w-4 text-amber-400" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-white/90">Graduation</div>
+                      <div className="text-xs text-white/70">{user.graduationDate || "Add grad date"}</div>
+                    </div>
+                    {!user.graduationDate && <MdEdit className="h-3 w-3 text-white/40" />}
+                  </div>
+                </div>
               </div>
             </Shell>
 
-            <StatCard value={"3"} label="Listings posted" icon={MdOutlinePlayCircle} />
-            <StatCard value={"12"} label="Saved properties" icon={MdStar} />
-            <StatCard value={"5"} label="Active chats" icon={MdOutlineAccessTime} />
+            <StatCard value={"3"} label="Listings posted" icon={MdOutlinePlayCircle} href="/listings?owner=me" />
+            <StatCard value={"12"} label="Saved properties" icon={MdStar} href="/saved" />
+            <StatCard value={"5"} label="Active chats" icon={MdOutlineAccessTime} href="/messages" />
 
             <SynapseCompletionStatus 
               onEditPreferences={() => window.location.href = '/Synapse?edit=true'} 
@@ -752,56 +1081,96 @@ export default function UserProfile() {
 
           {/* CENTER COLUMN */}
           <section className="space-y-6 lg:col-span-5">
-            <Shell className="p-5">
-              <div className="flex items-center gap-4">
-                <img
-                  src={user.avatar}
-                  alt={fullName(user)}
-                  className="h-16 w-16 rounded-2xl object-cover ring-1 ring-white/10"
-                />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl font-semibold">{fullName(user)}</span>
-                    <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-xs text-emerald-200">
-                      <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                      NewRun Member
-                    </span>
+            {/* Use the exact same MatchCard component */}
+            <div className="flex justify-center">
+              <MatchCard
+                item={transformUserToMatchCard(user, userStatus)}
+                onOpen={() => setOpenEdit(true)}
+                onMessage={(userId, message) => {
+                  // For self-profile, redirect to edit
+                  setOpenEdit(true);
+                }}
+                hideOverlays={false}
+                className={`max-w-sm colorful-profile self-profile status-${userStatus}`}
+                contactText="Edit Profile"
+              />
+              </div>
+
+            {/* Custom CSS for self-profile styling */}
+            <style>{`
+              .self-profile .pc-contact-btn {
+                background: rgba(59, 130, 246, 0.15) !important;
+                border: 1px solid rgba(59, 130, 246, 0.3) !important;
+                color: #60a5fa !important;
+              }
+              
+              .self-profile .pc-contact-btn:hover {
+                background: rgba(59, 130, 246, 0.25) !important;
+                border-color: rgba(59, 130, 246, 0.5) !important;
+                color: #93c5fd !important;
+              }
+              
+              /* Status styling for profile cards */
+              .status-online .pc-status {
+                color: #22c55e !important;
+              }
+              
+              .status-away .pc-status {
+                color: #f59e0b !important;
+              }
+              
+              .status-dnd .pc-status {
+                color: #ef4444 !important;
+              }
+              
+              .status-offline .pc-status {
+                color: #6b7280 !important;
+              }
+            `}</style>
+            
+
+            <Shell>
+              {/* About Section */}
+              <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.02] p-6">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500/20 to-purple-500/20">
+                    <MdPerson className="h-5 w-5 text-violet-400" />
                   </div>
-                  <div className="mt-1 text-sm text-white/70">{user.email || "—"}</div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-white mb-2">About</h3>
+                    <p className="text-white/80 leading-relaxed">
+                      {user.hometown
+                        ? `From ${user.hometown}. Currently at ${user.currentLocation || "—"}.`
+                        : "Tell others a bit about you in your profile."}
+                    </p>
+                    {!user.hometown && (
+                      <button 
+                        onClick={() => setOpenEdit(true)}
+                        className="mt-3 inline-flex items-center gap-2 text-sm text-violet-400 hover:text-violet-300 transition-colors"
+                      >
+                        <MdEdit className="h-4 w-4" />
+                        Add your story
+                      </button>
+                    )}
+                  </div>
                 </div>
+              </div>
 
-                <button
-                  onClick={() => setOpenEdit(true)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/85 hover:bg-white/[0.07]"
-                >
-                  <MdEdit className="h-4 w-4" /> Edit
+              {/* Support Actions */}
+              <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <button className="group relative overflow-hidden rounded-xl border border-emerald-400/20 bg-gradient-to-r from-emerald-500/10 to-green-500/10 px-4 py-3 text-sm font-medium text-emerald-300 hover:from-emerald-500/20 hover:to-green-500/20 transition-all duration-200">
+                  <div className="flex items-center justify-center gap-2">
+                    <FaWhatsapp className="h-4 w-4" />
+                    <span>Chat with support</span>
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-green-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                 </button>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Chip icon={MdPlace} text={user.currentLocation || "Location"} />
-                <Chip icon={MdSchool} text={user.university || "University"} />
-                <Chip icon={MdWorkOutline} text={user.major || "Major"} />
-                <Chip icon={MdOutlineAccessTime} text={user.graduationDate || "Graduation"} />
-                {user.campusLabel || user.campusDisplayName ? (
-                  <Chip icon={MdPlace} text={user.campusLabel || user.campusDisplayName} />
-                ) : null}
-              </div>
-
-              <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-4 text-white/80">
-                {user.hometown
-                  ? `From ${user.hometown}. Currently at ${user.currentLocation || "—"}.`
-                  : "Tell others a bit about you in your profile."}
-              </div>
-
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/90 hover:bg-white/[0.08]">
-                  <FaWhatsapp className="h-4 w-4 text-emerald-300" />
-                  Chat with support
-                </button>
-                <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/90 hover:bg-white/[0.08]">
-                  <MdOutlineMail className="h-4 w-4 text-violet-300/90" />
-                  Email us
+                <button className="group relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-r from-white/[0.04] to-white/[0.02] px-4 py-3 text-sm font-medium text-white/80 hover:from-white/[0.08] hover:to-white/[0.06] transition-all duration-200">
+                  <div className="flex items-center justify-center gap-2">
+                    <MdOutlineMail className="h-4 w-4" />
+                    <span>Email us</span>
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                 </button>
               </div>
             </Shell>
@@ -810,10 +1179,10 @@ export default function UserProfile() {
               <SectionLabel icon={MdDesignServices}>Stay connected</SectionLabel>
               <div className="mb-3 text-lg font-semibold">NewRun channels</div>
               <div className="flex flex-wrap gap-2">
-                <Chip icon={FaYoutube} text="YouTube" />
-                <Chip icon={FaDribbble} text="Product" />
-                <Chip icon={FaPinterest} text="Inspo" />
-                <Chip icon={FaInstagram} text="Instagram" />
+                <Chip icon={FaYoutube} text="YouTube" onClick={() => window.open('https://youtube.com/@newrun', '_blank')} isActionable={true} />
+                <Chip icon={FaDribbble} text="Product" onClick={() => window.open('https://dribbble.com/newrun', '_blank')} isActionable={true} />
+                <Chip icon={FaPinterest} text="Inspo" onClick={() => window.open('https://pinterest.com/newrun', '_blank')} isActionable={true} />
+                <Chip icon={FaInstagram} text="Instagram" onClick={() => window.open('https://instagram.com/newrun', '_blank')} isActionable={true} />
               </div>
             </Shell>
           </section>
@@ -822,8 +1191,8 @@ export default function UserProfile() {
           <section className="space-y-6 lg:col-span-3">
             <Shell className="p-0">
               <div className="p-4">
-                <SectionLabel icon={MdStar}>Tips</SectionLabel>
-                <div className="text-lg font-semibold">Get settled faster</div>
+                <SectionLabel icon={MdStar}>Get settled faster</SectionLabel>
+                <div className="text-lg font-semibold">Tips</div>
               </div>
               <div className="max-h-80 space-y-3 overflow-y-auto px-4 pb-4">
                 {[

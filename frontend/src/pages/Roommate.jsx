@@ -1,12 +1,13 @@
 // src/pages/Roommate.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import axiosInstance from "../utils/axiosInstance";
 import Navbar from "../components/Navbar/Navbar";
 import "../styles/newrun-hero.css";
+import confetti from 'canvas-confetti';
 import {
   Languages, MapPin, CalendarClock, Route, Moon, Sparkles, Utensils, PartyPopper, PawPrint,
-  OctagonX, CheckCircle2, Timer, Cigarette, CigaretteOff, Wine, Heart, Ban, Plus, Users, BookOpen, Search, Edit
+  OctagonX, CheckCircle2, Timer, Cigarette, CigaretteOff, Wine, Heart, Ban, Plus, Users, BookOpen, Search, Edit, User, UserCheck, UserX, UserPlus, Users2, UserMinus
 } from "lucide-react";
 import { BorderBeam } from "../components/ui/border-beam";
 
@@ -78,41 +79,42 @@ function AllergyTag({ label, onRemove }) {
   );
 }
 
-/* ===== celebratory confetti (no libs) ===== */
-function ConfettiBurst({ n = 36, duration = 1800 }) {
-  const pieces = Array.from({ length: n }).map((_, i) => {
-    const left = Math.random() * 100;             // start X %
-    const drift = -60 + Math.random() * 120;      // end X px
-    const rot = Math.floor(Math.random() * 360);  // base rotation
-    const delay = Math.random() * 180;            // ms
-    const size = 6 + Math.random() * 7;           // px
-    const colors = ["#F59E0B", "#22C55E", "#60A5FA", "#F472B6", "#34D399", "#FDE68A"];
-    const color = colors[i % colors.length];
-    return { i, left, drift, rot, delay, size, color };
-  });
-
-  return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-      {pieces.map(({ i, left, drift, rot, delay, size, color }) => (
-        <span
-          key={i}
-          className="nr-confetti"
-          style={{
-            left: `${left}%`,
-            width: size,
-            height: size * 0.65,
-            background: color,
-            animationDuration: `${duration}ms`,
-            animationDelay: `${delay}ms`,
-            // css vars used by keyframes:
-            "--tx": `${drift}px`,
-            "--r": `${rot}deg`,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
+/* ===== professional confetti (canvas-confetti) ===== */
+// Professional confetti animation for Synapse completion
+const triggerConfetti = () => {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  
+  const end = Date.now() + 4 * 1000; // 4 seconds for major milestone
+  const colors = ["#FF6B35", "#F7931E", "#FFD23F", "#3A86FF", "#FB5607", "#000000", "#FF0000", "#FFFFFF"];
+  
+  const frame = () => {
+    if (Date.now() > end) return;
+    
+    // Left cannon - more particles for celebration
+    confetti({
+      particleCount: 5,
+      angle: 60,
+      spread: 55,
+      startVelocity: 60,
+      origin: { x: 0, y: 0.5 },
+      colors: colors,
+    });
+    
+    // Right cannon - more particles for celebration
+    confetti({
+      particleCount: 5,
+      angle: 120,
+      spread: 55,
+      startVelocity: 60,
+      origin: { x: 1, y: 0.5 },
+      colors: colors,
+    });
+    
+    requestAnimationFrame(frame);
+  };
+  
+  frame();
+};
 
 
 function Chip({
@@ -153,8 +155,51 @@ function Chip({
         className,
       ].join(" ")}
     >
-      {active && <span className="text-black/80">✓</span>}
       <span className="[text-wrap:balance]">{children}</span>
+    </button>
+  );
+}
+
+// Custom component for gender preference buttons with larger icons and dotted separator
+function GenderPreferenceChip({ active, children, onClick, disabled, icon, iconComponent: IconComponent }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={active}
+      className={[
+        "w-full flex items-center border font-semibold transition duration-150 min-h-[60px]",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 active:translate-y-[1px]",
+        "px-4 py-3 text-[15px] rounded-2xl",
+        active
+          ? "border-transparent bg-gradient-to-r from-amber-400 to-orange-500 text-black shadow-[0_8px_18px_rgba(255,153,0,.25)] hover:brightness-110"
+          : "border-white/12 bg-white/[0.06] text-white/75 hover:bg-white/[0.12] hover:border-white/90",
+        disabled ? "opacity-40 cursor-not-allowed" : "",
+      ].join(" ")}
+    >
+      {/* Left section - Icon */}
+      <div className="flex items-center w-10 h-12">
+        {icon ? (
+          <img 
+            src={icon} 
+            alt={children}
+            className={`h-7 w-7 ml-0 ${active ? "opacity-100" : "opacity-80"}`}
+            onError={(e) => { e.currentTarget.style.display = "none"; }}
+          />
+        ) : IconComponent ? (
+          <IconComponent className={`${active ? "text-black/80" : "text-white/80"} h-7 w-7 ml-0`} strokeWidth={1.8} />
+        ) : null}
+      </div>
+      
+      {/* Dotted vertical separator */}
+      {/* <div className={`h-8 w-px border-l-4 border-dotted mx-2 ${active ? "border-black/50" : "border-white/40"}`}></div> */}
+      <div className={`h-6 sm:h-9 w-px border-l-4 border-dotted mx-3 ${active ? "border-black/50" : "border-white/40"}`} />
+
+      {/* Right section - Text */}
+      <div className="flex-1 flex items-center justify-center">
+        <span className="text-center leading-tight">{children}</span>
+      </div>
     </button>
   );
 }
@@ -193,7 +238,10 @@ function SearchSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  const [activeIndex, setActiveIndex] = useState(-1);
   const ref = useRef(null);
+  const searchRef = useRef(null);           // NEW
+  const listboxId = useMemo(() => `ss-${Math.random().toString(36).slice(2)}`, []);
 
   const formatSafe = (o) =>
     (typeof format === "function" ? format(o) : (o?.label ?? "")) || "";
@@ -206,6 +254,43 @@ function SearchSelect({
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
+  // ⤵ Auto-focus the filter whenever the menu opens
+  useEffect(() => {
+    if (open) {
+      // small rAF so the input is mounted
+      requestAnimationFrame(() => {
+        if (searchRef.current) {
+          searchRef.current.focus();
+          searchRef.current.select();
+        }
+      });
+    }
+  }, [open]);
+
+  // Reset active index when search changes
+  useEffect(() => {
+    setActiveIndex(-1);
+  }, [q]);
+
+  const openAndFocus = () => {
+    setOpen(true);
+    // focus will happen via effect above
+  };
+
+  const onTriggerKeyDown = (e) => {
+    // open on navigation keys
+    if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openAndFocus();
+      return;
+    }
+    // type-ahead from closed state: open + seed first char
+    if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      setQ(e.key);            // seed with the typed character
+      openAndFocus();
+    }
+  };
+
   const filtered = (q
     ? options.filter((o) => formatSafe(o).toLowerCase().includes(q.toLowerCase()))
     : options
@@ -214,10 +299,17 @@ function SearchSelect({
   return (
     <div ref={ref} className="relative">
       {label ? <div className="mb-1 text-[12px] font-semibold text-white/60">{label}</div> : null}
+
+      {/* TRIGGER */}
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
+        onClick={openAndFocus}                 // focus the filter automatically
+        onKeyDown={onTriggerKeyDown}           // type-to-open
+        role="combobox"                        // a11y
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listboxId}
         className={[
           "w-full rounded-xl border px-3 py-2 text-left text-sm",
           "border-white/12 bg-white/[0.05] text-white/85 hover:bg-white/[0.08]",
@@ -233,26 +325,70 @@ function SearchSelect({
         </div>
       </button>
 
+      {/* POPUP */}
       {open && (
-        <div className="absolute z-30 mt-2 w-full rounded-xl border border-white/12 bg-[#0f1115] shadow-xl">
+        <div
+          className="absolute z-30 mt-2 w-full rounded-xl border border-white/12 bg-[#0f1115] shadow-xl"
+          role="listbox"
+          id={listboxId}
+        >
           <div className="p-2 border-b border-white/10">
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} />
+            <Input
+              ref={searchRef}                   // NEW
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={placeholder}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") { 
+                  e.preventDefault(); 
+                  setOpen(false); 
+                }
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (filtered.length > 0) {
+                    const selectedIndex = activeIndex >= 0 ? activeIndex : 0;
+                    onChange(filtered[selectedIndex]);
+                    setOpen(false);
+                    setQ("");
+                    setActiveIndex(-1);
+                  }
+                }
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  if (filtered.length > 0) {
+                    setActiveIndex(prev => 
+                      prev < filtered.length - 1 ? prev + 1 : 0
+                    );
+                  }
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  if (filtered.length > 0) {
+                    setActiveIndex(prev => 
+                      prev > 0 ? prev - 1 : filtered.length - 1
+                    );
+                  }
+                }
+              }}
+            />
           </div>
           <div className="max-h-64 overflow-auto stealth-scroll">
             {filtered.length === 0 ? (
               <div className="px-3 py-2 text-sm text-white/60">No results</div>
             ) : (
-              filtered.map((opt) => {
+              filtered.map((opt, index) => {
                 const active = value && (value.value === opt.value);
+                const isHighlighted = index === activeIndex;
                 return (
                   <button
                     type="button"
                     key={opt.value}
-                    onClick={() => { onChange(opt); setOpen(false); setQ(""); }}
+                    onClick={() => { onChange(opt); setOpen(false); setQ(""); setActiveIndex(-1); }}
                     className={[
                       "flex w-full items-center justify-between gap-2 px-3 py-2 text-sm border-b border-white/5",
                       "hover:bg-white/[0.06]",
                       active ? "bg-white/[0.08]" : "",
+                      isHighlighted ? "bg-white/[0.12]" : "",
                     ].join(" ")}
                   >
                     <span className="flex items-center gap-2 truncate">
@@ -357,24 +493,12 @@ function Icon({ kind, className = "h-5 w-5" }) {
 /* =============================== */
 /* Step meta (headlines)           */
 /* =============================== */
-// const STEP_META = [
-//   { icon: "🗣️", pre: "Which", highlight: "language", post: "do you use most day-to-day?", sub: "Choose one. Add others if you’re comfortable." },
-//   { icon: "🗺️", pre: "Where do you call", highlight: "home", post: "?", sub: "Pick your country, then state/region. City is optional." },
-//   { icon: "📅💸", pre: "When are you moving and what’s your", highlight: "monthly budget", post: "?", sub: "Used only to filter obvious mismatches." },
-//   { icon: "📍🚶", pre: "How far from campus is okay, and how will you", highlight: "commute", post: "?", sub: "Pick a distance and one or more modes." },
-//   { icon: "🌙🔇", pre: "What’s your", highlight: "sleep style", post: "and quiet hours?", sub: "We show compatibility bands, not exact times." },
-//   { icon: "🧽",   pre: "How", highlight: "tidy", post: "do you like shared spaces?", sub: "Rate 1–5 for expectations." },
-//   { icon: "🍽️",  pre: "Tell us your", highlight: "diet", post: "and cooking rhythm.", sub: "Match what you do most weeks." },
-//   { icon: "⚡",   pre: "A few lifestyle", highlight: "habits", post: "to set expectations.", sub: "Smoking, drinking, parties." },
-//   { icon: "🐾",   pre: "Any", highlight: "pets or allergies", post: "?", sub: "Helps avoid conflicts." },
-//   { icon: "⛔",   pre: "Pick up to 3", highlight: "deal-breakers", post: ".", sub: "We’ll flag conflicts transparently." },
-//   { icon: "✅",   pre: "All set —", highlight: "Synapse", post: "is ready.", sub: "Badges now power housing & approvals." },
-// ];
+
 
 const STEP_META = [
   { iconKey: "language",   pre: "Which", highlight: "language", post: "do you use most day-to-day?", sub: "Choose one. Add others if you’re comfortable." },
   { iconKey: "home",       pre: "Where do you call", highlight: "home", post: "?", sub: "Pick your country, then state/region." },
-  { iconKey: "moveBudget", pre: "When are you moving and what’s your", highlight: "monthly budget", post: "?", sub: "Used only to filter obvious mismatches." },
+  { iconKey: "moveBudget", pre: "Who you’ll live with, when you'll move-in, and", highlight: "what you can spend", post: "?", sub: "Used only to filter obvious mismatches." },
   { iconKey: "commute",    pre: "How far from campus is okay, and how will you", highlight: "commute", post: "?", sub: "Pick a distance and one or more modes." },
   { iconKey: "sleep",      pre: "What’s your", highlight: "sleep style", post: "and quiet hours?", sub: "We show compatibility bands, not exact times." },
   { iconKey: "clean",      pre: "How", highlight: "tidy", post: "do you like shared spaces?", sub: "Rate 1–5 for expectations." },
@@ -617,6 +741,7 @@ export default function Roommate() {
     habits: { diet: "", cookingFreq: "sometimes", smoking: "no", drinking: "social", partying: "occasionally" },
     pets: { hasPets: false, okWithPets: true, allergies: [] },
     dealbreakers: [],
+    matching: { roommateGender: "any" }, // "female" | "male" | "any" | "prefer_not_say"
   });
 
   /* Load saved prefs and check completion status */
@@ -681,6 +806,7 @@ export default function Roommate() {
   const setLifestyle = (patch) => savePrefs({ lifestyle: { ...prefs.lifestyle, ...patch } });
   const setHabits    = (patch) => savePrefs({ habits:    { ...prefs.habits,    ...patch } });
   const setPets      = (patch) => savePrefs({ pets:      { ...prefs.pets,      ...patch } });
+  const setMatching  = (patch) => savePrefs({ matching:  { ...prefs.matching,  ...patch } });
 
   const nextStep = async () => {
     setTyping(true); 
@@ -1005,47 +1131,134 @@ const StepMoveBudget = () => {
 
   return (
     <div className="space-y-8">
-      {/* Block 1 — Move-in month */}
+      {/* Roommate gender comfort — discreet, respectful */}
       <div>
         <div className="mb-2 flex items-baseline gap-2">
-          <span className="text-[15px] md:text-[16px] font-semibold text-white">Move-in month</span>
-          <span className="text-[12px] text-white/60">Used only to match timing</span>
+          <span className="text-[15px] md:text-[16px] font-semibold text-white">
+            Who are you comfortable sharing a home with?
+          </span>
+          <span className="text-[12px] text-white/60">Used only for matching — kept private</span>
         </div>
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { k: "female", t: "Female roommates only", icon: "/src/assets/icons/woman.png" },
+            { k: "male", t: "Male roommates only", icon: "/src/assets/icons/man.png" },
+            { k: "any", t: "Any gender is fine", icon: "/src/assets/icons/man_women.png" },
+          ].map(({ k, t, icon }) => {
+            const on = (prefs.matching?.roommateGender ?? "any") === k;
+            return (
+              <GenderPreferenceChip
+                key={k}
+                active={on}
+                onClick={() => setMatching({ roommateGender: k })}
+                icon={icon}
+              >
+                {t}
+              </GenderPreferenceChip>
+            );
+          })}
+        </div>
+      </div>
 
-        <div className="relative max-w-[540px]">
-          <Input
-            ref={monthRef}
-            type="month"
-            className="nr-month pr-12"
-            value={prefs.logistics.moveInMonth || ""}
-            onChange={(e) => setLogistics({ moveInMonth: (e.target.value || "").slice(0, 7) })}
-          />
-          {/* clickable calendar button that opens the native picker */}
-          <button
-            type="button"
+      {/* Block 1 & 2 — Move-in month & Lease length (horizontal layout) */}
+      <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Move-in month section */}
+        <div>
+          <div className="mb-2 flex items-baseline gap-2">
+            <span className="text-[15px] md:text-[16px] font-semibold text-white">Move-in month</span>
+            <span className="text-[12px] text-white/60">Used only to match timing</span>
+          </div>
+
+          <div
+            className="relative max-w-[400px] cursor-text"
+            role="button"
             aria-label="Open month picker"
             onClick={() => {
               const el = monthRef.current;
               if (!el) return;
               if (typeof el.showPicker === "function") el.showPicker();
-              else el.focus(); // Safari fallback
+              else el.focus();
             }}
-            className="absolute inset-y-0 right-1 my-[4px] mr-[4px] grid place-items-center rounded-lg px-2
-                       text-white/80 hover:text-white focus-visible:outline-none focus-visible:ring-2
-                       focus-visible:ring-amber-400/60"
           >
-            <CalendarClock size={18} />
-          </button>
-        </div>
-      </div>
+            <Input
+              ref={monthRef}
+              type="month"
+              className="nr-month pr-20"  // room for icon + clear
+              placeholder="Select month"
+              value={prefs.logistics.moveInMonth || ""}
+              onFocus={(e) => {
+                // Open on focus for keyboard/tab users
+                const el = e.currentTarget;
+                if (typeof el.showPicker === "function") el.showPicker();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  const el = monthRef.current;
+                  if (!el) return;
+                  if (typeof el.showPicker === "function") el.showPicker();
+                }
+              }}
+              onChange={(e) => setLogistics({ moveInMonth: (e.target.value || "").slice(0, 7) })}
+              aria-haspopup="dialog"
+              aria-expanded="false"
+            />
 
-      {/* Block 2 — Lease length */}
-      <div>
-        <div className="mb-2 text-[15px] md:text-[16px] font-semibold text-white">Lease length</div>
-        <div className="flex flex-wrap gap-2">
-          <Chip active={prefs.logistics.leaseMonths === 6}  onClick={() => setLogistics({ leaseMonths: 6  })}>6–9 mo</Chip>
-          <Chip active={prefs.logistics.leaseMonths === 12} onClick={() => setLogistics({ leaseMonths: 12 })}>10–12 mo</Chip>
-          <Chip active={prefs.logistics.leaseMonths === 15} onClick={() => setLogistics({ leaseMonths: 15 })}>12+ mo</Chip>
+            {/* Calendar icon — decorative (clicks pass through) */}
+            <span
+              className="pointer-events-none absolute inset-y-0 right-3 grid place-items-center"
+              aria-hidden="true"
+            >
+              <CalendarClock size={18} className="text-white/80" />
+            </span>
+
+            {/* Clear button (appears only when set) */}
+            {prefs.logistics.moveInMonth ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLogistics({ moveInMonth: null });
+                  // Keep focus behavior sane
+                  const el = monthRef.current;
+                  if (el) el.focus();
+                }}
+                className="absolute inset-y-0 right-10 my-[4px] grid place-items-center rounded-lg px-2
+                           text-white/70 hover:text-white focus-visible:outline-none focus-visible:ring-2
+                           focus-visible:ring-amber-400/60"
+                aria-label="Clear selected month"
+              >
+                ✕
+              </button>
+            ) : null}
+          </div>
+
+          {/* Quick picks (optional, tiny quality-of-life)
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Chip onClick={() => {
+              const now = new Date();
+              const v = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2,'0')}`;
+              setLogistics({ moveInMonth: v });
+            }}>This month</Chip>
+            <Chip onClick={() => {
+              const d = new Date(); d.setMonth(d.getMonth() + 1);
+              const v = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}`;
+              setLogistics({ moveInMonth: v });
+            }}>Next month</Chip>
+          </div> */}
+        </div>
+
+        {/* Vertical dotted separator */}
+        <div className="hidden lg:block absolute left-1/2 top-0 bottom-0 w-px border-l-2 border-dotted border-white/20 transform -translate-x-1/2"></div>
+
+        {/* Lease length section */}
+        <div className="pl-3">
+          <div className="mb-2 text-[15px] md:text-[16px] font-semibold text-white">Lease length</div>
+          <div className="flex flex-wrap gap-2">
+            <Chip active={prefs.logistics.leaseMonths === 6}  onClick={() => setLogistics({ leaseMonths: 6  })}>6–9 mo</Chip>
+            <Chip active={prefs.logistics.leaseMonths === 12} onClick={() => setLogistics({ leaseMonths: 12 })}>10–12 mo</Chip>
+            <Chip active={prefs.logistics.leaseMonths === 15} onClick={() => setLogistics({ leaseMonths: 15 })}>12+ mo</Chip>
+          </div>
         </div>
       </div>
 
@@ -1153,8 +1366,69 @@ const StepMoveBudget = () => {
       <Divider />
       <div className="mb-2 text-[13px] font-semibold">Quiet hours (weeknights)</div>
       <div className="grid gap-3 md:grid-cols-2">
-        <Input type="time" value={prefs.lifestyle.quietAfter} onChange={(e) => setLifestyle({ quietAfter: e.target.value })}/>
-        <Input type="time" value={prefs.lifestyle.quietUntil} onChange={(e) => setLifestyle({ quietUntil: e.target.value })}/>
+        {/* Quiet After Time Picker */}
+        <div
+          className="relative cursor-text"
+          role="button"
+          aria-label="Open quiet after time picker"
+          onClick={() => {
+            const el = document.querySelector('input[name="quietAfter"]');
+            if (el) {
+              if (typeof el.showPicker === "function") el.showPicker();
+              else el.focus();
+            }
+          }}
+        >
+          <Input 
+            name="quietAfter"
+            type="time" 
+            value={prefs.lifestyle.quietAfter} 
+            onChange={(e) => setLifestyle({ quietAfter: e.target.value })}
+            onFocus={(e) => {
+              const el = e.currentTarget;
+              if (typeof el.showPicker === "function") el.showPicker();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                const el = e.currentTarget;
+                if (typeof el.showPicker === "function") el.showPicker();
+              }
+            }}
+          />
+        </div>
+
+        {/* Quiet Until Time Picker */}
+        <div
+          className="relative cursor-text"
+          role="button"
+          aria-label="Open quiet until time picker"
+          onClick={() => {
+            const el = document.querySelector('input[name="quietUntil"]');
+            if (el) {
+              if (typeof el.showPicker === "function") el.showPicker();
+              else el.focus();
+            }
+          }}
+        >
+          <Input 
+            name="quietUntil"
+            type="time" 
+            value={prefs.lifestyle.quietUntil} 
+            onChange={(e) => setLifestyle({ quietUntil: e.target.value })}
+            onFocus={(e) => {
+              const el = e.currentTarget;
+              if (typeof el.showPicker === "function") el.showPicker();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                const el = e.currentTarget;
+                if (typeof el.showPicker === "function") el.showPicker();
+              }
+            }}
+          />
+        </div>
       </div>
     </div>
   );
@@ -1645,12 +1919,12 @@ const StepCleanliness = () => {
 
 
   const StepFinish = () => {
-  const [boom, setBoom] = useState(false);
-
-  // Fire confetti when this step mounts
+  // Fire confetti when this step mounts - enhanced for major milestone
   useEffect(() => {
-    setBoom(true);
-    const t = setTimeout(() => setBoom(false), 2000);
+    // Delay confetti to let the completion message settle
+    const t = setTimeout(() => {
+      triggerConfetti();
+    }, 800);
     return () => clearTimeout(t);
   }, []);
 
@@ -1662,7 +1936,6 @@ const StepCleanliness = () => {
 
   return (
     <div className="relative">
-      {boom && <ConfettiBurst n={38} />}
 
       {/* Success header */}
       <div className="rounded-2xl ring-1 ring-white/10 p-4 sm:p-5 mb-4
@@ -1685,6 +1958,7 @@ const StepCleanliness = () => {
           <Badge><Moon className="h-4 w-4" /> Quiet hours</Badge>
           <Badge><Utensils className="h-4 w-4" /> Cooking rhythm</Badge>
           <Badge><Route className="h-4 w-4" /> Commute</Badge>
+          <Badge>Roommate comfort saved</Badge>
         </div>
       </div>
 

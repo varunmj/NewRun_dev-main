@@ -923,9 +923,26 @@ export default function UserDashboard() {
                         <>
                           <motion.div 
                             whileHover={{ scale: 1.05 }}
-                            className="relative w-16 h-16 rounded-full bg-blue-500/10 border border-blue-500/20 mx-auto mb-4 flex items-center justify-center text-blue-400 font-bold text-xl"
+                            className="relative w-24 h-24 rounded-full bg-blue-500/10 border border-blue-500/20 mx-auto mb-4 flex items-center justify-center text-blue-400 font-bold text-2xl overflow-hidden"
                           >
-                            {userInfo?.firstName?.charAt(0) || 'U'}
+                            {userInfo?.avatar ? (
+                              <img
+                                src={userInfo.avatar}
+                                alt={`${userInfo?.firstName || 'User'} avatar`}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  e.target.nextSibling.style.display = 'flex';
+                                }}
+                              />
+                            ) : null}
+                            <div 
+                              className={`w-full h-full flex items-center justify-center ${
+                                userInfo?.avatar ? 'hidden' : 'flex'
+                              }`}
+                            >
+                              {userInfo?.firstName?.charAt(0) || 'U'}
+                            </div>
                           </motion.div>
                           <h4 className="font-semibold text-white text-lg mb-3">{userInfo?.firstName || 'User'}</h4>
                           

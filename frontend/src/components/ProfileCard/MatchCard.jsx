@@ -40,14 +40,15 @@ const MatchCard = ({
   onOpen, 
   onMessage,
   className = "",
-  hideOverlays = false
+  hideOverlays = false,
+  contactText = "Message"
 }) => {
   const nameShort = displayName({ full: item.name, firstName: item.firstName, lastName: item.lastName });
-  const hasBudget = typeof item.budget === "number";
-  const budgetText = hasBudget ? `$${item.budget}/month` : "Budget not specified";
   const handle = nameShort.toLowerCase().replace(/\s+/g, '');
-  const status = item.lastActive ? formatLastActive(item.lastActive) : "Recently active";
-  const title = item.university ? `${item.university} • ${budgetText}` : budgetText;
+  
+  // Use status if available, otherwise fall back to lastActive
+  const status = item.statusLabel || (item.lastActive ? formatLastActive(item.lastActive) : "Recently active");
+  const title = item.university || "";
 
   useEffect(() => {
     if (item.university) prefetchUniversityLogo(item.university);
@@ -60,6 +61,12 @@ const MatchCard = ({
       if (e.nativeEvent) {
         e.nativeEvent.stopImmediatePropagation(); // Prevent card click when clicking message button
       }
+    }
+    
+    // Check if this is a self-profile (Edit Profile button)
+    if (item.isSelfProfile && onOpen) {
+      onOpen();
+      return;
     }
     
     // Create a pre-filled message with roommate request details
@@ -93,6 +100,13 @@ Looking forward to hearing from you! 😊`;
     if (e.target.closest('.pc-contact-btn')) {
       return; // Don't open drawer when clicking message button
     }
+    
+    // For self-profiles, don't open modal when clicking on the card/image
+    // Only the "Edit Profile" button should open the modal
+    if (item.isSelfProfile) {
+      return; // Don't open modal when clicking on self-profile card
+    }
+    
     if (onOpen) onOpen(item); 
   };
 
@@ -108,7 +122,7 @@ Looking forward to hearing from you! 😊`;
         title={title}
         handle={handle}
         status={status}
-        contactText="Message"
+        contactText={contactText}
         showUserInfo={true}
         onContactClick={handleContactClick}
         enableTilt={true}
@@ -116,7 +130,7 @@ Looking forward to hearing from you! 😊`;
         className="roommate-match-card"
       >
         {/* Overlays are now children of ProfileCard */}
-        {!hideOverlays && item.matchScore && (
+        {!hideOverlays && item.matchScore && !item.isSelfProfile && (
           <div className="match-score-overlay">
             <div 
               className="match-score-ring"
@@ -132,10 +146,28 @@ Looking forward to hearing from you! 😊`;
           </div>
         )}
         
-        {!hideOverlays && item.matchScore >= 85 && (
+        {!hideOverlays && item.matchScore >= 85 && !item.isSelfProfile && (
           <div className="top-match-badge">
             <div className="badge-dot"></div>
             <span>Top Match</span>
+          </div>
+        )}
+        
+        {/* Academic Status Badge for Self-Profile */}
+        {!hideOverlays && item.isSelfProfile && item.academicStatus && (
+          <div className={`academic-status-badge ${item.academicStatus}`}>
+            {item.academicStatus === 'alumni' && (
+              <svg className="alumni-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2L2 7v10c0 5.55 3.84 9.74 9 11 5.16-1.26 9-5.45 9-11V7l-10-5z"/>
+                <path d="M12 2L2 7v10c0 5.55 3.84 9.74 9 11 5.16-1.26 9-5.45 9-11V7l-10-5z" fill="none" stroke="currentColor" strokeWidth="1.5"/>
+                <path d="M8 12h8M8 16h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            )}
+            <span>
+              {item.academicStatus === 'undergrad' && 'Undergraduate'}
+              {item.academicStatus === 'graduate' && 'Graduate Student'}
+              {item.academicStatus === 'alumni' && 'Alumni'}
+            </span>
           </div>
         )}
         

@@ -370,7 +370,7 @@ class EmailService {
         <!-- Wordmark -->
         <tr>
           <td style="padding:0 0 16px 8px;font:700 30px/1.1 Inter,Arial,Helvetica,sans-serif;color:${BRAND.blue}">
-            <a href="${siteHref}" style="display:inline-block;font:700 30px Inter,Arial,Helvetica,sans-serif;background:linear-gradient(90deg,#007bff,#00e6ff);-webkit-background-clip:text;background-clip:text;color:transparent">
+            <a href="${siteHref}" style="display:inline-block;font:700 30px Inter,Arial,Helvetica,sans-serif;background:linear-gradient(90deg,#2563eb,#14b8a6);-webkit-background-clip:text;background-clip:text;color:transparent">
               ${wordmark}
             </a>
           </td>
