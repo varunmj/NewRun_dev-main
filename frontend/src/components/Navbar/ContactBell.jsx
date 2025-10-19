@@ -46,13 +46,13 @@ export default function ContactBell() {
   return (
     <>
       <button
-        className="relative grid h-9 w-9 place-items-center rounded-full bg-white/10 text-white/85 ring-1 ring-white/10 hover:bg-white/15"
+        className="relative grid h-9 w-9 place-items-center rounded-full bg-white/5 backdrop-blur-md text-white/85 ring-1 ring-white/20 hover:bg-white/10 hover:ring-white/30 transition-all duration-200"
         title="Notifications"
         onClick={() => setOpen(true)}
       >
         <MdNotifications />
         {count > 0 && (
-          <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-rose-500 px-1 text-[11px] font-semibold leading-5 text-white">
+          <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-gradient-to-r from-rose-500 to-pink-500 px-1 text-[11px] font-semibold leading-5 text-white shadow-lg">
             {count}
           </span>
         )}

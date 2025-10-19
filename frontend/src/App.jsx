@@ -1,8 +1,10 @@
 import React from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { HeroUIProvider } from '@heroui/react'; // ⬅️ moved from @heroui/react
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { UnifiedStateProvider } from './context/UnifiedStateContext.jsx';
+import { UserStatusProvider } from './context/UserStatusContext.jsx';
 import { EmailServiceProvider } from './components/EmailService.jsx';
 
 // pages
@@ -44,12 +46,24 @@ import CookieSettings from "./pages/CookieSettings";
 // guards
 import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
 
+// Create a client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      retry: 1,
+    },
+  },
+});
+
 const App = () => {
   return (
-    <AuthProvider>
-      <UnifiedStateProvider>
-        <EmailServiceProvider>
-          <HeroUIProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <UnifiedStateProvider>
+          <UserStatusProvider>
+            <EmailServiceProvider>
+              <HeroUIProvider>
             <Router>
               <RouteGuard>
             <Routes>
@@ -199,10 +213,12 @@ const App = () => {
               </Routes>
               </RouteGuard>
             </Router>
-          </HeroUIProvider>
-        </EmailServiceProvider>
-      </UnifiedStateProvider>
-    </AuthProvider>
+              </HeroUIProvider>
+            </EmailServiceProvider>
+          </UserStatusProvider>
+        </UnifiedStateProvider>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 };
 

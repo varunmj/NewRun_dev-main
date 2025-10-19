@@ -2374,7 +2374,7 @@ export default function SolveThreads() {
           })
         }
         ariaHideApp={false}
-        overlayClassName="fixed inset-0 bg-black/30 backdrop-blur-sm"
+        overlayClassName="fixed inset-0 bg-black/30 backdrop-blur-sm z-30"
         className="mx-auto mt-14 w-[min(960px,92vw)] max-h-[90vh] overflow-auto rounded-2xl border border-white/10 bg-white p-5 text-black shadow-2xl outline-none"
       >
         {openAddEditModal.modalType === "property" && (

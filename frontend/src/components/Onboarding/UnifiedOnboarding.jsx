@@ -1121,6 +1121,9 @@ export default function UnifiedOnboarding() {
           const responseData = await response.json();
           console.log('✅ Onboarding data saved successfully:', responseData);
           
+          // Set flag for UserProfile to refresh data
+          localStorage.setItem('onboarding_completed', Date.now().toString());
+          
           // Clear old onboarding data only on successful save
           localStorage.removeItem('nr_onboarding');
           localStorage.removeItem('nr_onboarding_focus');

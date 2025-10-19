@@ -1,5 +1,29 @@
 const nodemailer = require('nodemailer');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
+
+// Email assets configuration
+const EMAIL_ASSETS_DIR = process.env.EMAIL_ASSETS_DIR || path.join(__dirname, '../email_assets');
+
+function loadIcon(name) {
+  const p = path.join(EMAIL_ASSETS_DIR, name);
+  try {
+    const buf = fs.readFileSync(p);
+    console.log(`✓ loaded email asset ${name} (${buf.length} bytes)`);
+    return buf;
+  } catch (e) {
+    console.warn(`✗ missing email asset ${name} at ${p}: ${e.message}`);
+    return null;
+  }
+}
+
+// Load social media icons at startup
+const ICONS = {
+  x: loadIcon('twitter.png'),
+  linkedin: loadIcon('linkedin.png'),
+  instagram: loadIcon('instagram.png'),
+};
 
 class EmailService {
   constructor() {
@@ -45,12 +69,12 @@ class EmailService {
     }
   }
 
-  async sendEmail(to, subject, html, text = null) {
+  async sendEmail(to, subject, html, text = null, attachments = []) {
     try {
       console.log('📧 Attempting to send email...');
       console.log('📨 To:', to);
       console.log('📝 Subject:', subject);
-      console.log('📤 From:', process.env.FROM_EMAIL || 'noreply@newrun.app');
+      console.log('📤 From:', process.env.FROM_EMAIL || 'noreply@www.newrun.club');
 
       if (!this.transporter) {
         console.log('⚠️ Transporter not initialized, attempting to initialize...');
@@ -62,19 +86,20 @@ class EmailService {
 
       const headers = {
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-        "List-Unsubscribe": `<${process.env.FRONTEND_URL || "https://newrun.app"}/email/unsubscribe?u={{uid}}>, <mailto:unsubscribe@newrun.app>`,
+        "List-Unsubscribe": `<${process.env.FRONTEND_URL || "https://www.newrun.club"}/email/unsubscribe?u={{uid}}>, <mailto:unsubscribe@www.newrun.club>`,
         "X-Auto-Response-Suppress": "All",
         "Auto-Submitted": "auto-generated",
       };
 
       const mailOptions = {
-        from: `"NewRun" <${process.env.FROM_EMAIL || 'noreply@newrun.app'}>`,
+        from: `"NewRun" <${process.env.FROM_EMAIL || 'noreply@www.newrun.club'}>`,
         to: to,
         subject: subject,
         html: html,
         text: text || this.stripHtml(html),
         headers,
-        replyTo: "support@newrun.app"
+        replyTo: "support@www.newrun.club",
+        attachments
       };
 
       console.log('📋 Mail options prepared, sending...');
@@ -98,6 +123,38 @@ class EmailService {
     return html.replace(/<[^>]*>/g, '');
   }
 
+  // Helper method to get social media icon attachments
+  getSocialMediaAttachments() {
+    const atts = [];
+    
+    if (ICONS.x) {
+      atts.push({ 
+        filename: 'twitter.png', 
+        content: ICONS.x, 
+        cid: 'nr_x_32' 
+      });
+    }
+    
+    if (ICONS.linkedin) {
+      atts.push({ 
+        filename: 'linkedin.png', 
+        content: ICONS.linkedin, 
+        cid: 'nr_linkedin_32' 
+      });
+    }
+    
+    if (ICONS.instagram) {
+      atts.push({ 
+        filename: 'instagram.png', 
+        content: ICONS.instagram, 
+        cid: 'nr_instagram_32' 
+      });
+    }
+    
+    console.log('🖼  Inline attachments:', atts.map(a => `${a.cid}:${a.filename}`));
+    return atts;
+  }
+
   // Email Templates
   generateEmailVerificationTemplate(userName, verificationLink) {
     return `
@@ -111,7 +168,7 @@ class EmailService {
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
           .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
           .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
-          .header h1 { margin: 0; font-size: 28px; font-weight: 700; }
+          .header h1 { margin: 0; font-size: 30px; font-weight: 700; }
           .content { padding: 40px 30px; }
           .content h2 { color: #333; margin-bottom: 20px; font-size: 24px; }
           .content p { margin-bottom: 20px; font-size: 16px; color: #666; }
@@ -163,7 +220,7 @@ class EmailService {
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
           .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
           .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
-          .header h1 { margin: 0; font-size: 28px; font-weight: 700; }
+          .header h1 { margin: 0; font-size: 30px; font-weight: 700; }
           .content { padding: 40px 30px; }
           .content h2 { color: #333; margin-bottom: 20px; font-size: 24px; }
           .content p { margin-bottom: 20px; font-size: 16px; color: #666; }
@@ -213,7 +270,7 @@ class EmailService {
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
           .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
           .header { background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); color: white; padding: 30px; text-align: center; }
-          .header h1 { margin: 0; font-size: 28px; font-weight: 700; }
+          .header h1 { margin: 0; font-size: 30px; font-weight: 700; }
           .content { padding: 40px 30px; }
           .content h2 { color: #333; margin-bottom: 20px; font-size: 24px; }
           .content p { margin-bottom: 20px; font-size: 16px; color: #666; }
@@ -271,7 +328,7 @@ class EmailService {
     };
 
     const preheader = opts.preheader || "";
-    const siteHref = (opts.company && opts.company.siteHref) || "https://newrun.app";
+    const siteHref = (opts.company && opts.company.siteHref) || "https://www.newrun.club";
     const phoneHref = (opts.company && opts.company.phoneHref) || "tel:+10000000000";
     const phoneText = (opts.company && opts.company.phoneText) || "+1 (000) 000-0000";
     const addressHtml = (opts.company && opts.company.addressHtml) || "NewRun Inc · Address goes here";
@@ -312,8 +369,8 @@ class EmailService {
       <table role="presentation" class="outer" cellpadding="0" cellspacing="0">
         <!-- Wordmark -->
         <tr>
-          <td style="padding:0 0 16px 8px;font:700 28px/1.1 Inter,Arial,Helvetica,sans-serif;color:${BRAND.blue}">
-            <a href="${siteHref}" style="display:inline-block;font:700 28px Inter,Arial,Helvetica,sans-serif;background:linear-gradient(90deg,#007bff,#00e6ff);-webkit-background-clip:text;background-clip:text;color:transparent">
+          <td style="padding:0 0 16px 8px;font:700 30px/1.1 Inter,Arial,Helvetica,sans-serif;color:${BRAND.blue}">
+            <a href="${siteHref}" style="display:inline-block;font:700 30px Inter,Arial,Helvetica,sans-serif;background:linear-gradient(90deg,#2563eb,#14b8a6);-webkit-background-clip:text;background-clip:text;color:transparent">
               ${wordmark}
             </a>
           </td>
@@ -329,7 +386,7 @@ class EmailService {
 
         <!-- Card -->
         <tr>
-          <td style="background:#fff;border-radius:${opts.heroUrl?'0 0 20px 20px':'20px'};border:1px solid ${BRAND.border};border-top:${opts.heroUrl?'0':'1px'};padding:28px 26px">
+          <td style="background:#fff;border-radius:${opts.heroUrl?'0 0 20px 20px':'20px'};border:1px solid ${BRAND.border};border-top:${opts.heroUrl?'0':'1px'};padding:30px 26px">
             <div style="font:600 32px/1.2 Montserrat,Arial,Helvetica,sans-serif;color:${BRAND.textDark};margin:0 0 10px">
               ${opts.headline || ""}
             </div>
@@ -347,7 +404,7 @@ class EmailService {
                       <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:700;">${ctaLabel}</center>
                     </v:roundrect>
                   <![endif]-->
-                  <a href="${ctaHref}" style="display:inline-block;padding:14px 28px;border-radius:100px;color:#fff;font:700 16px Arial,Helvetica,sans-serif;mso-hide:all">${ctaLabel}</a>
+                  <a href="${ctaHref}" style="display:inline-block;padding:14px 30px;border-radius:100px;color:#fff;font:700 16px Arial,Helvetica,sans-serif;mso-hide:all">${ctaLabel}</a>
                 </td>
               </tr>
             </table>
@@ -361,15 +418,17 @@ class EmailService {
 
         <!-- Social strip (blue band) -->
         <tr>
-          <td style="background:${BRAND.blue};border-radius:20px;padding:16px 22px;color:#fff">
+          <td style="background:${BRAND.blue};border-radius:16px;padding:12px 20px;color:#000">
             <table role="presentation" width="100%">
               <tr>
-                <td style="font:700 18px Inter,Arial,Helvetica,sans-serif;color:#fff">Connect with ${wordmark}</td>
-                <td align="right">
-                  ${opts.social?.x ? `<a href="${opts.social.x}"><img src="https://newrun.club/assets/icons/twitter.svg" height="32" alt="X"></a>`:''}
-                  ${opts.social?.linkedin ? `<a href="${opts.social.linkedin}" style="margin-left:8px"><img src="https://newrun.club/assets/icons/linkedin.svg" height="32" alt="LinkedIn"></a>`:''}
-                  ${opts.social?.instagram ? `<a href="${opts.social.instagram}" style="margin-left:8px"><img src="https://newrun.club/assets/icons/instagram.svg" height="32" alt="Instagram"></a>`:''}
-                  ${opts.social?.rss ? `<a href="${opts.social.rss}" style="margin-left:8px"><img src="https://newrun.club/assets/icons/rss.svg" height="32" alt="Blog"></a>`:''}
+                <td style="font:700 16px Inter,Arial,Helvetica,sans-serif;color:#fff;vertical-align:middle">Connect with ${wordmark}</td>
+                <td align="right" style="vertical-align:middle">
+                  <div style="display:inline-flex;gap:28px;align-items:center">
+                    ${opts.social?.x ? `<a href="${opts.social.x}" style="display:inline-block;transition:opacity 0.2s;background:white;border-radius:50%;padding:6px;box-shadow:0 2px 4px rgba(0,0,0,0.1)"><img src="cid:nr_x_32" width="32" height="32" alt="X" style="display:block;border:0;outline:none;filter:brightness(0) invert(1)"></a>`:''}
+                    ${opts.social?.linkedin ? `<a href="${opts.social.linkedin}" style="display:inline-block;transition:opacity 0.2s;background:white;border-radius:50%;padding:6px;box-shadow:0 2px 4px rgba(0,0,0,0.1)"><img src="cid:nr_linkedin_32" width="32" height="32" alt="LinkedIn" style="display:block;border:0;outline:none;filter:brightness(0) invert(1)"></a>`:''}
+                    ${opts.social?.instagram ? `<a href="${opts.social.instagram}" style="display:inline-block;transition:opacity 0.2s;background:white;border-radius:50%;padding:6px;box-shadow:0 2px 4px rgba(0,0,0,0.1)"><img src="cid:nr_instagram_32" width="32" height="32" alt="Instagram" style="display:block;border:0;outline:none;filter:brightness(0) invert(1)"></a>`:''}
+                    ${opts.social?.rss ? `<a href="${opts.social.rss}" style="display:inline-block;transition:opacity 0.2s;background:white;border-radius:50%;padding:6px;box-shadow:0 2px 4px rgba(0,0,0,0.1)"><img src="cid:nr_rss_32" width="32" height="32" alt="Blog" style="display:block;border:0;outline:none;filter:brightness(0) invert(1)"></a>`:''}
+                  </div>
                 </td>
               </tr>
             </table>
@@ -377,7 +436,7 @@ class EmailService {
         </tr>
 
         <!-- Footer -->
-        <tr><td style="padding:16px 8px 28px 8px;text-align:center;color:#B6B6C2;font:400 13px/18px Inter,Arial,Helvetica,sans-serif">
+        <tr><td style="padding:16px 8px 30px 8px;text-align:center;color:#B6B6C2;font:400 13px/18px Inter,Arial,Helvetica,sans-serif">
           Visit <a href="${siteHref}" style="color:#94a3b8;text-decoration:underline">${siteHref.replace(/^https?:\/\//,'')}</a><br/>
           <a href="${phoneHref}" style="color:#94a3b8;text-decoration:none">${phoneText}</a><br/>
           ${addressHtml}<br/><br/>
@@ -405,18 +464,18 @@ class EmailService {
 
     return this.renderNRLayout({
       preheader: "Your NewRun account is ready",
-      heroUrl: "https://newrun.club/assets/email/hero-welcome.png",
+      heroUrl: "https://www.newrun.club/assets/email/hero-welcome.png",
       headline: "Account activated",
       bodyHtml,
-      cta: { label: "Open Dashboard", href: process.env.FRONTEND_URL || "https://newrun.app", color: "#0B5CFF" },
-      social: { x:"https://x.com/newrun", linkedin:"https://linkedin.com/company/newrun", instagram:"https://instagram.com/newrun" },
+      cta: { label: "Open Dashboard", href: process.env.FRONTEND_URL || "https://www.newrun.club", color: "#0B5CFF" },
+      social: { x:"https://x.com/newrunnnnn", linkedin:"https://linkedin.com/company/newrun-ed-ed", instagram:"https://instagram.com/newrun" },
       company: {
-        siteHref: process.env.FRONTEND_URL || "https://newrun.app",
+        siteHref: process.env.FRONTEND_URL || "https://www.newrun.club",
         phoneHref: "tel:+18885550123",
         phoneText: "+1 (888) 555-0123",
         addressHtml: "NewRun Inc · 123 Campus Drive · University City, CA 90210"
       },
-      listUnsub: { link: (process.env.FRONTEND_URL || "https://newrun.app") + "/email/unsubscribe?u={{uid}}", oneClick:true }
+      listUnsub: { link: (process.env.FRONTEND_URL || "https://www.newrun.club") + "/email/unsubscribe?u={{uid}}", oneClick:true }
     });
   }
 
@@ -430,7 +489,7 @@ class EmailService {
         <tr><td align="center" style="padding:24px;border:2px solid #0B5CFF;border-radius:16px;background:#fff;box-shadow:0 6px 20px rgba(11,92,255,.15);">
           <div style="text-transform:uppercase;color:#64748b;font-size:12px;letter-spacing:1px;font-weight:700;margin-bottom:12px;">Verification Code</div>
           <div style="font-family:'Courier New',monospace;font-weight:800;font-size:48px;letter-spacing:12px;color:#111827;margin:8px 0;">${String(code)}</div>
-          <div style="color:#6b7280;font-size:14px;margin-top:8px;">Enter this on NewRun to finish setup</div>
+          <div style="color:#6b7300;font-size:14px;margin-top:8px;">Enter this on NewRun to finish setup</div>
         </td></tr>
       </table>
 
@@ -450,23 +509,23 @@ class EmailService {
         </td></tr>
       </table>
 
-      <p style="margin:20px 0 0 0;color:#6b7280;font-size:14px;">Didn't sign up? You can safely ignore this email.</p>
+      <p style="margin:20px 0 0 0;color:#6b7300;font-size:14px;">Didn't sign up? You can safely ignore this email.</p>
     `;
 
     return this.renderNRLayout({
       preheader: "Verify your email to activate your NewRun account",
-      heroUrl: "https://newrun.club/assets/email/hero-verify.png",
+      heroUrl: "https://www.newrun.club/assets/email/nr-logo.png",
       headline: "Account Verification Required",
       bodyHtml,
-      cta: { label: "Verify Email", href: process.env.FRONTEND_URL + "/verify-email" || "https://newrun.app/verify-email", color: "#0B5CFF" },
-      social: { x:"https://x.com/newrun", linkedin:"https://linkedin.com/company/newrun", instagram:"https://instagram.com/newrun" },
+      cta: { label: "Verify Email", href: process.env.FRONTEND_URL + "/verify-email" || "https://www.newrun.club/verify-email", color: "#0B5CFF" },
+      social: { x:"https://x.com/newrunnn", linkedin:"https://linkedin.com/company/newrun-ed", instagram:"https://instagram.com/newrun" },
       company: {
-        siteHref: process.env.FRONTEND_URL || "https://newrun.app",
+        siteHref: process.env.FRONTEND_URL || "https://www.newrun.club",
         phoneHref: "tel:+18885550123",
         phoneText: "+1 (888) 555-0123",
         addressHtml: "NewRun Inc · 123 Campus Drive · University City, CA 90210"
       },
-      listUnsub: { link: (process.env.FRONTEND_URL || "https://newrun.app") + "/email/unsubscribe?u={{uid}}", oneClick:true }
+      listUnsub: { link: (process.env.FRONTEND_URL || "https://www.newrun.club") + "/email/unsubscribe?u={{uid}}", oneClick:true }
     });
   }
 
@@ -483,18 +542,18 @@ class EmailService {
 
     return this.renderNRLayout({
       preheader: "Verify your email to activate NewRun",
-      heroUrl: "https://newrun.club/assets/email/hero-verify.png",
+      heroUrl: "https://www.newrun.club/assets/email/nr-logo.png",
       headline: "Verify your email",
       bodyHtml,
       cta: { label: "Verify Email", href: verificationLink, color: "#0B5CFF" },
-      social: { x:"https://x.com/newrun", linkedin:"https://linkedin.com/company/newrun", instagram:"https://instagram.com/newrun" },
+      social: { x:"https://x.com/newrunnn", linkedin:"https://linkedin.com/company/newrun-ed", instagram:"https://instagram.com/newrun" },
       company: {
-        siteHref: process.env.FRONTEND_URL || "https://newrun.app",
+        siteHref: process.env.FRONTEND_URL || "https://www.newrun.club",
         phoneHref: "tel:+18885550123",
         phoneText: "+1 (888) 555-0123",
         addressHtml: "NewRun Inc · 123 Campus Drive · University City, CA 90210"
       },
-      listUnsub: { link: (process.env.FRONTEND_URL || "https://newrun.app") + "/email/unsubscribe?u={{uid}}", oneClick:true }
+      listUnsub: { link: (process.env.FRONTEND_URL || "https://www.newrun.club") + "/email/unsubscribe?u={{uid}}", oneClick:true }
     });
   }
 
@@ -511,18 +570,18 @@ class EmailService {
 
     return this.renderNRLayout({
       preheader: "Reset your NewRun password",
-      heroUrl: "https://newrun.club/assets/email/hero-reset.png",
+      heroUrl: "https://www.newrun.club/assets/email/hero-reset.png",
       headline: "Reset your password",
       bodyHtml,
       cta: { label: "Reset Password", href: resetLink, color: "#9A67FB" },
-      social: { x:"https://x.com/newrun", linkedin:"https://linkedin.com/company/newrun", instagram:"https://instagram.com/newrun" },
+      social: { x:"https://x.com/newrunnn", linkedin:"https://linkedin.com/company/newrun-ed", instagram:"https://instagram.com/newrun" },
       company: {
-        siteHref: process.env.FRONTEND_URL || "https://newrun.app",
+        siteHref: process.env.FRONTEND_URL || "https://www.newrun.club",
         phoneHref: "tel:+18885550123",
         phoneText: "+1 (888) 555-0123",
         addressHtml: "NewRun Inc · 123 Campus Drive · University City, CA 90210"
       },
-      listUnsub: { link: (process.env.FRONTEND_URL || "https://newrun.app") + "/email/unsubscribe?u={{uid}}", oneClick:true }
+      listUnsub: { link: (process.env.FRONTEND_URL || "https://www.newrun.club") + "/email/unsubscribe?u={{uid}}", oneClick:true }
     });
   }
 
@@ -557,13 +616,13 @@ class EmailService {
 
             <tr>
               <td align="left" style="padding:0 25px 20px 25px">
-                <a href="${process.env.FRONTEND_URL || 'https://newrun.app'}"><img src="https://newrun.app/assets/nr-wordmark-blue.png" width="110" alt="NewRun"/></a>
+                <a href="${process.env.FRONTEND_URL || 'https://www.newrun.club'}"><img src="https://www.newrun.club/assets/nr-wordmark-blue.png" width="110" alt="NewRun"/></a>
               </td>
             </tr>
 
             <tr>
               <td style="padding:0 25px">
-                <img src="https://newrun.app/assets/email/hero-link.png" width="650" alt="" style="width:100%;max-width:650px;border-radius:20px 20px 0 0;display:block"/>
+                <img src="https://www.newrun.club/assets/email/hero-link.png" width="650" alt="" style="width:100%;max-width:650px;border-radius:20px 20px 0 0;display:block"/>
               </td>
             </tr>
 
@@ -571,8 +630,8 @@ class EmailService {
               <td style="padding:0 25px">
                 <table role="presentation" width="100%" bgcolor="#ffffff" style="border-radius:0 0 20px 20px">
                   <tr>
-                    <td style="padding:28px 30px 34px 30px;font-family:Arial,Helvetica,sans-serif;color:#10134A">
-                      <div style="font-weight:700;font-size:28px;line-height:34px">Verify your email</div>
+                    <td style="padding:30px 30px 34px 30px;font-family:Arial,Helvetica,sans-serif;color:#10134A">
+                      <div style="font-weight:700;font-size:30px;line-height:34px">Verify your email</div>
                       <div style="color:#334155;font-size:16px;line-height:24px;margin-top:6px">
                         Hi ${userName}, tap the button below to confirm your email and activate your NewRun account.
                       </div>
@@ -581,7 +640,7 @@ class EmailService {
                         <tr>
                           <td bgcolor="${brandBlue}" style="border-radius:100px">
                             <a class="btn" href="${verificationLink}" target="_blank"
-                               style="display:inline-block;padding:16px 28px;font-family:Arial,Helvetica,sans-serif;color:#fff;font-weight:700;border-radius:100px">
+                               style="display:inline-block;padding:16px 30px;font-family:Arial,Helvetica,sans-serif;color:#fff;font-weight:700;border-radius:100px">
                                Verify Email
                             </a>
                           </td>
@@ -608,17 +667,17 @@ class EmailService {
                 <tr>
                   <td align="left" style="padding:16px 22px;font-family:Arial,Helvetica,sans-serif;color:#fff;font-weight:700;font-size:20px">Connect with NewRun</td>
                   <td align="right" style="padding:12px 22px">
-                    <a href="https://x.com/"><img src="https://newrun.app/assets/email/social-x.png" height="32" alt="X"/></a>
-                    <a href="https://www.linkedin.com/"><img src="https://newrun.app/assets/email/social-linkedin.png" height="32" alt="LinkedIn" style="margin-left:8px"/></a>
-                    <a href="https://www.instagram.com/"><img src="https://newrun.app/assets/email/social-instagram.png" height="32" alt="Instagram" style="margin-left:8px"/></a>
-                    <a href="${process.env.FRONTEND_URL || 'https://newrun.app'}"><img src="https://newrun.app/assets/email/social-blog.png" height="32" alt="Blog" style="margin-left:8px"/></a>
+                    <a href="https://x.com/"><img src="https://www.newrun.club/assets/email/social-x.png" height="32" alt="X"/></a>
+                    <a href="https://www.linkedin.com/"><img src="https://www.newrun.club/assets/email/social-linkedin.png" height="32" alt="LinkedIn" style="margin-left:8px"/></a>
+                    <a href="https://www.instagram.com/"><img src="https://www.newrun.club/assets/email/social-instagram.png" height="32" alt="Instagram" style="margin-left:8px"/></a>
+                    <a href="${process.env.FRONTEND_URL || 'https://www.newrun.club'}"><img src="https://www.newrun.club/assets/email/social-blog.png" height="32" alt="Blog" style="margin-left:8px"/></a>
                   </td>
                 </tr>
               </table>
             </td></tr>
 
             <tr><td style="padding:16px 25px 30px 25px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#B6B6C2">
-              Visit <a href="https://newrun.app" style="color:#B6B6C2;text-decoration:underline">newrun.app</a><br/>
+              Visit <a href="https://www.newrun.club" style="color:#B6B6C2;text-decoration:underline">www.newrun.club</a><br/>
               <a href="tel:+1234567890" style="color:#B6B6C2;text-decoration:none">+1 (234) 567-890</a><br/>
               NewRun Inc · 123 Campus Drive · University City, CA 90210<br/><br/>
               &copy; ${new Date().getFullYear()} NewRun — All rights reserved.
@@ -693,31 +752,36 @@ class EmailService {
   async sendEmailVerification(userEmail, userName, verificationLink) {
     const subject = 'Verify Your NewRun Account';
     const html = this.generateEmailVerificationTemplate(userName, verificationLink);
-    return await this.sendEmail(userEmail, subject, html);
+    const attachments = this.getSocialMediaAttachments();
+    return await this.sendEmail(userEmail, subject, html, null, attachments);
   }
 
   async sendOTP(userEmail, userName, otp) {
-    const subject = 'Your NewRun OTP Code';
-    const html = this.generateOTPTemplate(userName, otp);
-    return await this.sendEmail(userEmail, subject, html);
+    const subject = 'Account Verification Required - NewRun';
+    const html = this.generateOTPVerificationTemplate(userName, otp);
+    const attachments = this.getSocialMediaAttachments();
+    return await this.sendEmail(userEmail, subject, html, null, attachments);
   }
 
   async sendPasswordReset(userEmail, userName, resetLink) {
     const subject = 'Reset Your NewRun Password';
     const html = this.generatePasswordResetTemplate(userName, resetLink);
-    return await this.sendEmail(userEmail, subject, html);
+    const attachments = this.getSocialMediaAttachments();
+    return await this.sendEmail(userEmail, subject, html, null, attachments);
   }
 
   async sendWelcomeEmail(userEmail, userName) {
     const subject = 'Account Activated - NewRun';
     const html = this.generateWelcomeTemplate(userName);
-    return await this.sendEmail(userEmail, subject, html);
+    const attachments = this.getSocialMediaAttachments();
+    return await this.sendEmail(userEmail, subject, html, null, attachments);
   }
 
   async sendEmailVerificationWithCode(userEmail, userName, verificationLink, verificationCode) {
     const subject = 'Account Verification Required - NewRun';
     const html = this.generateOTPVerificationTemplate(userName, verificationCode);
-    return await this.sendEmail(userEmail, subject, html);
+    const attachments = this.getSocialMediaAttachments();
+    return await this.sendEmail(userEmail, subject, html, null, attachments);
   }
 
   // Expose initialization method for manual reinitialization

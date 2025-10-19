@@ -196,7 +196,7 @@ const upload = multer({
       }
     },
     limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB limit
+      fileSize: 30 * 1024 * 1024, // 30MB limit
   }
 });
 
@@ -2591,12 +2591,44 @@ app.get("/get-user", authenticateToken, async (req, res) => {
     const isUser = await User.findById(payloadUser._id);
     if (!isUser) return res.sendStatus(401);
 
-    return res.json({
+    // Consolidate all user data into onboardingData for consistent API
+    const consolidatedOnboardingData = {
+      // Basic profile info
+      firstName: isUser.firstName,
+      lastName: isUser.lastName,
+      email: isUser.email,
+      avatar: isUser.avatar,
+      createdOn: isUser.createdOn,
+      
+      // Location and personal info
+      currentLocation: isUser.currentLocation,
+      hometown: isUser.hometown,
+      birthday: isUser.birthday,
+      
+      // Academic info
+      university: isUser.university,
+      major: isUser.major,
+      graduationDate: isUser.graduationDate,
+      schoolDepartment: isUser.schoolDepartment,
+      cohortTerm: isUser.cohortTerm,
+      campusLabel: isUser.campusLabel,
+      campusPlaceId: isUser.campusPlaceId,
+      campusDisplayName: isUser.campusDisplayName,
+      
+    // Merge with existing onboarding data
+    ...(isUser.onboardingData || {}),
+  };
+
+  console.log('🔍 Backend get-user - isUser.onboardingData:', JSON.stringify(isUser.onboardingData, null, 2));
+  console.log('🔍 Backend get-user - consolidatedOnboardingData:', JSON.stringify(consolidatedOnboardingData, null, 2));
+
+  return res.json({
       user: {
         _id: isUser._id,
         firstName: isUser.firstName,
         lastName: isUser.lastName,
         email: isUser.email,
+        avatar: isUser.avatar,
         createdOn: isUser.createdOn,
 
         currentLocation: isUser.currentLocation,
@@ -2613,6 +2645,9 @@ app.get("/get-user", authenticateToken, async (req, res) => {
         campusLabel:       isUser.campusLabel,
         campusPlaceId:     isUser.campusPlaceId,
         campusDisplayName: isUser.campusDisplayName,
+        
+        // ✨ consolidated onboarding data with ALL user info
+        onboardingData: consolidatedOnboardingData,
       },
       message: "",
     });
@@ -2643,6 +2678,83 @@ app.post("/upload-images", upload.array("images", 5), async (req, res) => {
     res.status(500).json({
       error: true,
       message: "Failed to upload images",
+    });
+  }
+});
+
+// Profile Picture Upload API
+app.post("/upload-avatar", authenticateToken, upload.single("avatar"), async (req, res) => {
+  try {
+    const userId = req.user?.user?._id || req.user?._id;
+    
+    if (!userId) {
+      return res.status(401).json({ error: true, message: "Unauthorized" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: true, message: "No image file provided" });
+    }
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(req.file.mimetype)) {
+      return res.status(400).json({ 
+        error: true, 
+        message: "Invalid file type. Only JPEG, PNG, and WebP images are allowed." 
+      });
+    }
+
+    // Validate file size (30MB max)
+    const maxSize = 30 * 1024 * 1024; // 30MB
+    if (req.file.size > maxSize) {
+      return res.status(400).json({ 
+        error: true, 
+        message: "File too large. Maximum size is 30MB." 
+      });
+    }
+
+    const avatarUrl = req.file.location;
+    
+    // Update user's avatar in database
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { avatar: avatarUrl },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: true, message: "User not found" });
+    }
+
+    res.json({
+      error: false,
+      message: "Avatar updated successfully",
+      avatarUrl,
+      user: {
+        _id: updatedUser._id,
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        email: updatedUser.email,
+        avatar: updatedUser.avatar,
+        currentLocation: updatedUser.currentLocation,
+        hometown: updatedUser.hometown,
+        birthday: updatedUser.birthday,
+        university: updatedUser.university,
+        major: updatedUser.major,
+        graduationDate: updatedUser.graduationDate,
+        schoolDepartment: updatedUser.schoolDepartment,
+        cohortTerm: updatedUser.cohortTerm,
+        campusLabel: updatedUser.campusLabel,
+        campusPlaceId: updatedUser.campusPlaceId,
+        campusDisplayName: updatedUser.campusDisplayName,
+      }
+    });
+
+  } catch (error) {
+    console.error("Error uploading avatar:", error);
+    res.status(500).json({
+      error: true,
+      message: "Failed to upload avatar",
     });
   }
 });
@@ -4275,6 +4387,7 @@ Provide a helpful, personalized response.`;
         campusDisplayName: updated.campusDisplayName || '',
 
         createdOn: updated.createdOn || null,
+        onboardingData: updated.onboardingData || {},
       }
     });
   } catch (err) {
@@ -4285,7 +4398,7 @@ Provide a helpful, personalized response.`;
 
 // --- allow PATCHing only safe, known fields ---
 const ALLOWED_USER_FIELDS = [
-  'firstName','lastName','currentLocation','hometown','birthday',
+  'firstName','lastName','avatar','currentLocation','hometown','birthday',
   'university','major','graduationDate',
   'schoolDepartment','cohortTerm','campusLabel','campusPlaceId','campusDisplayName'
 ];
@@ -4309,9 +4422,12 @@ async function updateUserHandler(req, res) {
     const userId = req?.user?.user?._id || req?.user?._id;  // supports both payload shapes
     if (!userId) return res.status(401).json({ error: true, message: 'Unauthorized' });
 
+    console.log('Backend received data:', req.body);
     const updateDoc = buildUserUpdate(req.body);
+    console.log('Built update doc:', updateDoc);
     if (Object.keys(updateDoc).length === 0) {
-      return res.status(400).json({ error: true, message: 'No valid fields to update' });
+      console.log('No valid fields to update - returning 204');
+      return res.sendStatus(204); // nothing to change; not an error
     }
 
     const updated = await User.findByIdAndUpdate(userId, { $set: updateDoc }, { new: true });
@@ -5089,13 +5205,35 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
       return out;
     })();
 
+    // Calculate completion percentage
+    const completionPercentage = calculateSynapseCompletion(norm);
+    const isCompleted = completionPercentage >= 80;
+
     const updated = await User.findByIdAndUpdate(
       userId,
-      { $set: { synapse: norm } },
-      { new: true, projection: { synapse: 1 } }
+      { 
+        $set: { 
+          synapse: norm,
+          synapseCompletion: {
+            percentage: completionPercentage,
+            completed: isCompleted,
+            completedAt: isCompleted ? new Date() : null,
+            lastUpdated: new Date()
+          }
+        } 
+      },
+      { new: true, projection: { synapse: 1, synapseCompletion: 1 } }
     ).lean();
 
-    return res.json({ ok: true, preferences: updated?.synapse || {} });
+    return res.json({ 
+      ok: true, 
+      preferences: updated?.synapse || {},
+      completion: {
+        percentage: completionPercentage,
+        completed: isCompleted,
+        lastUpdated: new Date()
+      }
+    });
   } catch (err) {
     console.error("POST /synapse/preferences error:", err);
     return res.status(500).json({ message: "Failed to save preferences" });
@@ -5201,46 +5339,158 @@ app.post("/synapse/mark-complete", authenticateToken, async (req, res) => {
 
 // Helper function to calculate completion percentage
 function calculateSynapseCompletion(synapse) {
+  if (!synapse || typeof synapse !== 'object') return 0;
+  
   let completedFields = 0;
   let totalFields = 0;
 
-  // Culture section
-  if (synapse.culture) {
-    totalFields += 3;
-    if (synapse.culture.primaryLanguage) completedFields++;
-    if (synapse.culture.home?.country) completedFields++;
-    if (synapse.culture.home?.region) completedFields++;
-  }
+  // Culture section (25% weight)
+  const cultureFields = [
+    'culture.primaryLanguage',
+    'culture.home.country',
+    'culture.home.region',
+    'culture.home.city'
+  ];
+  cultureFields.forEach(field => {
+    totalFields++;
+    const value = field.split('.').reduce((obj, key) => obj?.[key], synapse);
+    if (value && value.toString().trim() !== '') completedFields++;
+  });
 
-  // Logistics section
-  if (synapse.logistics) {
-    totalFields += 3;
-    if (synapse.logistics.moveInMonth) completedFields++;
-    if (synapse.logistics.budgetMax !== null) completedFields++;
-    if (synapse.logistics.commuteMode?.length > 0) completedFields++;
-  }
+  // Logistics section (20% weight)
+  const logisticsFields = [
+    'logistics.moveInMonth',
+    'logistics.budgetMax',
+    'logistics.commuteMode'
+  ];
+  logisticsFields.forEach(field => {
+    totalFields++;
+    const value = field.split('.').reduce((obj, key) => obj?.[key], synapse);
+    if (value !== null && value !== undefined && 
+        !(Array.isArray(value) && value.length === 0)) completedFields++;
+  });
 
-  // Lifestyle section
-  if (synapse.lifestyle) {
-    totalFields += 2;
-    if (synapse.lifestyle.sleepPattern) completedFields++;
-    if (synapse.lifestyle.cleanliness) completedFields++;
-  }
+  // Lifestyle section (25% weight)
+  const lifestyleFields = [
+    'lifestyle.sleepPattern',
+    'lifestyle.cleanliness',
+    'lifestyle.quietAfter',
+    'lifestyle.quietUntil'
+  ];
+  lifestyleFields.forEach(field => {
+    totalFields++;
+    const value = field.split('.').reduce((obj, key) => obj?.[key], synapse);
+    if (value !== null && value !== undefined && value !== '') completedFields++;
+  });
 
-  // Habits section
-  if (synapse.habits) {
-    totalFields += 2;
-    if (synapse.habits.diet) completedFields++;
-    if (synapse.habits.smoking) completedFields++;
-  }
+  // Habits section (20% weight)
+  const habitsFields = [
+    'habits.diet',
+    'habits.cookingFreq',
+    'habits.smoking',
+    'habits.drinking',
+    'habits.partying'
+  ];
+  habitsFields.forEach(field => {
+    totalFields++;
+    const value = field.split('.').reduce((obj, key) => obj?.[key], synapse);
+    if (value !== null && value !== undefined && value !== '') completedFields++;
+  });
 
-  // Pets section
-  if (synapse.pets) {
-    totalFields += 1;
-    if (synapse.pets.hasPets !== undefined) completedFields++;
-  }
+  // Pets section (10% weight)
+  const petsFields = [
+    'pets.hasPets',
+    'pets.okWithPets'
+  ];
+  petsFields.forEach(field => {
+    totalFields++;
+    const value = field.split('.').reduce((obj, key) => obj?.[key], synapse);
+    if (value !== null && value !== undefined) completedFields++;
+  });
 
   return totalFields > 0 ? Math.round((completedFields / totalFields) * 100) : 0;
+}
+
+// Enhanced function to generate match explanations
+function generateMatchExplanations(user, candidate, score) {
+  const explanations = [];
+  const userSynapse = user.synapse || {};
+  const candidateSynapse = candidate.synapse || {};
+  
+  // Language compatibility
+  if (userSynapse.culture?.primaryLanguage === candidateSynapse.culture?.primaryLanguage) {
+    explanations.push({
+      type: 'positive',
+      category: 'language',
+      text: `Both speak ${userSynapse.culture.primaryLanguage}`,
+      weight: 20
+    });
+  }
+  
+  // Geographic compatibility
+  if (userSynapse.culture?.home?.country === candidateSynapse.culture?.home?.country) {
+    explanations.push({
+      type: 'positive',
+      category: 'geography',
+      text: `Both from ${userSynapse.culture.home.country}`,
+      weight: 8
+    });
+  }
+  
+  // Lifestyle compatibility
+  if (userSynapse.lifestyle?.sleepPattern === candidateSynapse.lifestyle?.sleepPattern) {
+    explanations.push({
+      type: 'positive',
+      category: 'lifestyle',
+      text: `Similar sleep schedule (${userSynapse.lifestyle.sleepPattern})`,
+      weight: 8
+    });
+  }
+  
+  // Cleanliness compatibility
+  const userCleanliness = userSynapse.lifestyle?.cleanliness;
+  const candidateCleanliness = candidateSynapse.lifestyle?.cleanliness;
+  if (userCleanliness && candidateCleanliness && Math.abs(userCleanliness - candidateCleanliness) <= 1) {
+    explanations.push({
+      type: 'positive',
+      category: 'lifestyle',
+      text: `Similar cleanliness standards (${userCleanliness}/10 vs ${candidateCleanliness}/10)`,
+      weight: 9
+    });
+  }
+  
+  // Habits compatibility
+  const habitMatches = [];
+  ['smoking', 'drinking', 'partying'].forEach(habit => {
+    if (userSynapse.habits?.[habit] === candidateSynapse.habits?.[habit]) {
+      habitMatches.push(habit);
+    }
+  });
+  
+  if (habitMatches.length > 0) {
+    explanations.push({
+      type: 'positive',
+      category: 'habits',
+      text: `Similar ${habitMatches.join(', ')} preferences`,
+      weight: habitMatches.length * 4
+    });
+  }
+  
+  // Pet compatibility
+  if (userSynapse.pets?.okWithPets === candidateSynapse.pets?.okWithPets) {
+    explanations.push({
+      type: 'positive',
+      category: 'social',
+      text: `Both ${userSynapse.pets.okWithPets ? 'okay' : 'not okay'} with pets`,
+      weight: 7
+    });
+  }
+  
+  // Sort by weight and return top explanations
+  return explanations
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 5)
+    .map(exp => ({ type: exp.type, text: exp.text }));
 }
 
   // --- Synapse (roommate) matches ---
@@ -5296,22 +5546,32 @@ function calculateSynapseCompletion(synapse) {
       }
       // else "any": no extra narrowing
 
-      // Scoring weights (simple, tweak anytime)
+      // Enhanced scoring weights for better compatibility matching
       const W = {
-        langPrimarySame: 25,
-        langCrossOK:     15,
-        comfortBonus:    10,
-        country:         10,
-        region:          8,
-        city:            6,
-        commuteMode:     6,
-        sleep:           6,
-        cleanlinessNear: 8,
-        dietSame:        4,
-        smokingSame:     3,
-        drinkingSame:    3,
-        partiesSame:     3,
+        // Language compatibility (30% total)
+        langPrimarySame: 20,
+        langCrossOK:     10,
+        comfortBonus:    5,
+        
+        // Geographic compatibility (15% total)
+        country:         8,
+        region:          4,
+        city:            3,
+        
+        // Lifestyle compatibility (25% total)
+        commuteMode:     8,
+        sleep:           8,
+        cleanlinessNear: 9,
+        
+        // Habits compatibility (20% total)
+        dietSame:        6,
+        smokingSame:     5,
+        drinkingSame:    4,
+        partiesSame:     5,
+        
+        // Social compatibility (10% total)
         petsCompat:      7,
+        socialCompatibility: 3,
       };
 
       // Build the score parts dynamically so we only add checks that have a "me" side

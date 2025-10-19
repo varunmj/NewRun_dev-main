@@ -1,13 +1,16 @@
 // src/utils/googleMapsLoader.js
 import { useJsApiLoader } from "@react-google-maps/api";
 
+// Static libraries array to prevent re-creation
+const DEFAULT_LIBRARIES = ["places"];
+
 /**
  * Always load the Google Maps script with the Places library, once.
  * Pass extra libraries via the `extra` arg if you ever need more.
  */
 export function useGoogleMapsLoader(extra = []) {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
-  const libraries = Array.from(new Set(["places", ...extra]));
+  const libraries = extra.length > 0 ? [...DEFAULT_LIBRARIES, ...extra] : DEFAULT_LIBRARIES;
 
   const res = useJsApiLoader({
     id: "newrun-google-maps",     // stable id => inject once app-wide

@@ -256,16 +256,18 @@ const ProfileCardComponent = ({
           <div className="pc-shine" />
           <div className="pc-glare" />
           <div className="pc-content pc-avatar-content">
-            <img
-              className="avatar"
-              src={avatarUrl}
-              alt={`${name || 'User'} avatar`}
-              loading="lazy"
-              onError={e => {
-                const target = e.target;
-                target.style.display = 'none';
-              }}
-            />
+            <div className="avatar-container">
+              <img
+                className="avatar diffused-avatar"
+                src={avatarUrl}
+                alt={`${name || 'User'} avatar`}
+                loading="lazy"
+                onError={e => {
+                  const target = e.target;
+                  target.style.display = 'none';
+                }}
+              />
+            </div>
             {showUserInfo && (
               <div className="pc-user-info">
                 <div className="pc-user-details">

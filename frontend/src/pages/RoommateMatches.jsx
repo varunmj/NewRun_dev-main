@@ -99,7 +99,7 @@ function ScoreRing({ value = 0, size = 64, animated = true }) {
 /* =====================================================================
    Clearbit university logos
    ===================================================================== */
-const UNI_DOMAINS = { "Northern Illinois University": "niu.edu" };
+const UNI_DOMAINS = { "Northern Illinois University": "niu.edu", "University of Illinois Urbana-Champaign": "illinois.edu" , "University of Illinois Chicago": "uic.edu","Northwestern University": "northwestern.edu", "University of Chicago": "uchicago.edu", "DePaul University": "depaul.edu", "Loyola University Chicago": "luc.edu", "Illinois Institute of Technology": "iit.edu", "Stanford University": "stanford.edu", "University of California Berkeley": "berkeley.edu", "University of California Los Angeles": "ucla.edu", "University of Southern California": "usc.edu", "University of Texas Austin": "utexas.edu", "University of Texas Dallas": "utdallas.edu", "University of Texas San Antonio": "utsa.edu", "University of Texas Arlington": "uta.edu"};
 const universityLogoUrl = (name = "") => {
   const n = String(name || "").trim();
   if (!n) return "";
