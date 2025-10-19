@@ -164,8 +164,8 @@ Looking forward to hearing from you! 😊`;
               </svg>
             )}
             <span>
-              {item.academicStatus === 'undergrad' && 'Undergraduate'}
-              {item.academicStatus === 'graduate' && 'Graduate Student'}
+              {item.academicStatus === 'undergraduate' && 'Undergraduate'}
+              {item.academicStatus === 'graduate' && 'Graduate'}
               {item.academicStatus === 'alumni' && 'Alumni'}
             </span>
           </div>

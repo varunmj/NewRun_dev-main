@@ -2615,11 +2615,14 @@ app.get("/get-user", authenticateToken, async (req, res) => {
       campusPlaceId: isUser.campusPlaceId,
       campusDisplayName: isUser.campusDisplayName,
       
-      // Merge with existing onboarding data
-      ...(isUser.onboardingData || {}),
-    };
+    // Merge with existing onboarding data
+    ...(isUser.onboardingData || {}),
+  };
 
-    return res.json({
+  console.log('🔍 Backend get-user - isUser.onboardingData:', JSON.stringify(isUser.onboardingData, null, 2));
+  console.log('🔍 Backend get-user - consolidatedOnboardingData:', JSON.stringify(consolidatedOnboardingData, null, 2));
+
+  return res.json({
       user: {
         _id: isUser._id,
         firstName: isUser.firstName,

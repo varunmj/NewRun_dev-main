@@ -425,8 +425,15 @@ function StatusSelector({ currentStatus, onStatusChange }) {
 /* =====================================================================
    Transform user data to match MatchCard format
    ===================================================================== */
-// Function to determine academic status based on graduation date
+// Function to determine academic status from onboarding data
 function getAcademicStatus(user) {
+  // Use the academicLevel from onboardingData if available
+  if (user.onboardingData?.academicLevel) {
+    console.log('🎓 Using onboardingData.academicLevel:', user.onboardingData.academicLevel);
+    return user.onboardingData.academicLevel;
+  }
+  
+  // Fallback to graduation date logic if onboarding data is not available
   if (!user.graduationDate) return null;
   
   const graduationDate = new Date(user.graduationDate);
@@ -438,7 +445,7 @@ function getAcademicStatus(user) {
   if (graduationYear > currentYear) {
     // Determine if undergrad or graduate based on typical graduation ages
     const age = currentDate.getFullYear() - (new Date(user.dateOfBirth || '2000-01-01')).getFullYear();
-    return age <= 22 ? 'undergrad' : 'graduate';
+    return age <= 22 ? 'undergraduate' : 'graduate';
   }
   
   // If graduated, they're alumni
@@ -449,6 +456,13 @@ function transformUserToMatchCard(user, userStatus = USER_STATUS.ONLINE) {
   const displayName = (u) => [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || "Complete your profile";
   const statusConfig = STATUS_CONFIG[userStatus] || STATUS_CONFIG[USER_STATUS.ONLINE];
   const academicStatus = getAcademicStatus(user);
+  
+  console.log('🔍 User data for badge:', {
+    firstName: user.firstName,
+    onboardingData: user.onboardingData,
+    academicLevel: user.onboardingData?.academicLevel,
+    determinedAcademicStatus: academicStatus
+  });
   
   return {
     userId: user.id || user._id || "current-user",
@@ -955,6 +969,8 @@ export default function UserProfile() {
     (async () => {
       try {
         const { data } = await axiosInstance.get("/get-user");
+        console.log('🔍 Frontend get-user response:', JSON.stringify(data, null, 2));
+        console.log('🔍 Frontend user.onboardingData:', data?.user?.onboardingData);
         setUser(normalizeUser(data?.user || {}));
       } catch (e) {
         console.error("Failed to load user", e);
@@ -963,6 +979,78 @@ export default function UserProfile() {
         setLoading(false);
       }
     })();
+  }, []);
+
+  // Check for recent onboarding completion and refresh data
+  useEffect(() => {
+    const checkForRecentOnboarding = () => {
+      // Check if user just completed onboarding (within last 5 minutes)
+      const onboardingCompleted = localStorage.getItem('onboarding_completed');
+      if (onboardingCompleted) {
+        const completedTime = parseInt(onboardingCompleted);
+        const now = Date.now();
+        const fiveMinutesAgo = now - (5 * 60 * 1000);
+        
+        if (completedTime > fiveMinutesAgo) {
+          console.log('🔄 Recent onboarding completion detected, refreshing user data...');
+          // Clear the flag
+          localStorage.removeItem('onboarding_completed');
+          // Refresh user data
+          (async () => {
+            try {
+              const { data } = await axiosInstance.get("/get-user");
+              setUser(normalizeUser(data?.user || {}));
+            } catch (e) {
+              console.error("Failed to refresh user data after onboarding", e);
+            }
+          })();
+        }
+      }
+    };
+
+    // Check immediately and also after a short delay
+    checkForRecentOnboarding();
+    const timeoutId = setTimeout(checkForRecentOnboarding, 1000);
+    
+    return () => clearTimeout(timeoutId);
+  }, []);
+
+  // Refresh user data when component becomes visible (e.g., after onboarding)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // Page became visible, refresh user data
+        (async () => {
+          try {
+            const { data } = await axiosInstance.get("/get-user");
+            setUser(normalizeUser(data?.user || {}));
+          } catch (e) {
+            console.error("Failed to refresh user data", e);
+          }
+        })();
+      }
+    };
+
+    const handleFocus = () => {
+      // Window gained focus, refresh user data
+      (async () => {
+        try {
+          const { data } = await axiosInstance.get("/get-user");
+          setUser(normalizeUser(data?.user || {}));
+        } catch (e) {
+          console.error("Failed to refresh user data", e);
+        }
+      })();
+    };
+
+    // Listen for page visibility changes and window focus
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   if (loading) {
