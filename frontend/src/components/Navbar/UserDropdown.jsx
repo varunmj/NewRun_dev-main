@@ -9,6 +9,7 @@ import { getInitials, getAvatarBgColor } from '../../utils/avatarUtils';
 import axios from '../../utils/axiosInstance';
 
 // Status configuration for mini dropdown
+
 const STATUS_CONFIG = {
   online: {
     label: 'Online',

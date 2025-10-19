@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import MegaMenu from "./MegaMenu";
-import { hasDraft } from "../../utils/onboardingProgress";
+import UserDropdown from "./UserDropdown.jsx";
 import axiosInstance from "../../utils/axiosInstance";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { forceLogout } from "../../utils/logoutUtils";
@@ -13,14 +13,8 @@ import {
   MdChecklistRtl,
   MdDiversity3,
   MdAutoAwesome,
-  MdPerson,
-  MdSettings,
-  MdLogout,
   MdNotificationsNone,
   MdClose,
-  MdAttachMoney,
-  MdSchool,
-  MdDirectionsBus,
 } from "react-icons/md";
 
 /* ---------- helpers ---------- */
@@ -51,120 +45,12 @@ const initialsOf = (user) => {
     .join("");
 };
 
-/* ---------- Avatar menu ---------- */
-function ProfileMenu({ onLogout }) {
-  const [open, setOpen] = useState(false);
-  const [user, setUser] = useState(null);
-  const ref = useRef(null);
-
-  // Fetch user data from backend
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const response = await axiosInstance.get('/get-user');
-        setUser(response.data?.user);
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-      }
-    };
-    
-    fetchUser();
-  }, []);
-
-  const initials = useMemo(() => {
-    if (!user) return "NR";
-    return initialsOf(user) || "NR";
-  }, [user]);
-
-  useEffect(() => {
-    const onDocClick = (e) => {
-      if (!ref.current) return;
-      if (!ref.current.contains(e.target)) setOpen(false);
-    };
-    const onEsc = (e) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onEsc);
-    };
-  }, []);
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white/90 ring-1 ring-white/10 hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-sky-500"
-      >
-        {initials}
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-[#0b0c0f] p-1.5 shadow-xl ring-1 ring-black/5"
-        >
-          {/* User info header */}
-          {user && (
-            <div className="px-3 py-2 border-b border-white/10 mb-1">
-              <div className="text-sm font-semibold text-white">{nameOf(user)}</div>
-              <div className="text-xs text-white/60">{user.email}</div>
-            </div>
-          )}
-          
-          <Link
-            to="/profile"
-            role="menuitem"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/90 hover:bg-white/5"
-          >
-            <MdPerson className="text-white/60" /> Profile
-          </Link>
-          <Link
-            to="/settings"
-            role="menuitem"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/90 hover:bg-white/5"
-          >
-            <MdSettings className="text-white/60" /> Settings
-          </Link>
-          <Link
-            to="/Dashboard"
-            role="menuitem"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/90 hover:bg-white/5"
-          >
-            <MdSettings className="text-white/60" /> Dashboard
-          </Link>
-
-          <div className="my-1 h-px bg-white/10" />
-
-          <button
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              onLogout?.();
-            }}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-red-300 hover:bg-red-500/10"
-          >
-            <MdLogout /> Log out
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 /* ---------- Notification bell ---------- */
 function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [items, setItems] = useState([]);
-  const [verificationNotifications, setVerificationNotifications] = useState([]);
-  const [totalCount, setTotalCount] = useState(0);
   const panelRef = useRef(null);
   const btnRef = useRef(null);
 
@@ -180,20 +66,10 @@ function NotificationBell() {
     }
   };
 
-  const loadVerificationNotifications = async () => {
-    try {
-      const r = await axiosInstance.get("/api/user/verification-status");
-      const notifications = r?.data?.notifications || [];
-      setVerificationNotifications(notifications);
-    } catch {
-      setVerificationNotifications([]);
-    }
-  };
-
   useEffect(() => {
     let s;
     (async () => {
-      await Promise.all([loadPending(), loadVerificationNotifications()]);
+      await loadPending();
       try {
         const { io } = await import("socket.io-client");
         const url =
@@ -229,24 +105,6 @@ function NotificationBell() {
       document.removeEventListener("keydown", onEsc);
     };
   }, []);
-
-  // Calculate total count whenever counts change
-  useEffect(() => {
-    setTotalCount(pendingCount + verificationNotifications.length);
-  }, [pendingCount, verificationNotifications.length]);
-
-  const handleVerificationAction = (notification) => {
-    switch (notification.id) {
-      case 'email_verification':
-        window.location.href = '/verify-email';
-        break;
-      case 'phone_verification':
-        window.location.href = '/add-phone';
-        break;
-      default:
-        console.log('Unknown verification notification:', notification);
-    }
-  };
 
   const approve = async (requestId) => {
     await axiosInstance.post("/contact-access/approve", { requestId });
@@ -296,17 +154,13 @@ function NotificationBell() {
       <button
         ref={btnRef}
         onClick={() => setOpen((v) => !v)}
-        className="relative grid h-10 w-10 place-items-center rounded-2xl backdrop-blur-sm bg-white/10 border border-white/20 text-white/90 hover:bg-white/15 hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
-        style={{
-          background: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
-        }}
+        className="relative grid h-9 w-9 place-items-center rounded-full bg-white/5 backdrop-blur-md text-white/85 ring-1 ring-white/20 hover:bg-white/10 hover:ring-white/30 transition-all duration-200"
         aria-label="Notifications"
       >
         <MdNotificationsNone className="text-xl" />
-        {totalCount > 0 && (
-          <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-gradient-to-r from-red-500 to-pink-500 px-1.5 text-[10px] font-bold text-white shadow-lg animate-pulse border-2 border-white/20">
-            {totalCount > 9 ? "9+" : totalCount}
+        {pendingCount > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-gradient-to-r from-rose-500 to-pink-500 px-1 text-[10px] font-semibold text-white shadow-lg">
+            {pendingCount > 9 ? "9+" : pendingCount}
           </span>
         )}
       </button>
@@ -314,157 +168,68 @@ function NotificationBell() {
       {open && (
         <div
           ref={panelRef}
-          className="absolute right-0 top-11 z-50 w-[320px] max-h-[60vh] overflow-hidden rounded-2xl backdrop-blur-2xl border border-white/10 shadow-xl"
-          style={{
-            background: 'rgba(255, 255, 255, 0.08)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05)'
-          }}
+          className="absolute right-0 top-11 z-50 w-[360px] max-h-[70vh] overflow-auto rounded-2xl border border-white/20 bg-[#0b0c0f]/80 backdrop-blur-xl shadow-2xl ring-1 ring-white/10"
         >
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#0b0c0f] px-3 py-2">
+            <div className="text-sm font-semibold text-white">Requests</div>
+            <button onClick={() => setOpen(false)} className="rounded-full p-1 text-white/60 hover:bg-white/10">
+              <MdClose />
+            </button>
+          </div>
 
-          {items.length === 0 && verificationNotifications.length === 0 ? (
-            <div className="px-4 py-8 text-center">
-              <div className="text-sm text-white/60">No notifications</div>
-            </div>
+          {items.length === 0 ? (
+            <div className="px-4 py-10 text-center text-sm text-white/60">You’re all caught up ✨</div>
           ) : (
-            <div className="py-2">
-              {items.map((it, index) => {
+            <ul className="divide-y divide-white/10">
+              {items.map((it) => {
                 const requester = it.requesterId || {};
                 return (
-                  <div key={it._id}>
-                    <div className="px-4 py-3 hover:bg-white/5 transition-colors duration-200">
-                      <div className="flex gap-3">
-                        {/* Black box with blue letters avatar */}
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-semibold border border-white/10"
-                             style={{
-                               background: '#000000', // Black background
-                               color: '#2563eb' // NewRun blue text
-                             }}>
-                          {initialsOf(requester)}
-                        </div>
+                  <li key={it._id} className="flex gap-3 px-3 py-3">
+                    <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/10 text-sm font-semibold text-white/90">
+                      {initialsOf(requester)}
+                    </div>
 
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm font-semibold text-white truncate">
-                              {nameOf(requester)}
-                            </span>
-                            {it.createdAt && (
-                              <span className="text-xs text-white/50">
-                                {timeAgo(it.createdAt)}
-                              </span>
-                            )}
-                          </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-2">
+                        <span className="truncate text-sm font-semibold text-white">
+                          {nameOf(requester)}
+                        </span>
+                        {it.createdAt && <span className="text-xs text-white/45">{timeAgo(it.createdAt)}</span>}
+                      </div>
 
-                          <div className="text-xs text-white/70 mb-3">
-                            wants to view your contact info
-                            {it.propertyId?.title && (
-                              <span className="block text-white/60">
-                                for {it.propertyId.title}
-                              </span>
-                            )}
-                          </div>
+                      {/* ⬇️ Wrap to next line and show full property title */}
+                      <div className="text-sm text-white/75 whitespace-normal break-words leading-5">
+                        <span className="block">wants to view your contact info</span>
+                        {it.propertyId?.title && (
+                          <span className="block">
+                            for <span className="font-medium">{it.propertyId.title}</span>.
+                          </span>
+                        )}
+                      </div>
 
-                          {it._err && (
-                            <div className="mb-3 p-2 rounded-lg text-xs text-red-300"
-                                 style={{
-                                   background: 'rgba(239, 68, 68, 0.1)',
-                                   border: '1px solid rgba(239, 68, 68, 0.2)'
-                                 }}>
-                              {it._err}
-                            </div>
-                          )}
+                      {it._err && <div className="mt-1 text-xs text-rose-400">{it._err}</div>}
 
-                          {/* Action buttons */}
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleApprove(it._id)}
-                              disabled={it._busy}
-                              className="flex-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60 transition-all duration-200"
-                              style={{
-                                background: '#2563eb' // NewRun blue
-                              }}
-                            >
-                              {it._busy ? (
-                                <div className="flex items-center justify-center gap-1">
-                                  <div className="w-2 h-2 border border-white border-t-transparent rounded-full animate-spin"></div>
-                                  Working…
-                                </div>
-                              ) : (
-                                "Approve"
-                              )}
-                            </button>
-                            <button
-                              onClick={() => handleDeny(it._id)}
-                              disabled={it._busy}
-                              className="flex-1 rounded-lg border border-white/20 px-3 py-1.5 text-xs font-medium text-white/80 hover:border-white/30 disabled:opacity-60 transition-all duration-200"
-                              style={{
-                                background: 'rgba(255, 255, 255, 0.05)'
-                              }}
-                            >
-                              Deny
-                            </button>
-                          </div>
-                        </div>
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          onClick={() => handleApprove(it._id)}
+                          disabled={it._busy}
+                          className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60"
+                        >
+                          {it._busy ? "Working…" : "Approve"}
+                        </button>
+                        <button
+                          onClick={() => handleDeny(it._id)}
+                          disabled={it._busy}
+                          className="rounded-md border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-white/85 hover:bg-white/10 disabled:opacity-60"
+                        >
+                          Deny
+                        </button>
                       </div>
                     </div>
-                    
-                    {/* Horizontal fading separator */}
-                    {index < items.length - 1 && (
-                      <div className="mx-4 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
-                    )}
-                  </div>
+                  </li>
                 );
               })}
-
-              {/* Verification Notifications */}
-              {verificationNotifications.map((notification, index) => (
-                <div key={notification.id}>
-                  <div className="px-4 py-3 hover:bg-white/5 transition-colors duration-200">
-                    <div className="flex gap-3">
-                      {/* Verification icon */}
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg border border-white/10"
-                           style={{
-                             background: notification.type === 'warning' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(59, 130, 246, 0.2)',
-                             color: notification.type === 'warning' ? '#f59e0b' : '#3b82f6'
-                           }}>
-                        {notification.avatar}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-semibold text-white truncate">
-                            {notification.title}
-                          </span>
-                        </div>
-
-                        <div className="text-xs text-white/70 mb-3">
-                          {notification.message}
-                        </div>
-
-                        {/* Action button */}
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleVerificationAction(notification)}
-                            className="flex-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-all duration-200"
-                            style={{
-                              background: notification.type === 'warning' ? '#f59e0b' : '#3b82f6'
-                            }}
-                          >
-                            {notification.action}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Horizontal fading separator */}
-                  {index < verificationNotifications.length - 1 && (
-                    <div className="mx-4 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
-                  )}
-                </div>
-              ))}
-            </div>
+            </ul>
           )}
         </div>
       )}
@@ -474,27 +239,8 @@ function NotificationBell() {
 
 /* ---------- Main Navbar ---------- */
 export default function Navbar() {
-  const nav = useNavigate();
   const loc = useLocation();
-  const [showResume, setShowResume] = useState(false);
   const { logout } = useAuth();
-
-  // Check onboarding completion status from backend
-  useEffect(() => {
-    const checkOnboardingStatus = async () => {
-      try {
-        const response = await axiosInstance.get('/onboarding-data');
-        const isCompleted = response.data?.onboardingData?.completed || false;
-        setShowResume(!isCompleted);
-      } catch (error) {
-        console.error('Error checking onboarding status:', error);
-        // Fallback to local storage check
-        setShowResume(hasDraft());
-      }
-    };
-    
-    checkOnboardingStatus();
-  }, []);
 
   const productItems = [
     { title: "Solve Threads", desc: "AI-powered campus life solutions.", to: "/solve-threads", icon: MdAutoAwesome, featured: true },
@@ -506,9 +252,8 @@ export default function Navbar() {
     { title: "Build my plan", desc: "Let AI craft everything for me.", to: "/onboarding", icon: MdAutoAwesome },
   ];
 
-
   return (
-    <header className="sticky top-0 z-40 w-full">
+    <header className="sticky top-0 z-[100] w-full">
       <div className="mx-auto mt-3 flex max-w-7xl items-center justify-between rounded-2xl bg-[#0b0c0f]/90 px-4 py-2.5 backdrop-blur border border-white/5">
         {/* brand */}
         <Link to="/" className="inline-flex items-center">
@@ -525,6 +270,12 @@ export default function Navbar() {
             className={`text-sm font-semibold ${loc.pathname.startsWith("/solve-threads") ? "text-orange-400" : "text-orange-400/80 hover:text-orange-400"}`}
           >
             Solve Threads
+          </Link>
+          <Link
+            to="/community"
+            className={`text-sm ${loc.pathname.startsWith("/community") ? "text-white" : "text-white/80 hover:text-white"}`}
+          >
+            Get Help
           </Link>
           <Link
             to="/blogs"
@@ -548,33 +299,9 @@ export default function Navbar() {
 
         {/* right side */}
         <div className="flex items-center gap-3">
-          {showResume && (
-            <button
-              onClick={() => nav("/onboarding", { state: { from: "navbar_resume" } })}
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/85 hover:bg-white/10"
-              title="Pick up where you left off"
-            >
-              Resume setup
-            </button>
-          )}
-
           <NotificationBell />
 
-          <ProfileMenu
-            onLogout={async () => {
-              // BULLETPROOF LOGOUT
-              try {
-                await logout();
-              } catch (error) {
-                console.error('AuthContext logout error:', error);
-              }
-              
-              // Always force logout regardless of AuthContext result
-              setTimeout(() => {
-                forceLogout();
-              }, 100);
-            }}
-          />
+          <UserDropdown />
         </div>
       </div>
     </header>
