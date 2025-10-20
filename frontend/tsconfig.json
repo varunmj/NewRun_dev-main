@@ -8,10 +8,7 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["vite/client"],
-    "typeRoots": ["./src/types", "./node_modules/@types"],
-    "allowJs": true,
-    "checkJs": false
+    "types": ["vite/client"]
   },
-  "include": ["src", "tailwind.config.ts", "postcss.config.js", "src/types/**/*"]
+  "include": ["src", "tailwind.config.ts", "postcss.config.js"]
 }
