@@ -176,10 +176,16 @@ const s3Client = new S3Client({
 
 const s3 = new AWS.S3();
 
+// Debug S3 configuration
+console.log('S3 Configuration:');
+console.log('Region:', process.env.AWS_REGION);
+console.log('Bucket:', process.env.AWS_S3_BUCKET);
+console.log('S3 client methods:', Object.getOwnPropertyNames(s3.__proto__));
+
 // Multer storage for S3
 const upload = multer({
     storage: multerS3({
-      s3: s3Client,
+      s3: s3,
       bucket: process.env.AWS_S3_BUCKET,
     // Adjust based on the access level you need
       key: function (req, file, cb) {
@@ -2685,6 +2691,10 @@ app.post("/upload-images", upload.array("images", 5), async (req, res) => {
 // Profile Picture Upload API
 app.post("/upload-avatar", authenticateToken, upload.single("avatar"), async (req, res) => {
   try {
+    console.log('Upload avatar request received');
+    console.log('User ID:', req.user?.user?._id || req.user?._id);
+    console.log('File:', req.file);
+    
     const userId = req.user?.user?._id || req.user?._id;
     
     if (!userId) {
