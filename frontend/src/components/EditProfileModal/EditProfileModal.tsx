@@ -469,12 +469,28 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }: {
                   <p className="text-sm text-gray-400 mb-4">Used for routing & distance on properties</p>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="block text-sm font-medium text-gray-200 mb-1">University name</label>
-                      <input
-                        {...register("university")}
-                        className="w-full rounded-lg border border-white/10 bg-[#0F1115]/95 px-3 py-2 text-sm text-white placeholder-white/60 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        placeholder="e.g., Northern Illinois University"
-                      />
+                      <label className="block text-sm font-medium text-gray-200 mb-1 flex items-center gap-2">
+                        University name
+                        <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                        </svg>
+                      </label>
+                      <div className="relative group">
+                        <input
+                          {...register("university")}
+                          disabled={true}
+                          className="w-full rounded-lg border border-white/10 bg-[#0F1115]/50 px-3 py-2 text-sm text-white/50 placeholder-white/30 cursor-not-allowed opacity-70"
+                          placeholder="e.g., Northern Illinois University"
+                        />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-yellow-500/60">
+                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block bg-gray-900 border border-white/20 rounded-lg px-3 py-2 text-xs text-white/80 whitespace-nowrap z-10">
+                          Set during onboarding - cannot be changed manually
+                        </div>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-200 mb-1">School / Department</label>

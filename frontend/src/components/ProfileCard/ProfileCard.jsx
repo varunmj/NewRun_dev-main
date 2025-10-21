@@ -285,7 +285,7 @@ const ProfileCardComponent = ({
                   </div>
                   <div className="pc-user-text">
                     <div className="pc-handle">@{handle}</div>
-                    <div className="pc-status">{status}</div>
+                    <div className={`pc-status pc-status-${status?.toLowerCase().replace(/\s+/g, '-') || 'unknown'}`}>{status}</div>
                   </div>
                 </div>
                 <button

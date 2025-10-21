@@ -762,7 +762,6 @@ app.post('/community/threads/:id/comments/:commentId/vote', authenticateToken, a
     res.status(500).json({ success: false, message: 'Server error', error: e.message });
   }
 });
-
 // Add comment to answer (alias for reply)
 app.post('/community/threads/:id/answers/:answerId/comments', authenticateToken, async (req, res) => {
   try {
@@ -1503,7 +1502,6 @@ app.get('/verify-email', async (req, res) => {
     });
   }
 });
-
 // Email verification code endpoint (Enterprise-grade)
 app.post('/verify-email-code', authenticateToken, async (req, res) => {
   try {
@@ -2268,7 +2266,6 @@ app.post('/forgot-password', async (req, res) => {
     });
   }
 });
-
 // Reset password
 app.post('/reset-password', async (req, res) => {
   try {
@@ -2541,11 +2538,71 @@ app.get('/onboarding-data', authenticateToken, async (req, res) => {
   }
 });
 
+// Update university endpoint (allows users to correct their university after onboarding)
+app.post('/update-university', authenticateToken, async (req, res) => {
+  try {
+    const { user } = req.user;
+    const { university } = req.body;
 
+    console.log(`🏫 University update request for user ${user._id}`, { university });
 
+    if (!university || typeof university !== 'string') {
+      return res.status(400).json({
+        error: true,
+        message: 'University name is required and must be a string'
+      });
+    }
 
+    const trimmedUniversity = university.trim();
+    if (trimmedUniversity.length === 0 || trimmedUniversity.length > 150) {
+      return res.status(400).json({
+        error: true,
+        message: 'University name must be between 1 and 150 characters'
+      });
+    }
 
+    // Find and update user
+    const userDoc = await User.findById(user._id);
+    if (!userDoc) {
+      return res.status(404).json({
+        error: true,
+        message: 'User not found'
+      });
+    }
 
+    console.log(`   Old university: ${userDoc.university}`);
+    console.log(`   New university: ${trimmedUniversity}`);
+
+    // Update both fields
+    userDoc.university = trimmedUniversity;
+    
+    // Also update onboarding data if it exists
+    if (userDoc.onboardingData) {
+      userDoc.onboardingData.university = trimmedUniversity;
+    }
+
+    await userDoc.save();
+
+    console.log(`✅ University updated successfully for user ${user._id}`);
+
+    res.json({
+      error: false,
+      message: 'University updated successfully',
+      university: trimmedUniversity,
+      user: {
+        id: userDoc._id,
+        university: userDoc.university
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error updating university:', error);
+    res.status(500).json({
+      error: true,
+      message: 'Failed to update university',
+      details: error.message
+    });
+  }
+});
 
 // Get user API:
 // app.get("/get-user", authenticateToken, async (req, res) => {
@@ -2979,7 +3036,6 @@ app.delete("/delete-property/:propertyId",authenticateToken,async(req,res)=>{
         });
     }
 });
-
 //API for // Find the property by ID
 app.get("/properties/:id", async (req, res) => {
   const propertyId = req.params.id;
@@ -3055,7 +3111,6 @@ app.put("/update-property-pinned/:propertyId",authenticateToken,async(req,res)=>
         });
     }
 });
-
 // Advanced Property Search API with Filters:
 app.get("/search-properties", async (req, res) => {
   try {
@@ -3281,7 +3336,7 @@ app.post("/contact-access/request", authenticateToken, async (req, res) => {
       return res.status(200).json({ success: true, self: true });
     }
 
-    // If there’s already a doc, don’t create another; tell client it’s already pending/approved
+    // If there's already a doc, don't create another; tell client it's already pending/approved
     const existing = await ContactAccessRequest.findOne({ propertyId, requesterId }).lean();
     if (existing) {
       return res.status(200).json({
@@ -3775,7 +3830,6 @@ app.post('/marketplace/favorites/:id', (req, res) => {
   // TODO: implement real per-user favorites (e.g., User.favoriteItemIds)
   res.json({ favored: true });
 });
-  
   // Update an existing marketplace item
   app.put("/marketplace/item/:id", authenticateToken, async (req, res) => {
     const itemId = req.params.id;
@@ -4437,7 +4491,6 @@ async function updateUserHandler(req, res) {
     return res.status(500).json({ error: true, message: 'Internal Server Error' });
   }
 }
-
 // Keep your original route AND add aliases used by the frontend
 app.patch('/user/update', authenticateToken, updateUserHandler);   // existing canonical
 app.patch('/update-user', authenticateToken, updateUserHandler);   // alias for old FE
@@ -5109,7 +5162,7 @@ Return only JSON with keys:
       "We parsed your request into search criteria.",
       "Here are matching listings — select ones you like.",
       "Tap Request contact to ask owners (uses SafeContact).",
-      "We’ll ping you when owners approve."
+      "We'll ping you when owners approve."
     ];
 
     // Save a thread snapshot
@@ -5237,11 +5290,9 @@ app.post("/synapse/preferences", authenticateToken, async (req, res) => {
     return res.status(500).json({ message: "Failed to save preferences" });
   }
 });
-
 // =====================
 // SYNAPSE COMPLETION TRACKING
 // =====================
-
 // GET: Check Synapse completion status
 app.get("/synapse/completion-status", authenticateToken, async (req, res) => {
   try {
@@ -5882,7 +5933,7 @@ function generateMatchExplanations(user, candidate, score) {
     try {
       const actions = [];
       
-      // Split content into sections and look for **Label:** and **Description:** patterns
+      // Split content into sections and look for **Label: and **Description:** patterns
       const sections = aiContent.split(/\*\*Label:/);
       
       sections.forEach((section, index) => {
@@ -6024,7 +6075,6 @@ function generateMatchExplanations(user, candidate, score) {
     
     return insights;
   }
-
   function generateFallbackActions(user) {
     const actions = [];
     
@@ -6790,11 +6840,9 @@ Be conversational, motivating, and specific. ALWAYS start with a friendly greeti
       }
 
       const prompt = `Based on this user profile and ${roommates.length} potential roommates, provide 3-5 personalized insights for finding the best roommate match:
-
 User Profile: ${JSON.stringify(userContext.profile)}
 Onboarding: ${JSON.stringify(userContext.onboarding)}
 Synapse: ${JSON.stringify(userContext.synapse)}
-
 Top matches found: ${roommates.slice(0, 3).map(r => `${r.name} (${Math.round(r.matchScore * 100)}% match)`).join(', ')}
 
 Provide actionable insights for better roommate matching.`;
@@ -6826,7 +6874,6 @@ Provide actionable insights for better roommate matching.`;
       }
 
       const prompt = `Based on this roommate search results, provide 3-5 specific recommendations for the user:
-
 User: ${userContext.profile.name}
 Results: ${roommates.length} matches found
 Top match: ${roommates[0]?.name} (${Math.round(roommates[0]?.matchScore * 100)}% compatibility)
@@ -7546,7 +7593,6 @@ Provide specific, actionable recommendations for improving roommate matching.`;
       });
     }
   });
-
   app.post('/api/transactions', authenticateToken, async (req, res) => {
     try {
       const {
@@ -7608,7 +7654,6 @@ Provide specific, actionable recommendations for improving roommate matching.`;
       });
     }
   });
-
   app.put('/api/transactions/:id', authenticateToken, async (req, res) => {
     try {
       const {
@@ -8295,7 +8340,6 @@ Provide specific, actionable recommendations for improving roommate matching.`;
       });
     }
   });
-
   app.post('/api/transportation/carpools', authenticateToken, async (req, res) => {
     try {
       const {
@@ -8403,7 +8447,6 @@ Provide specific, actionable recommendations for improving roommate matching.`;
       });
     }
   });
-
   // Route Usage tracking
   app.post('/api/transportation/routes/:id/use', authenticateToken, async (req, res) => {
     try {
@@ -8498,6 +8541,7 @@ Provide specific, actionable recommendations for improving roommate matching.`;
     }
   });
 
+  */
   // Test endpoint to verify server is running
   app.get('/api/test', (req, res) => {
     res.json({ 
@@ -8509,10 +8553,6 @@ Provide specific, actionable recommendations for improving roommate matching.`;
 
   const PORT = process.env.PORT || 8000;
 
-  */
-  
-  const PORT = process.env.PORT || 8000;
-  
   server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });

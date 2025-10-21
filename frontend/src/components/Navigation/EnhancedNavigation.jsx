@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import axiosInstance from '../../utils/axiosInstance';
 import { 
   MdHome, 
   MdStore, 
@@ -23,7 +24,52 @@ import {
  */
 const EnhancedNavigation = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [synapseCompleted, setSynapseCompleted] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // Check Synapse completion status
+  useEffect(() => {
+    const checkSynapseStatus = async () => {
+      try {
+        const response = await axiosInstance.get('/synapse/completion-status');
+        setSynapseCompleted(response.data?.completed || false);
+      } catch (error) {
+        console.error('Error checking Synapse status:', error);
+      }
+    };
+    
+    checkSynapseStatus();
+  }, []);
+
+  // Smooth navigation handler for Roommates
+  const handleRoommateNavigation = async (e) => {
+    e.preventDefault();
+    
+    if (isNavigating) return; // Prevent multiple clicks
+    
+    setIsNavigating(true);
+    
+    try {
+      // Check completion status in real-time
+      const response = await axiosInstance.get('/synapse/completion-status');
+      const isCompleted = response.data?.completed || false;
+      
+      // Navigate directly to the correct page
+      if (isCompleted) {
+        navigate('/Synapsematches');
+      } else {
+        navigate('/Synapse');
+      }
+    } catch (error) {
+      console.error('Error checking Synapse status:', error);
+      // Fallback to Synapse page if API fails
+      navigate('/Synapse');
+    } finally {
+      setIsNavigating(false);
+    }
+  };
 
   const navigationItems = [
     {
@@ -46,31 +92,34 @@ const EnhancedNavigation = () => {
     },
     {
       name: 'Roommates',
-      href: '/Synapse',
+      href: '#', // Will be handled by onClick
       icon: MdGroup,
-      description: 'Find compatible roommates'
+      description: isNavigating ? 'Loading...' : (synapseCompleted ? 'View your matches' : 'Find compatible roommates'),
+      onClick: handleRoommateNavigation,
+      isLoading: isNavigating
     },
-    {
-      name: 'Finance',
-      href: '/finance',
-      icon: MdAccountBalance,
-      description: 'AI budget planning & optimization',
-      isNew: true
-    },
-    {
-      name: 'Academic',
-      href: '/academic',
-      icon: MdSchool,
-      description: 'Course planning & deadlines',
-      isNew: true
-    },
-    {
-      name: 'Transport',
-      href: '/transport',
-      icon: MdDirectionsBus,
-      description: 'Route optimization & carpool',
-      isNew: true
-    },
+    // Temporarily removed features - moved to Upcoming Features directory
+    // {
+    //   name: 'Finance',
+    //   href: '/finance',
+    //   icon: MdAccountBalance,
+    //   description: 'AI budget planning & optimization',
+    //   isNew: true
+    // },
+    // {
+    //   name: 'Academic',
+    //   href: '/academic',
+    //   icon: MdSchool,
+    //   description: 'Course planning & deadlines',
+    //   isNew: true
+    // },
+    // {
+    //   name: 'Transport',
+    //   href: '/transport',
+    //   icon: MdDirectionsBus,
+    //   description: 'Route optimization & carpool',
+    //   isNew: true
+    // },
     {
       name: 'Dining',
       href: '/dining',
@@ -147,19 +196,37 @@ const EnhancedNavigation = () => {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.1 }}
                 >
-                  <Link
-                    to={item.href}
-                    onClick={() => setIsOpen(false)}
-                    className={`group flex items-center gap-3 p-3 rounded-lg transition-all duration-300 ${
-                      active
-                        ? 'bg-blue-600 text-white'
-                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                    } ${item.comingSoon ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
+                  {item.onClick ? (
+                    <button
+                      onClick={(e) => {
+                        setIsOpen(false);
+                        item.onClick(e);
+                      }}
+                      disabled={item.isLoading || item.comingSoon}
+                      className={`group flex items-center gap-3 p-3 rounded-lg transition-all duration-300 w-full text-left ${
+                        active
+                          ? 'bg-blue-600 text-white'
+                          : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      } ${item.comingSoon ? 'opacity-50 cursor-not-allowed' : ''} ${item.isLoading ? 'opacity-75 cursor-wait' : ''}`}
+                    >
+                  ) : (
+                    <Link
+                      to={item.href}
+                      onClick={() => setIsOpen(false)}
+                      className={`group flex items-center gap-3 p-3 rounded-lg transition-all duration-300 ${
+                        active
+                          ? 'bg-blue-600 text-white'
+                          : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      } ${item.comingSoon ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                  )}
                     <div className="relative">
-                      <IconComponent className="text-xl" />
-                      {item.isNew && !item.comingSoon && (
+                      <IconComponent className={`text-xl ${item.isLoading ? 'animate-pulse' : ''}`} />
+                      {item.isNew && !item.comingSoon && !item.isLoading && (
                         <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full"></div>
+                      )}
+                      {item.isLoading && (
+                        <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                       )}
                     </div>
                     <div className="flex-1">
@@ -180,7 +247,11 @@ const EnhancedNavigation = () => {
                         {item.description}
                       </p>
                     </div>
-                  </Link>
+                  {item.onClick ? (
+                    </button>
+                  ) : (
+                    </Link>
+                  )}
                 </motion.div>
               );
             })}
@@ -216,6 +287,9 @@ const EnhancedNavigation = () => {
 };
 
 export default EnhancedNavigation;
+
+
+
 
 
 
