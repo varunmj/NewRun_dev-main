@@ -9,8 +9,6 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const multerS3 = require('multer-s3');
 const AWS = require('aws-sdk');
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
-const { Upload } = require("@aws-sdk/lib-storage");
 const axios = require('axios');
 const { authenticateToken, getAuthUserId } = require('./utilities');
 const { loginRateLimit, availabilityLimiter } = require('./middleware/rateLimiter');
@@ -165,15 +163,7 @@ AWS.config.update({
   region: process.env.AWS_REGION,
 });
 
-// AWS S3 configuration for SDK v3
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY,
-    secretAccessKey: process.env.AWS_SECRET_KEY,
-  },
-});
-
+// AWS S3 configuration for SDK v2
 const s3 = new AWS.S3();
 
 // S3 configuration verified
@@ -2687,6 +2677,11 @@ app.post("/upload-images", upload.array("images", 5), async (req, res) => {
 // Profile Picture Upload API
 app.post("/upload-avatar", authenticateToken, upload.single("avatar"), async (req, res) => {
   try {
+    console.log('📸 Avatar upload request received');
+    console.log('📸 User ID:', req.user?.user?._id || req.user?._id);
+    console.log('📸 File:', req.file);
+    console.log('📸 File location:', req.file?.location);
+    
     const userId = req.user?.user?._id || req.user?._id;
     
     if (!userId) {
@@ -3954,7 +3949,7 @@ app.post('/marketplace/favorites/:id', (req, res) => {
   // AI Service endpoints - temporarily disabled
   // const aiService = require('./services/aiService');
   const PropertyDataTransformer = require('./services/propertyDataTransformer');
-  const AIDataValidator = require('./services/aiDataValidator');
+  // const AIDataValidator = require('./services/aiDataValidator'); // File doesn't exist
 
   // AI Roommate Matching System
   const aiRoommateMatching = require('./ai-roommate-matching');
@@ -4198,7 +4193,8 @@ Provide 4-6 specific, actionable next steps prioritized by importance and urgenc
       const rawActions = parseAIActions(aiContent, userContext);
       
       // Validate and fix any duplicate content
-      const validatedActions = AIDataValidator.validateActions(rawActions);
+      // const validatedActions = AIDataValidator.validateActions(rawActions); // AIDataValidator not available
+      const validatedActions = rawActions; // Use raw actions without validation for now
       
       res.json({ success: true, actions: validatedActions, aiGenerated: true });
     } catch (error) {
