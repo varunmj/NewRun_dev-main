@@ -26,3 +26,11 @@ UserBookmarkSchema.index({ userId: 1, bookmarkedAt: -1 });
 module.exports = mongoose.model('UserBookmark', UserBookmarkSchema);
 
 
+
+
+
+
+
+
+
+

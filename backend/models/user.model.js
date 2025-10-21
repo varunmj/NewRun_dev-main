@@ -40,16 +40,18 @@ const userSchema = new Schema({
     major: { type: String, default: '' },
     intake: { type: String, default: null },
     graduationDate: { type: Date, default: null },
-    graduationSemester: { type: String, default: '' },
-    graduationYear: { type: String, default: '' },
     
     // Current situation
-    currentSituation: { type: String, enum: ['incoming', 'current', 'transfer', 'working', 'relocation', 'grad_school', 'job_search'], default: null },
+    currentSituation: { type: String, default: null },
     usStatus: { type: String, enum: ['in_us', 'coming_to_us'], default: null },
     usEntryDate: { type: Date, default: null },
     
     // Visa and status
-    visaStatus: { type: String, enum: ['F1', 'CPT', 'OPT_STEM', 'H1B', 'citizen'], default: null },
+    visaStatus: { 
+      type: String, 
+      enum: ['F1', 'CPT', 'OPT_STEM', 'H1B', 'citizen'], 
+      default: null 
+    },
     
     // Location and budget
     city: { type: String, default: '' },
@@ -57,48 +59,38 @@ const userSchema = new Schema({
       min: { type: Number, default: null },
       max: { type: Number, default: null }
     },
-    
-    // Housing and essentials
-    housingNeeds: { type: String, enum: ['On-campus', 'Off-campus', 'Sublet', 'Need roommate', 'Have roommate', 'Undecided'], default: null },
-    essentials: [{ type: String, enum: ['sim_card', 'banking', 'cookware', 'transportation', 'bedding', 'electronics', 'clothing', 'study_materials'] }],
-    
-    // Focus and completion
-    focus: [{ type: String, enum: ['Housing', 'Roommate', 'Essentials', 'Community', 'Everything'] }],
-    arrivalAnniversaryMMDD: { type: String, default: null }, // e.g., "08-21"
+    housingNeed: { type: String, enum: ['On-campus', 'Off-campus', 'Sublet', 'Undecided'], default: null },
+    roommateInterest: { type: Boolean, default: null },
+    essentials: [{ 
+      type: String, 
+      enum: [
+        'SIM', 'Bedding', 'Bank', 'Cookware', 'Transit',
+        'sim_card', 'banking', 'cookware', 'transportation', 'bedding', 'electronics', 'clothing', 'study_materials'
+      ] 
+    }],
+    focus: { 
+      type: [String], 
+      enum: ['Housing', 'Roommate', 'Essentials', 'Community', 'Everything'], 
+      default: null 
+    },
     completed: { type: Boolean, default: false },
     completedAt: { type: Date, default: null }
   },
 
-  // Phone number
-  phoneNumber:        { type: String, default: null },
-  phoneVerified:      { type: Boolean, default: false },
-  phoneVerificationCode: { type: String, default: null },
-  phoneVerificationExpires: { type: Date, default: null },
-
   // Email verification and security
   emailVerified:      { type: Boolean, default: false },
-  emailVerificationCode: { type: String, default: null },
   emailVerificationToken: { type: String, default: null },
   emailVerificationExpires: { type: Date, default: null },
   
   // OTP for various purposes
   otp:                { type: String, default: null },
   otpExpires:         { type: Date, default: null },
-  otpPurpose:         { type: String, enum: ['email_verification', 'password_reset', 'login', 'two_factor', 'phone_verification'], default: null },
+  otpPurpose:         { type: String, enum: ['email_verification', 'password_reset', 'login', 'two_factor'], default: null },
   
   // Password reset
   passwordResetToken: { type: String, default: null },
   passwordResetTokenId: { type: String, default: null },
   passwordResetExpires: { type: Date, default: null },
-
-  // Legal consent (Terms/Privacy)
-  termsConsent: {
-    accepted:   { type: Boolean, default: false },
-    version:    { type: String,  default: '' },
-    acceptedAt: { type: Date,    default: null },
-    ip:         { type: String,  default: '' },
-    userAgent:  { type: String,  default: '' }
-  },
 
   createdOn: { type: Date, default: Date.now },
 });
@@ -155,6 +147,14 @@ const SynapseSchema = new mongoose.Schema(
       allergies:  { type: [String], default: [] },
     },
 
+    matching: {
+      roommateGender: { 
+        type: String, 
+        enum: ["female", "male", "any"], 
+        default: "any" 
+      },
+    },
+
     dealbreakers: { type: [String], default: [] },
   },
   { _id: false }
@@ -162,15 +162,6 @@ const SynapseSchema = new mongoose.Schema(
 
 userSchema.add({
   synapse: { type: SynapseSchema, default: () => ({}) },
-  
-  // Synapse completion tracking
-  synapseCompletion: {
-    completed: { type: Boolean, default: false },
-    completedAt: { type: Date, default: null },
-    lastStep: { type: Number, default: 0 }, // Track which step they're on (0-10)
-    completionPercentage: { type: Number, default: 0 }, // 0-100%
-    totalSteps: { type: Number, default: 11 } // Total steps in Synapse
-  }
 });
 
 

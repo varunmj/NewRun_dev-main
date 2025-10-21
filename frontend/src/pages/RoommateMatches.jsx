@@ -11,6 +11,7 @@ import "../styles/newrun-hero.css";
 import "../styles/neumorphic-button.css";
 import VerifiedIcon from "../assets/icons/icons8-verified-48.png";
 import { expandLanguageCodes, expandLangsInText } from "../utils/languageNames";
+import { getUniversityLogoUrl } from "../utils/clearbitLogo";
 
 import {
   Info, X, MapPin, Clock, Filter, Check, Languages, PawPrint, Moon, ChevronLeft, ChevronRight
@@ -97,20 +98,12 @@ function ScoreRing({ value = 0, size = 64, animated = true }) {
 }
 
 /* =====================================================================
-   Clearbit university logos
+   University Logo Component
    ===================================================================== */
-const UNI_DOMAINS = { "Northern Illinois University": "niu.edu", "University of Illinois Urbana-Champaign": "illinois.edu" , "University of Illinois Chicago": "uic.edu","Northwestern University": "northwestern.edu", "University of Chicago": "uchicago.edu", "DePaul University": "depaul.edu", "Loyola University Chicago": "luc.edu", "Illinois Institute of Technology": "iit.edu", "Stanford University": "stanford.edu", "University of California Berkeley": "berkeley.edu", "University of California Los Angeles": "ucla.edu", "University of Southern California": "usc.edu", "University of Texas Austin": "utexas.edu", "University of Texas Dallas": "utdallas.edu", "University of Texas San Antonio": "utsa.edu", "University of Texas Arlington": "uta.edu"};
-const universityLogoUrl = (name = "") => {
-  const n = String(name || "").trim();
-  if (!n) return "";
-  const domain = UNI_DOMAINS[n] || `${n.toLowerCase().replace(/[^a-z0-9]+/g, "")}.edu`;
-  return `https://logo.clearbit.com/${domain}`;
-};
-
 // Circle uni logo (no text)
 function UniversityLogoCircle({ university, size = 56 }) {
   if (!university) return null;
-  const url = universityLogoUrl(university);
+  const url = getUniversityLogoUrl(university);
   if (!url) return null;
 
   return (
