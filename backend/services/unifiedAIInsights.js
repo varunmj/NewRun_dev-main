@@ -4,7 +4,7 @@
  * Eliminates duplicates, improves quality, and provides better user experience
  */
 
-const AIDataValidator = require('./aiDataValidator');
+const AIDataValidator = require('../aiDataValidator');
 
 class UnifiedAIInsights {
   constructor() {
