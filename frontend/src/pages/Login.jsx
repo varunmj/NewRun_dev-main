@@ -382,18 +382,8 @@ export default function Login() {
             <button
               type="button"
               onClick={() => {
-                // Check if Google OAuth is configured
-                fetch('http://localhost:8000/api/auth/google')
-                  .then(response => {
-                    if (response.ok) {
-                      window.location.href = 'http://localhost:8000/api/auth/google';
-                    } else {
-                      setError('Google OAuth is not configured. Please use email/password login.');
-                    }
-                  })
-                  .catch(() => {
-                    setError('Google OAuth is not available. Please use email/password login.');
-                  });
+                const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+                window.location.href = `${apiUrl}/api/auth/google`;
               }}
               className="mb-2 inline-flex h-10 w-full items-center justify-center gap-3 rounded-md border border-gray-300 bg-white text-[14px] font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-sm hover:shadow-md"
             >
