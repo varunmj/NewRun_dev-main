@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { HeroUIProvider } from '@heroui/react'; // ⬅️ moved from @heroui/react
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -57,6 +57,24 @@ const queryClient = new QueryClient({
 });
 
 const App = () => {
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    const error = urlParams.get('error');
+    
+    if (token) {
+      // Store the token and redirect to dashboard
+      localStorage.setItem('accessToken', token);
+      // Clean up URL and redirect
+      window.history.replaceState({}, document.title, '/dashboard');
+      window.location.href = '/dashboard';
+    } else if (error) {
+      // Handle OAuth error
+      console.error('OAuth error:', error);
+      window.history.replaceState({}, document.title, '/login?oauth_error=' + error);
+    }
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
