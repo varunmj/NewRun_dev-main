@@ -61,6 +61,9 @@ const RouteGuard = ({ children }) => {
 
   // Block history navigation when not authenticated, but never on public legal/help pages
   const publicAlwaysAccessible = [
+    '/',
+    '/login',
+    '/signup',
     '/help',
     '/terms',
     '/privacy',
@@ -75,7 +78,14 @@ const RouteGuard = ({ children }) => {
     if (!isAuthenticated && !loading) {
       // Never block back navigation on public legal/help pages
       const publicAlwaysAccessible = [
-        '/help', '/terms', '/privacy', '/cookies', '/cookies/settings'
+        '/',
+        '/login',
+        '/signup',
+        '/help', 
+        '/terms', 
+        '/privacy', 
+        '/cookies', 
+        '/cookies/settings'
       ];
       if (publicAlwaysAccessible.some(p => location.pathname.startsWith(p))) return;
 

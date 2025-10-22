@@ -23,6 +23,9 @@ const useHistoryBlocker = (shouldBlock = false) => {
     const handleNavigation = (event) => {
       // Never block hash navigation on public legal/help pages
       const publicAlwaysAccessible = [
+        '/',
+        '/login',
+        '/signup',
         '/help',
         '/terms',
         '/privacy',

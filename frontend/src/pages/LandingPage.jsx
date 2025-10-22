@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, Suspense } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { motion, useScroll, useTransform } from "framer-motion";
 import Lenis from "@studio-freight/lenis";
 
@@ -101,30 +101,34 @@ export default function LandingPage() {
 
           <motion.p
             variants={fadeUp}
-            custom={1}
             initial="hidden"
             animate="show"
-            className="mt-5 max-w-2xl text-lg text-[var(--text-mid)] md:text-xl"
+            custom={1}
+            className="mt-6 max-w-2xl text-xl leading-relaxed text-white/70 md:text-2xl"
           >
-            Housing, essentials, and community — all in one place, curated for your university only.
+            Connect with students, find verified housing, explore the campus, and build friendships. All in one place.
           </motion.p>
 
+          {/* CTA Buttons - ADDED */}
           <motion.div
             variants={fadeUp}
-            custom={2}
             initial="hidden"
             animate="show"
-            className="mt-10 flex flex-col items-center gap-4 sm:flex-row"
+            custom={2}
+            className="mt-8 flex flex-col sm:flex-row gap-4 items-center justify-center"
           >
-            <button onClick={() => navigate("/onboarding")} className="btn-metal">
-              Get Started
-            </button>
-            <button
-              onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-              className="btn-ghost"
+            <Link
+              to="/signup"
+              className="px-8 py-3 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-500 text-white font-semibold hover:shadow-lg hover:shadow-blue-500/50 transition-all duration-300"
             >
-              Explore NewRun
-            </button>
+              Get Started
+            </Link>
+            <Link
+              to="/login"
+              className="px-8 py-3 rounded-lg border border-white/30 text-white font-semibold hover:bg-white/10 transition-all duration-300"
+            >
+              Log In
+            </Link>
           </motion.div>
 
           {/* micro-stats */}

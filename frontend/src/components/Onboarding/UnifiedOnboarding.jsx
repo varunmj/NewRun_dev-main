@@ -27,55 +27,233 @@ import {
   Search
 } from 'lucide-react';
 
+// Comprehensive list of common college majors/fields of study
+const MAJORS_LIST = [
+  // STEM - Engineering
+  'Mechanical Engineering',
+  'Electrical Engineering',
+  'Civil Engineering',
+  'Chemical Engineering',
+  'Software Engineering',
+  'Computer Engineering',
+  'Biomedical Engineering',
+  'Aerospace Engineering',
+  'Environmental Engineering',
+  'Industrial Engineering',
+  
+  // STEM - Computer Science & IT
+  'Computer Science',
+  'Information Technology',
+  'Data Science',
+  'Cybersecurity',
+  'Information Systems',
+  'Web Development',
+  'Game Development',
+  'Artificial Intelligence',
+  'Machine Learning',
+  
+  // STEM - Mathematics & Physics
+  'Mathematics',
+  'Physics',
+  'Statistics',
+  'Applied Mathematics',
+  'Astrophysics',
+  'Quantum Physics',
+  
+  // STEM - Biology & Life Sciences
+  'Biology',
+  'Biochemistry',
+  'Microbiology',
+  'Molecular Biology',
+  'Marine Biology',
+  'Genetics',
+  'Cell Biology',
+  'Ecology',
+  
+  // STEM - Chemistry
+  'Chemistry',
+  'Organic Chemistry',
+  'Analytical Chemistry',
+  'Physical Chemistry',
+  
+  // STEM - Other Sciences
+  'Geology',
+  'Environmental Science',
+  'Neuroscience',
+  'Psychology',
+  'Nursing',
+  'Pre-Medicine',
+  'Pre-Dental',
+  
+  // Business & Economics
+  'Business Administration',
+  'Business Management',
+  'Accounting',
+  'Finance',
+  'Economics',
+  'Marketing',
+  'International Business',
+  'Entrepreneurship',
+  'Business Analytics',
+  'Supply Chain Management',
+  'Human Resource Management',
+  'Real Estate',
+  
+  // Engineering & Technology Management
+  'Project Management',
+  'Operations Management',
+  'Technology Management',
+  
+  // Liberal Arts & Sciences
+  'Undeclared/General Studies',
+  'Liberal Arts',
+  'General Science',
+  'Natural Sciences',
+  
+  // Humanities
+  'English Literature',
+  'English Composition',
+  'Journalism',
+  'Creative Writing',
+  'Philosophy',
+  'Classics',
+  'Comparative Literature',
+  
+  // History & Social Sciences
+  'History',
+  'American History',
+  'World History',
+  'Political Science',
+  'International Relations',
+  'Public Administration',
+  'Public Policy',
+  'Sociology',
+  'Anthropology',
+  'Geography',
+  
+  // Foreign Languages
+  'Spanish',
+  'French',
+  'German',
+  'Chinese',
+  'Japanese',
+  'Arabic',
+  'Latin',
+  'Foreign Languages',
+  'Linguistics',
+  
+  // Arts & Design
+  'Fine Arts',
+  'Graphic Design',
+  'Industrial Design',
+  'Interior Design',
+  'Fashion Design',
+  'Digital Art',
+  'Animation',
+  'Visual Arts',
+  'Art History',
+  'Architecture',
+  'Landscape Architecture',
+  
+  // Music & Performing Arts
+  'Music',
+  'Music Theory',
+  'Music Performance',
+  'Music Composition',
+  'Music Education',
+  'Theater',
+  'Drama',
+  'Dance',
+  'Film Production',
+  'Media Arts',
+  
+  // Education
+  'Education',
+  'Elementary Education',
+  'Secondary Education',
+  'Special Education',
+  'Early Childhood Education',
+  'Physical Education',
+  
+  // Law & Justice
+  'Pre-Law',
+  'Criminal Justice',
+  'Legal Studies',
+  
+  // Communication & Media
+  'Communications',
+  'Media Studies',
+  'Public Relations',
+  'Advertising',
+  'Broadcasting',
+  'Digital Media',
+  'Telecommunications',
+  
+  // Social Work & Counseling
+  'Social Work',
+  'Clinical Counseling',
+  'Mental Health Counseling',
+  
+  // Health & Medical Sciences
+  'Public Health',
+  'Health Administration',
+  'Health Sciences',
+  'Medical Technology',
+  'Pharmacy',
+  'Physical Therapy',
+  'Occupational Therapy',
+  'Dietetics',
+  'Nutrition Science',
+  'Veterinary Science',
+  
+  // Agriculture & Environmental
+  'Agriculture',
+  'Forestry',
+  'Horticulture',
+  'Sustainable Agriculture',
+  'Environmental Management',
+  
+  // Hospitality & Tourism
+  'Hospitality Management',
+  'Hotel Management',
+  'Tourism Management',
+  'Culinary Arts',
+  'Food Science',
+  
+  // Sports & Recreation
+  'Sports Management',
+  'Kinesiology',
+  'Exercise Science',
+  'Recreation Management',
+  
+  // Military & Security
+  'Military Science',
+  'National Security',
+  
+  // Other Professional Fields
+  'Accounting',
+  'Actuarial Science',
+  'Audiology',
+  'Aviation',
+  'Construction Management',
+  'Engineering Technology',
+  'Funeral Service',
+  'Insurance',
+  'Library Science',
+  'Manufacturing',
+  'Paralegal Studies',
+  'Real Estate',
+  'Telecommunications',
+  'Transportation',
+].sort();
+
 // Required fields registry for future-proofing
 const REQUIRED_TEXT_IDS = new Set(['university']); // expand later
 
 // Major Autocomplete Component
-const MajorAutocomplete = ({ value, onChange, placeholder, university, className }) => {
-  const [suggestions, setSuggestions] = useState([]);
+const MajorAutocomplete = ({ value, onChange, placeholder, className }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
-  const controllerRef = useRef(null);
-
-  const fetchMajors = useCallback(async (universityName) => {
-    if (!universityName) return;
-    
-    // Cancel previous request
-    controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    
-    setLoading(true);
-    try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/universities/${encodeURIComponent(universityName)}/majors`, {
-        signal: controller.signal
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        setSuggestions(data.majors || []);
-      }
-    } catch (error) {
-      if (error.name !== 'AbortError') {
-        console.error('Error fetching majors:', error);
-        setSuggestions([]);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Debounced fetch
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (university) {
-        fetchMajors(university);
-      }
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [university, fetchMajors]);
 
   const handleInputChange = (e) => {
     const inputValue = e.target.value;
@@ -127,9 +305,9 @@ const MajorAutocomplete = ({ value, onChange, placeholder, university, className
     }, 150);
   };
 
-  const filteredSuggestions = suggestions.filter(major =>
+  const filteredSuggestions = MAJORS_LIST.filter(major =>
     major.toLowerCase().includes(value.toLowerCase())
-  );
+  ).slice(0, 12); // Limit to 12 suggestions
 
   return (
     <div className="relative">
@@ -147,12 +325,6 @@ const MajorAutocomplete = ({ value, onChange, placeholder, university, className
         aria-haspopup="listbox"
         aria-activedescendant={isOpen && selectedIndex >= 0 ? `major-opt-${selectedIndex}` : undefined}
       />
-      
-      {loading && (
-        <div className="absolute right-3 top-1/2 -translate-y-1/2" aria-live="polite" aria-label="Loading suggestions">
-          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/40 border-t-white"></div>
-        </div>
-      )}
       
       {isOpen && filteredSuggestions.length > 0 && (
         <div 
@@ -639,6 +811,13 @@ const ONBOARDING_STEPS = [
         category: 'international'
       },
       { 
+        label: 'J1 Exchange Program', 
+        icon: GraduationCap, 
+        description: 'Exchange student or scholar',
+        value: 'J1',
+        category: 'international'
+      },
+      { 
         label: 'CPT (F-1)', 
         icon: Briefcase, 
         description: 'Curricular Practical Training',
@@ -661,7 +840,6 @@ const ONBOARDING_STEPS = [
       },
       { 
         label: 'US Citizen/Green Card', 
-        icon: Flag, 
         description: 'US citizen or permanent resident',
         value: 'citizen',
         category: 'domestic'
@@ -755,6 +933,30 @@ const initProfile = () => ({
   startedAt: new Date().toISOString(),
   completedAt: null
 });
+
+// Helper function to get confirmation message for a selection
+const getConfirmationMessage = (stepId, selectedValue, profile) => {
+  const stepConfig = ONBOARDING_STEPS.find(s => s.id === stepId);
+  if (!stepConfig) return null;
+
+  switch (stepId) {
+    case 'us_status':
+      return selectedValue === 'in_us' ? 'Already in the US' : 'Coming to the US';
+    case 'academic_level':
+      const academicLabels = { undergraduate: 'Undergraduate', graduate: 'Graduate Student', alumni: 'Alumni' };
+      return academicLabels[selectedValue] || selectedValue;
+    case 'current_situation':
+      const situationLabels = { incoming: 'Incoming Student', current: 'Current Student', transfer: 'Transfer Student', working: 'Currently Working', relocation: 'Job Relocation', grad_school: 'Graduate School', job_search: 'Job Search' };
+      return situationLabels[selectedValue] || selectedValue;
+    case 'visa_status':
+      const visaLabels = { F1: 'F1 Student Visa', J1: 'J1 Exchange Program', CPT: 'CPT (F-1)', OPT_STEM: 'OPT / STEM-OPT (F-1)', H1B: 'H1B Work Visa', citizen: 'US Citizen/Green Card' };
+      return visaLabels[selectedValue] || selectedValue;
+    case 'housing_needs':
+      return selectedValue || 'Not selected';
+    default:
+      return selectedValue || 'Not selected';
+  }
+};
 
 export default function UnifiedOnboarding() {
   const navigate = useNavigate();
@@ -900,6 +1102,18 @@ export default function UnifiedOnboarding() {
     return ONBOARDING_STEPS.filter(step => shouldShowStep(step));
   }, [shouldShowStep]);
 
+  // Debug: Log when university step visibility changes
+  useEffect(() => {
+    const universityStep = ONBOARDING_STEPS.find(s => s.id === 'university');
+    const isUniversityVisible = visibleSteps.some(s => s.id === 'university');
+    console.log('🎓 University Step Debug:', {
+      academicLevel: profile.academicLevel,
+      isUniversityVisible,
+      condition: universityStep?.conditional?.(profile),
+      allVisibleSteps: visibleSteps.map(s => s.id)
+    });
+  }, [visibleSteps, profile.academicLevel]);
+
   // Resume from saved step ID
   useEffect(() => {
     if (profile.currentStepId) {
@@ -997,7 +1211,11 @@ export default function UnifiedOnboarding() {
 
       case 'budget':
         const { min, max } = profile.budget_range || {};
-        return Number.isFinite(+min) && Number.isFinite(+max) && +min >= 0 && +max >= +min;
+        const isMinValid = Number.isFinite(+min) && +min >= 0;
+        const isMaxValid = Number.isFinite(+max) && +max >= 0;
+        const isValidRange = isMinValid && isMaxValid && +min <= +max;
+        
+        return isValidRange;
 
       default:
         // fallback by type
@@ -1201,9 +1419,12 @@ export default function UnifiedOnboarding() {
   const prevStep = useCallback(() => {
     const idx = visibleSteps.findIndex(s => s.id === stepConfig.id);
     if (idx > 0) {
-      setCurrentStep(idx - 1);
+      const prevIdx = idx - 1;
+      setCurrentStep(prevIdx);
+      setProfile(p => ({ ...p, currentStepId: visibleSteps[prevIdx].id }));
+      localStorage.setItem('nr_onboarding', JSON.stringify({ ...profile, currentStepId: visibleSteps[prevIdx].id }));
     }
-  }, [visibleSteps, stepConfig]);
+  }, [visibleSteps, stepConfig, profile]);
 
 
   // Add keyboard navigation
@@ -1375,28 +1596,38 @@ export default function UnifiedOnboarding() {
                   <label className="block text-blue-400 text-base font-semibold mb-4">
                     Semester
                   </label>
-                  <select
-                    value={profile.graduationSemester || ''}
-                    onChange={(e) => {
-                      const semester = e.target.value;
-                      const year = profile.graduationYear || '';
-                      const combinedValue = semester && year ? `${semester}_${year}` : '';
-                      handleInputChange('graduationSemester', semester);
-                      handleInputChange('intake', combinedValue);
-                    }}
-                    className="w-full p-4 rounded-xl border-2 border-white/20 bg-black/40 text-white placeholder-white/50 focus:border-blue-500 focus:bg-black/60 transition-all duration-200 hover:border-white/40 hover:bg-black/50"
-                    style={{
-                      backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
-                      backgroundPosition: 'right 12px center',
-                      backgroundRepeat: 'no-repeat',
-                      backgroundSize: '16px'
-                    }}
-                  >
-                    <option value="" className="bg-black text-white">Select semester</option>
-                    <option value="spring" className="bg-black text-white">Spring</option>
-                    <option value="summer" className="bg-black text-white">Summer</option>
-                    <option value="fall" className="bg-black text-white">Fall</option>
-                  </select>
+                  <div className={`rounded-2xl border-2 transition-all p-4 flex items-center gap-4 ${
+                    profile.graduationSemester
+                      ? 'border-blue-500 bg-blue-500/10'
+                      : 'border-white/20 bg-transparent'
+                  }`}>
+                    <select
+                      value={profile.graduationSemester || ''}
+                      onChange={(e) => {
+                        const semester = e.target.value;
+                        const year = profile.graduationYear || '';
+                        const combinedValue = semester && year ? `${semester}_${year}` : '';
+                        handleInputChange('graduationSemester', semester);
+                        handleInputChange('intake', combinedValue);
+                      }}
+                      className="flex-1 bg-transparent text-white placeholder-white/50 focus:outline-none appearance-none"
+                      style={{
+                        backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
+                        backgroundPosition: 'right 12px center',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundSize: '16px',
+                        paddingRight: '2.5rem'
+                      }}
+                    >
+                      <option value="" className="bg-black text-white">Select semester</option>
+                      <option value="spring" className="bg-black text-white">Spring</option>
+                      <option value="summer" className="bg-black text-white">Summer</option>
+                      <option value="fall" className="bg-black text-white">Fall</option>
+                    </select>
+                    {profile.graduationSemester && (
+                      <CheckCircle size={24} className="text-green-400 flex-shrink-0" />
+                    )}
+                  </div>
                 </div>
 
                 {/* Year Dropdown */}
@@ -1404,30 +1635,40 @@ export default function UnifiedOnboarding() {
                   <label className="block text-blue-400 text-base font-semibold mb-4">
                     Year
                   </label>
-                  <select
-                    value={profile.graduationYear || ''}
-                    onChange={(e) => {
-                      const year = e.target.value;
-                      const semester = profile.graduationSemester || '';
-                      const combinedValue = semester && year ? `${semester}_${year}` : '';
-                      handleInputChange('graduationYear', year);
-                      handleInputChange('intake', combinedValue);
-                    }}
-                    className="w-full p-4 rounded-xl border-2 border-white/20 bg-black/40 text-white placeholder-white/50 focus:border-blue-500 focus:bg-black/60 transition-all duration-200 hover:border-white/40 hover:bg-black/50"
-                    style={{
-                      backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
-                      backgroundPosition: 'right 12px center',
-                      backgroundRepeat: 'no-repeat',
-                      backgroundSize: '16px'
-                    }}
-                  >
-                    <option value="" className="bg-black text-white">Select year</option>
-                    <option value="2020" className="bg-black text-white">2020</option>
-                    <option value="2021" className="bg-black text-white">2021</option>
-                    <option value="2022" className="bg-black text-white">2022</option>
-                    <option value="2023" className="bg-black text-white">2023</option>
-                    <option value="2024" className="bg-black text-white">2024</option>
-                  </select>
+                  <div className={`rounded-2xl border-2 transition-all p-4 flex items-center gap-4 ${
+                    profile.graduationYear
+                      ? 'border-blue-500 bg-blue-500/10'
+                      : 'border-white/20 bg-transparent'
+                  }`}>
+                    <select
+                      value={profile.graduationYear || ''}
+                      onChange={(e) => {
+                        const year = e.target.value;
+                        const semester = profile.graduationSemester || '';
+                        const combinedValue = semester && year ? `${semester}_${year}` : '';
+                        handleInputChange('graduationYear', year);
+                        handleInputChange('intake', combinedValue);
+                      }}
+                      className="flex-1 bg-transparent text-white placeholder-white/50 focus:outline-none appearance-none"
+                      style={{
+                        backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
+                        backgroundPosition: 'right 12px center',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundSize: '16px',
+                        paddingRight: '2.5rem'
+                      }}
+                    >
+                      <option value="" className="bg-black text-white">Select year</option>
+                      <option value="2020" className="bg-black text-white">2020</option>
+                      <option value="2021" className="bg-black text-white">2021</option>
+                      <option value="2022" className="bg-black text-white">2022</option>
+                      <option value="2023" className="bg-black text-white">2023</option>
+                      <option value="2024" className="bg-black text-white">2024</option>
+                    </select>
+                    {profile.graduationYear && (
+                      <CheckCircle size={24} className="text-green-400 flex-shrink-0" />
+                    )}
+                  </div>
                 </div>
               </div>
               
@@ -1459,27 +1700,42 @@ export default function UnifiedOnboarding() {
                   handleInputChange(stepConfig.field, value);
                     setTimeout(nextStep, 300);
                 }}
-                className={`p-6 rounded-2xl border-2 transition-all duration-200 text-left ${
+                className={`p-6 rounded-2xl border-2 transition-all duration-200 text-left h-24 ${
                   profile[stepConfig.field] === (option.value || option.label)
                     ? 'border-blue-500 bg-blue-500/10 text-white'
                     : 'border-white/20 hover:border-white/40 hover:bg-white/5 text-white/90'
                 }`}
               >
-                <div className="flex items-center gap-4">
-                  {option.icon && <option.icon size={24} className="text-blue-400" />}
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-lg text-white">{option.label}</h3>
-                    <p className="text-white/70 text-sm">{option.description}</p>
+                <div className="flex items-center gap-4 h-full">
+                  {option.icon ? (
+                    <option.icon size={24} className="text-blue-400 flex-shrink-0" />
+                  ) : option.value === 'citizen' ? (
+                    <span className="text-2xl flex-shrink-0">🇺🇸</span>
+                  ) : null}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-lg text-white truncate">{option.label}</h3>
+                    <p className="text-white/70 text-sm line-clamp-2">{option.description}</p>
                   </div>
                   {/* Show checkmark for selected options */}
                   {profile[stepConfig.field] === (option.value || option.label) && (
-                    <CheckCircle size={20} className="text-green-400" />
+                    <CheckCircle size={20} className="text-green-400 flex-shrink-0" />
                   )}
                 </div>
               </motion.button>
               ))}
             </div>
             
+            {/* Show confirmation box for selected value */}
+            {profile[stepConfig.field] && (
+              <div className="text-center mt-8">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                  <p className="text-white/90 text-sm">
+                    Selected: <span className="text-blue-400 font-medium">{getConfirmationMessage(stepConfig.id, profile[stepConfig.field], profile)}</span>
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         );
 
@@ -1520,22 +1776,22 @@ export default function UnifiedOnboarding() {
                       
                       handleInputChange(stepConfig.field, newValues);
                     }}
-                    className={`p-6 rounded-2xl border-2 transition-all duration-200 text-left ${
+                    className={`p-6 rounded-2xl border-2 transition-all duration-200 text-left h-24 ${
                       isSelected
                         ? 'border-blue-500 bg-blue-500/10 text-white'
                         : 'border-white/20 hover:border-white/40 hover:bg-white/5 text-white/90'
                     }`}
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 rounded-xl bg-blue-500/20">
+                    <div className="flex items-center gap-4 h-full">
+                      <div className="p-3 rounded-xl bg-blue-500/20 flex-shrink-0">
                         <option.icon size={24} className="text-blue-400" />
                       </div>
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-lg mb-1">{option.label}</h3>
-                        <p className="text-white/70 text-sm">{option.description}</p>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-lg mb-1 truncate">{option.label}</h3>
+                        <p className="text-white/70 text-sm line-clamp-2">{option.description}</p>
                       </div>
                       {isSelected && (
-                        <CheckCircle size={24} className="text-blue-400" />
+                        <CheckCircle size={24} className="text-blue-400 flex-shrink-0" />
                       )}
                     </div>
                   </motion.button>
@@ -1557,19 +1813,56 @@ export default function UnifiedOnboarding() {
       case 'date':
         const isUsEntry = stepConfig.id === 'us_entry_date';
         const dateError = isUsEntry ? getUsEntryDateError(profile) : '';
+        
+        // Format date for display
+        const formatDateForDisplay = (dateString) => {
+          if (!dateString) return '';
+          // Parse date string in format YYYY-MM-DD without timezone conversion
+          const [year, month, day] = dateString.split('-').map(Number);
+          const date = new Date(year, month - 1, day); // month is 0-indexed
+          return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        };
+        
+        const isValidDate = profile[stepConfig.field] && !dateError;
+        
         return (
           <div className="max-w-md mx-auto">
-            <input
-              type="date"
-              value={profile[stepConfig.field]}
-              onChange={(e) => handleInputChange(stepConfig.field, e.target.value)}
-              aria-invalid={!!dateError}
-              className={`w-full p-4 rounded-xl bg-white/10 border text-white text-center text-lg focus:outline-none ${
-                dateError ? 'border-red-500 focus:border-red-500' : 'border-white/30 focus:border-blue-500'
-              }`}
-            />
+            <div className={`relative p-6 rounded-2xl border-2 transition-all flex items-center gap-4 ${
+              isValidDate
+                ? 'border-blue-500 bg-blue-500/10'
+                : 'border-white/20 bg-transparent hover:border-white/40'
+            }`}>
+              {/* Green checkmark when valid date is selected - on the left */}
+              {isValidDate && (
+                <div className="flex-shrink-0">
+                  <CheckCircle size={24} className="text-green-400" />
+                </div>
+              )}
+              
+              <input
+                type="date"
+                value={profile[stepConfig.field]}
+                onChange={(e) => handleInputChange(stepConfig.field, e.target.value)}
+                aria-invalid={!!dateError}
+                className={`flex-1 bg-transparent text-white text-center text-lg focus:outline-none ${
+                  dateError ? 'text-red-400' : 'text-white'
+                }`}
+              />
+            </div>
             {isUsEntry && dateError && (
               <p className="mt-2 text-sm text-red-400" role="alert">{dateError}</p>
+            )}
+            
+            {/* Show confirmation box for date */}
+            {isValidDate && (
+              <div className="text-center mt-6">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                  <p className="text-white/90 text-sm">
+                    Selected: <span className="text-blue-400 font-medium">{formatDateForDisplay(profile[stepConfig.field])}</span>
+                  </p>
+                </div>
+              </div>
             )}
           </div>
         );
@@ -1578,13 +1871,31 @@ export default function UnifiedOnboarding() {
         return (
           <div className="max-w-md mx-auto">
             {stepConfig.field === 'major' ? (
-              <MajorAutocomplete
-                value={profile[stepConfig.field]}
-                onChange={(value) => handleInputChange(stepConfig.field, value)}
-                placeholder={stepConfig.placeholder}
-                university={profile.university}
-                className="w-full p-4 rounded-xl bg-white/10 border border-white/30 text-white text-center text-lg focus:outline-none focus:border-blue-500 placeholder-white/50"
-              />
+              <>
+                <div className={`rounded-2xl border-2 transition-all p-6 overflow-visible ${
+                  profile[stepConfig.field]
+                    ? 'border-blue-500 bg-blue-500/10'
+                    : 'border-white/20 bg-transparent hover:border-white/40'
+                }`}>
+                  <MajorAutocomplete
+                    value={profile[stepConfig.field]}
+                    onChange={(value) => handleInputChange(stepConfig.field, value)}
+                    placeholder={stepConfig.placeholder}
+                    className="w-full bg-transparent text-white text-center text-lg focus:outline-none placeholder-white/50"
+                  />
+                </div>
+                {/* Show confirmation box for major */}
+                {profile[stepConfig.field] && (
+                  <div className="text-center mt-6">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                      <p className="text-white/90 text-sm">
+                        Selected: <span className="text-blue-400 font-medium">{profile[stepConfig.field]}</span>
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
               <input
                 type="text"
@@ -1601,61 +1912,135 @@ export default function UnifiedOnboarding() {
         return (
           <div className="max-w-md mx-auto">
             {stepConfig.field === 'city' ? (
-              <AutocompleteInput
-                value={profile[stepConfig.field]}
-                onChange={(value) => handleInputChange(stepConfig.field, value)}
-                onSearch={handleCitySearch}
-                suggestions={citySuggestions}
-                placeholder={stepConfig.placeholder}
-                className="w-full p-4 rounded-xl bg-white/10 border border-white/30 text-white text-center text-lg focus:outline-none focus:border-blue-500 placeholder-white/50"
-              />
+              <>
+                <div className={`rounded-2xl border-2 transition-all p-6 overflow-visible ${
+                  profile[stepConfig.field]
+                    ? 'border-blue-500 bg-blue-500/10'
+                    : 'border-white/20 bg-transparent hover:border-white/40'
+                }`}>
+                  <AutocompleteInput
+                    value={profile[stepConfig.field]}
+                    onChange={(value) => handleInputChange(stepConfig.field, value)}
+                    onSearch={handleCitySearch}
+                    suggestions={citySuggestions}
+                    placeholder={stepConfig.placeholder}
+                    className="w-full bg-transparent text-white text-center text-lg focus:outline-none placeholder-white/50"
+                  />
+                </div>
+                {profile[stepConfig.field] && (
+                  <div className="text-center mt-6">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                      <p className="text-white/90 text-sm">
+                        Selected: <span className="text-blue-400 font-medium">{profile[stepConfig.field]}</span>
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </>
             ) : stepConfig.field === 'university' ? (
-              <AutocompleteInput
-                value={profile[stepConfig.field]}
-                onChange={(value) => handleInputChange(stepConfig.field, value)}
-                onSearch={handleUniversitySearch}
-                suggestions={universitySuggestions}
-                placeholder={stepConfig.placeholder}
-                className="w-full p-4 rounded-xl bg-white/10 border border-white/30 text-white text-center text-lg focus:outline-none focus:border-blue-500 placeholder-white/50"
-              />
+              <>
+                <div className={`rounded-2xl border-2 transition-all p-6 overflow-visible ${
+                  profile[stepConfig.field]
+                    ? 'border-blue-500 bg-blue-500/10'
+                    : 'border-white/20 bg-transparent hover:border-white/40'
+                }`}>
+                  <AutocompleteInput
+                    value={profile[stepConfig.field]}
+                    onChange={(value) => handleInputChange(stepConfig.field, value)}
+                    onSearch={handleUniversitySearch}
+                    suggestions={universitySuggestions}
+                    placeholder={stepConfig.placeholder}
+                    className="w-full bg-transparent text-white text-center text-lg focus:outline-none placeholder-white/50"
+                  />
+                </div>
+                {/* Show confirmation box for university */}
+                {profile[stepConfig.field] && (
+                  <div className="text-center mt-6">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                      <p className="text-white/90 text-sm">
+                        Selected: <span className="text-blue-400 font-medium">{profile[stepConfig.field]}</span>
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
-              <input
-                type="text"
-                value={profile[stepConfig.field]}
-                onChange={(e) => handleInputChange(stepConfig.field, e.target.value)}
-                placeholder={stepConfig.placeholder}
-                className="w-full p-4 rounded-xl bg-white/10 border border-white/30 text-white text-center text-lg focus:outline-none focus:border-blue-500 placeholder-white/50"
-              />
+              <>
+                <input
+                  type="text"
+                  value={profile[stepConfig.field]}
+                  onChange={(e) => handleInputChange(stepConfig.field, e.target.value)}
+                  placeholder={stepConfig.placeholder}
+                  className="w-full p-4 rounded-xl bg-white/10 border border-white/30 text-white text-center text-lg focus:outline-none focus:border-blue-500 placeholder-white/50"
+                />
+                {/* Show confirmation box for any other text field */}
+                {profile[stepConfig.field] && (
+                  <div className="text-center mt-6">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                      <p className="text-white/90 text-sm">
+                        Entered: <span className="text-blue-400 font-medium">{profile[stepConfig.field]}</span>
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         );
 
       case 'budget':
+        const { min, max } = profile.budget_range || {};
+        const isMinValid = Number.isFinite(+min) && +min >= 0;
+        const isMaxValid = Number.isFinite(+max) && +max >= 0;
+        const isValidRange = isMinValid && isMaxValid && +min <= +max;
+        const isMaxLessThanMin = isMinValid && isMaxValid && +max < +min;
+        
         return (
           <div className="max-w-md mx-auto space-y-4">
             <div className="flex gap-4">
               <div className="flex-1">
                 <label className="block text-white text-sm mb-2 font-medium">Min Budget</label>
-                <input
-                  type="number"
-                  value={profile.budget_range.min}
-                  onChange={(e) => handleBudgetChange('min', e.target.value)}
-                  placeholder="0"
-                  className="w-full p-3 rounded-lg bg-white/10 border border-white/30 text-white text-center focus:outline-none focus:border-blue-500 placeholder-white/50"
-                />
+                <div className={`rounded-lg border-2 transition-all p-3 flex items-center gap-2 ${
+                  isMinValid
+                    ? 'border-blue-500 bg-blue-500/10'
+                    : 'border-white/30 bg-white/10'
+                }`}>
+                  <span className="text-white/70">$</span>
+                  <input
+                    type="number"
+                    value={profile.budget_range.min}
+                    onChange={(e) => handleBudgetChange('min', e.target.value)}
+                    placeholder="Eg. 100"
+                    className="flex-1 bg-transparent text-white text-center focus:outline-none placeholder-white/50"
+                  />
+                </div>
               </div>
               <div className="flex-1">
                 <label className="block text-white text-sm mb-2 font-medium">Max Budget</label>
-                <input
-                  type="number"
-                  value={profile.budget_range.max}
-                  onChange={(e) => handleBudgetChange('max', e.target.value)}
-                  placeholder="1000"
-                  className="w-full p-3 rounded-lg bg-white/10 border border-white/30 text-white text-center focus:outline-none focus:border-blue-500 placeholder-white/50"
-                />
+                <div className={`rounded-lg border-2 transition-all p-3 flex items-center gap-2 ${
+                  isMaxLessThanMin
+                    ? 'border-red-500 bg-red-500/10'
+                    : isMaxValid
+                    ? 'border-blue-500 bg-blue-500/10'
+                    : 'border-white/30 bg-white/10'
+                }`}>
+                  <span className={`${isMaxLessThanMin ? 'text-red-400' : 'text-white/70'}`}>$</span>
+                  <input
+                    type="number"
+                    value={profile.budget_range.max}
+                    onChange={(e) => handleBudgetChange('max', e.target.value)}
+                    placeholder="Eg. 1500"
+                    className={`flex-1 bg-transparent text-center focus:outline-none placeholder-white/50 ${
+                      isMaxLessThanMin ? 'text-red-400' : 'text-white'
+                    }`}
+                  />
+                </div>
               </div>
             </div>
-            <p className="text-white/60 text-sm text-center">Per month in your local currency</p>
+            <p className="text-white/60 text-sm text-center">Include rent, utilities, groceries, food, transportation, and other monthly expenses</p>
           </div>
         );
 
