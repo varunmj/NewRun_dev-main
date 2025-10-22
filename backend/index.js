@@ -14,6 +14,7 @@ const { authenticateToken, getAuthUserId } = require('./utilities');
 const { loginRateLimit, availabilityLimiter } = require('./middleware/rateLimiter');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const session = require('express-session');
 
 // Helper function to track user activities
 async function trackActivity(userId, activityType, targetType, targetId, metadata = {}, location = {}) {
@@ -80,22 +81,30 @@ app.use(cors({
     credentials: true
 }));
 
-// Session configuration (MUST be before Passport middleware)
-const session = require('express-session');
+app.set('trust proxy', 1);
 app.use(session({
-  secret: process.env.ACCESS_TOKEN_SECRET || 'your-secret-key',
+  secret: process.env.ACCESS_TOKEN_SECRET || 'newrun-secret',
   resave: false,
-  saveUninitialized: true,
-  cookie: { 
-    secure: true,
+  saveUninitialized: false,
+  cookie: {
+    secure: true,        // https on api.newrun.club
     httpOnly: true,
+    sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000
   }
 }));
 
 
+
 // Passport configuration
 app.use(passport.initialize());
+app.use(passport.session());
+
+passport.serializeUser((user, done) => done(null, user._id));
+passport.deserializeUser(async (id, done) => {
+  try { const user = await User.findById(id); done(null, user); }
+  catch (e) { done(e); }
+});
 
 // Google OAuth Strategy (only if credentials are provided)
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
