@@ -108,7 +108,7 @@ const AutocompleteInput = ({
       {isOpen && filteredSuggestions.length > 0 && (
         <div
           ref={dropdownRef}
-          className="absolute z-50 w-full mt-1 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+          className="absolute z-[50] w-full mt-6 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg shadow-lg max-h-60 overflow-y-auto top-full"
         >
           {filteredSuggestions.map((suggestion, index) => (
             <div

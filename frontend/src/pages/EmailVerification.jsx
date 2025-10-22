@@ -253,9 +253,9 @@ const EmailVerification = () => {
       setMessage('Account verification completed. Your NewRun account is now activated.');
       setStep('success');
       
-      // Redirect to dashboard after success
+      // Redirect to onboarding after email verification is complete
       setTimeout(() => {
-        navigate('/dashboard');
+        navigate('/onboarding');
       }, 1200);
     } catch (err) {
       const errorMessage = err?.response?.data?.message || 'Invalid or expired code.';

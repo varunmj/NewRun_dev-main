@@ -53,8 +53,12 @@ function NotificationBell() {
   const [items, setItems] = useState([]);
   const panelRef = useRef(null);
   const btnRef = useRef(null);
+  const { isAuthenticated } = useAuth(); // ADD AUTH CHECK
 
   const loadPending = async () => {
+    // SKIP if not authenticated
+    if (!isAuthenticated) return;
+    
     try {
       const r = await axiosInstance.get("/contact-access/inbox?status=pending");
       const arr = r?.data?.items || [];
@@ -67,6 +71,9 @@ function NotificationBell() {
   };
 
   useEffect(() => {
+    // SKIP if not authenticated
+    if (!isAuthenticated) return;
+    
     let s;
     (async () => {
       await loadPending();
@@ -104,7 +111,7 @@ function NotificationBell() {
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onEsc);
     };
-  }, []);
+  }, [isAuthenticated]);
 
   const approve = async (requestId) => {
     await axiosInstance.post("/contact-access/approve", { requestId });
@@ -240,7 +247,7 @@ function NotificationBell() {
 /* ---------- Main Navbar ---------- */
 export default function Navbar() {
   const loc = useLocation();
-  const { logout } = useAuth();
+  const { logout, isAuthenticated } = useAuth(); // ADD isAuthenticated
 
   const productItems = [
     { title: "Solve Threads", desc: "AI-powered campus life solutions.", to: "/solve-threads", icon: MdAutoAwesome, featured: true },
@@ -297,11 +304,31 @@ export default function Navbar() {
           </Link>
         </nav>
 
-        {/* right side */}
+        {/* right side - Conditional rendering based on auth status */}
         <div className="flex items-center gap-3">
-          <NotificationBell />
-
-          <UserDropdown />
+          {isAuthenticated ? (
+            <>
+              {/* Show for authenticated users */}
+              <NotificationBell />
+              <UserDropdown />
+            </>
+          ) : (
+            <>
+              {/* Show for unauthenticated users */}
+              <Link
+                to="/login"
+                className="text-sm font-semibold text-white/80 hover:text-white transition-colors"
+              >
+                Log In
+              </Link>
+              <Link
+                to="/signup"
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-500 text-white font-semibold hover:shadow-lg hover:shadow-blue-500/50 transition-all duration-300"
+              >
+                Sign Up
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>

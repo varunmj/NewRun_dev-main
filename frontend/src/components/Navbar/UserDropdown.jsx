@@ -47,7 +47,7 @@ const STATUS_CONFIG = {
 
 const UserDropdown = () => {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, isAuthenticated } = useAuth(); // ADD isAuthenticated
   const { userStatus, setUserStatus } = useUserStatus();
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -66,6 +66,12 @@ const UserDropdown = () => {
 
   // Fetch user
   useEffect(() => {
+    // SKIP if not authenticated
+    if (!isAuthenticated) {
+      setIsLoading(false);
+      return;
+    }
+
     const fetchUser = async () => {
       try {
         const response = await axios.get('/get-user');
@@ -79,7 +85,7 @@ const UserDropdown = () => {
       }
     };
     fetchUser();
-  }, []);
+  }, [isAuthenticated]);
 
   // Close on outside click
   useEffect(() => {
