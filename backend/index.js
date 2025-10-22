@@ -80,6 +80,20 @@ app.use(cors({
     credentials: true
 }));
 
+// Session configuration (MUST be before Passport middleware)
+const session = require('express-session');
+app.use(session({
+  secret: process.env.ACCESS_TOKEN_SECRET || 'your-secret-key',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { 
+    secure: true,
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000
+  }
+}));
+
+
 // Passport configuration
 app.use(passport.initialize());
 
