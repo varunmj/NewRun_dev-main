@@ -112,7 +112,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: `${process.env.BACKEND_URL || 'http://www.newrun.club'}/api/auth/google/callback`
+    callbackURL: `${process.env.BACKEND_URL || 'https://api.newrun.club'}/api/auth/google/callback`
   }, async (accessToken, refreshToken, profile, done) => {
   try {
     // Check if user already exists
@@ -125,8 +125,18 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     // Check if user exists with same email
     user = await User.findOne({ email: profile.emails[0].value });
     if (user) {
-      // Link Google account to existing user
-      user.googleId = profile.id;
+      // Link Google account to existing user (and backfill required fields if missing)
+      const givenName = profile.name?.givenName || 'Google';
+      const familyName = profile.name?.familyName || 'User';
+
+      if (!user.googleId) user.googleId = profile.id;
+      if (!user.firstName) user.firstName = givenName;
+      if (!user.lastName) user.lastName = familyName;
+      if (!user.password) {
+        const randomSecret = crypto.randomBytes(32).toString('hex');
+        const hashedSecret = await bcrypt.hash(randomSecret, 10);
+        user.password = hashedSecret;
+      }
       user.emailVerified = true; // Google emails are pre-verified
       await user.save();
       return done(null, user);
@@ -1719,7 +1729,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   );
 
   app.get('/api/auth/google/callback', 
-    passport.authenticate('google', { failureRedirect: '/login?error=google_auth_failed' }),
+    passport.authenticate('google', { failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=google_auth_failed` }),
     async (req, res) => {
       try {
         const user = req.user;

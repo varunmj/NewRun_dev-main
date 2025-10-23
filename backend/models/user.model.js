@@ -9,6 +9,7 @@ const userSchema = new Schema({
   password:  { type: String, required: true },
 
   // optional login/display
+  googleId:  { type: String, unique: true, sparse: true },
   username:  { type: String, unique: true, sparse: true, lowercase: true, trim: true },
   avatar:    { type: String, default: '' },
 
