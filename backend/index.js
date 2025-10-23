@@ -1731,8 +1731,10 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   );
 
   app.get('/api/auth/google/callback', async (req, res, next) => {
+    console.log('[OAuth] Callback route hit', { queryKeys: Object.keys(req.query || {}) });
     try {
       passport.authenticate('google', async (err, user, info) => {
+        console.log('[OAuth] Passport authenticate callback invoked', { hasErr: !!err, hasUser: !!user, hasInfo: !!info });
         if (err) {
           const rawBody = err.oauthError && err.oauthError.data ? String(err.oauthError.data) : '';
           const shortBody = rawBody.length > 400 ? rawBody.slice(0, 400) + '…' : rawBody;
