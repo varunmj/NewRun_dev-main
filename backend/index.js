@@ -1753,10 +1753,18 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=${reason}`);
         }
 
-        const userData = { user: user };
-        const accessToken = jwt.sign(userData, process.env.ACCESS_TOKEN_SECRET, {
+        // Keep JWT small to avoid exceeding proxy header limits on redirect
+        const tokenPayload = {
+          id: user._id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          username: user.username || undefined,
+        };
+        const accessToken = jwt.sign(tokenPayload, process.env.ACCESS_TOKEN_SECRET, {
           expiresIn: '24h',
         });
+        console.log('[OAuth] Redirecting with JWT length:', accessToken.length);
         return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?token=${accessToken}`);
       })(req, res, next);
     } catch (error) {
