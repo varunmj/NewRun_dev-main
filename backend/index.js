@@ -15,6 +15,8 @@ const { loginRateLimit, availabilityLimiter } = require('./middleware/rateLimite
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const session = require('express-session');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const crypto = require('crypto');
 
 // Helper function to track user activities
 async function trackActivity(userId, activityType, targetType, targetId, metadata = {}, location = {}) {
@@ -130,6 +132,10 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       await user.save();
       return done(null, user);
     }
+
+    const randomSecret = crypto.randomBytes(32).toString('hex');
+    const hashedSecret = await bcrypt.hash(randomSecret, 10);
+    // password: hashedSecret
     
     // Create new user
     user = new User({
@@ -138,7 +144,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       firstName: profile.name.givenName,
       lastName: profile.name.familyName,
       emailVerified: true,
-      password: null // No password for Google users
+      password: hashedSecret
     });
     
     await user.save();
