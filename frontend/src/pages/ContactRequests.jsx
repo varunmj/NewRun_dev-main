@@ -25,7 +25,12 @@ export default function ContactRequests() {
     let s;
     (async () => {
       const { io } = await import('socket.io-client');
-      const url = import.meta.env.VITE_API_BASE?.replace(/\/$/, '') || 'http://localhost:8000';
+      const url = (
+        import.meta.env.VITE_API_BASE?.replace(/\/$/, '') ||
+        import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ||
+        import.meta.env.VITE_API_URL?.replace(/\/$/, '') ||
+        (window.location.hostname.endsWith('newrun.club') ? 'https://api.newrun.club' : 'http://localhost:8000')
+      );
       s = io(url, { transports: ['websocket'], withCredentials: true });
 
       // register current user; your Navbar or app shell can send this too
