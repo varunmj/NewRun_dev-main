@@ -2567,8 +2567,8 @@ app.post('/save-onboarding', authenticateToken, async (req, res) => {
 // Get user onboarding data
 app.get('/onboarding-data', authenticateToken, async (req, res) => {
   try {
-    // Get user ID from JWT token
-    const userId = req.user.user?._id || req.user._id;
+    // Get user ID from JWT token (support both token shapes)
+    const userId = req.user.user?._id || req.user._id || req.user.id;
     console.log('Onboarding data request for user ID:', userId);
     
     if (!userId) {
@@ -2699,9 +2699,11 @@ app.post('/update-university', authenticateToken, async (req, res) => {
 
 // Updated Get User API
 app.get("/get-user", authenticateToken, async (req, res) => {
-  const payloadUser = req?.user?.user || req?.user; // support both token shapes
+  const payloadUser = (req?.user?.user || req?.user); // support both token shapes
   try {
-    const isUser = await User.findById(payloadUser._id);
+    const userId = payloadUser?._id || payloadUser?.id;
+    if (!userId) return res.sendStatus(401);
+    const isUser = await User.findById(userId);
     if (!isUser) return res.sendStatus(401);
 
     // Consolidate all user data into onboardingData for consistent API

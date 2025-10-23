@@ -29,7 +29,16 @@ function authenticateToken(req, res, next) {
 
 // NEW: unify how we read the authed user's id (your JWT sometimes nests under user)
 function getAuthUserId(req) {
-  return (req.user && (req.user.user?._id || req.user._id)) || null;
+  if (!req || !req.user) return null;
+  const u = req.user;
+  // Support both legacy tokens ({ user: {_id} }) and compact tokens ({ id })
+  return (
+    u.user?.id ||
+    u.user?._id ||
+    u.id ||
+    u._id ||
+    null
+  );
 }
 
 module.exports = {
