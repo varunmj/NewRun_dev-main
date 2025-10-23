@@ -32,13 +32,11 @@ function getAuthUserId(req) {
   if (!req || !req.user) return null;
   const u = req.user;
   // Support both legacy tokens ({ user: {_id} }) and compact tokens ({ id })
-  return (
-    u.user?.id ||
-    u.user?._id ||
-    u.id ||
-    u._id ||
-    null
-  );
+  const raw = u?.user?.id || u?.user?._id || u?.id || u?._id || null;
+  if (!raw) return null;
+  // Always return a string
+  try { return typeof raw === 'string' ? raw : String(raw); }
+  catch { return null; }
 }
 
 module.exports = {
