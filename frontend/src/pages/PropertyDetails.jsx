@@ -204,8 +204,12 @@ export default function PropertyDetailPage() {
     (async () => {
       try {
         const { io } = await import("socket.io-client");
-        const socketURL =
-          import.meta.env.VITE_API_BASE?.replace(/\/$/, "") || "http://localhost:8000";
+        const socketURL = (
+          import.meta.env.VITE_API_BASE?.replace(/\/$/, "") ||
+          import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ||
+          import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
+          (window.location.hostname.endsWith('newrun.club') ? 'https://api.newrun.club' : 'http://localhost:8000')
+        );
         s = io(socketURL, { transports: ["websocket"], withCredentials: true });
         if (userId) s.emit("registerUser", userId);
         s.on("contact_request:updated", (payload) => {

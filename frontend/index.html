@@ -12,6 +12,18 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Runtime fallback for API base in production, before app boot
+      (function(){
+        try {
+          if (typeof window !== 'undefined' && !window.__API_BASE_URL__) {
+            if (/newrun\.club$/i.test(window.location.hostname)) {
+              window.__API_BASE_URL__ = 'https://api.newrun.club';
+            }
+          }
+        } catch(e) {}
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
