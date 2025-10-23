@@ -24,6 +24,32 @@
         } catch(e) {}
       })();
     </script>
+    <script>
+      // Capture OAuth token from URL ASAP (before the app mounts)
+      (function(){
+        try {
+          var url = new URL(window.location.href);
+          var token = url.searchParams.get('token');
+          var error = url.searchParams.get('error');
+          if (token) {
+            try { localStorage.setItem('accessToken', token); } catch(e) {}
+            url.searchParams.delete('token');
+            url.searchParams.delete('error');
+            // Clean URL without query
+            window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+            // If we're on login/landing, send to dashboard
+            if (url.pathname === '/login' || url.pathname === '/') {
+              window.location.replace('/dashboard');
+            }
+          } else if (error) {
+            // Normalize error param to login page message
+            if (url.pathname !== '/login') {
+              window.location.replace('/login?oauth_error=' + encodeURIComponent(error));
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
