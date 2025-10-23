@@ -1734,9 +1734,17 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     try {
       passport.authenticate('google', async (err, user, info) => {
         if (err) {
-          console.error('Google OAuth Token error:', err);
-          const reason = encodeURIComponent(err.message || 'oauth_error');
-          return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=${reason}`);
+          const rawBody = err.oauthError && err.oauthError.data ? String(err.oauthError.data) : '';
+          const shortBody = rawBody.length > 400 ? rawBody.slice(0, 400) + '…' : rawBody;
+          console.error('Google OAuth Token error:', {
+            code: err.code,
+            message: err.message,
+            status: err.status,
+            body: shortBody,
+          });
+          const reason = encodeURIComponent(err.code || 'oauth_error');
+          const desc = encodeURIComponent((err.message || '').slice(0, 200));
+          return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=${reason}&desc=${desc}`);
         }
         if (!user) {
           const reason = encodeURIComponent(info?.message || 'google_auth_failed');
