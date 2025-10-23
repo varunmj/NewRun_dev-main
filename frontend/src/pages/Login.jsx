@@ -176,6 +176,16 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
+  // If token already present (e.g., set by OAuth), bounce to dashboard
+  React.useEffect(() => {
+    try {
+      const t = localStorage.getItem('accessToken') || localStorage.getItem('token') || localStorage.getItem('userToken');
+      if (t) {
+        nav('/dashboard', { replace: true });
+      }
+    } catch {}
+  }, [nav]);
+
   async function handleLogin(e) {
     e.preventDefault();
     if (!identifier.trim() || !password) {
