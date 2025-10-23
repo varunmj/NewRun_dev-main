@@ -1545,7 +1545,7 @@ app.get('/verify-email', async (req, res) => {
 // Email verification code endpoint (Enterprise-grade)
 app.post('/verify-email-code', authenticateToken, async (req, res) => {
   try {
-    const authUser = req.user?.user || req.user;
+    const authUser = req.user?.user?._id || req.user?._id || req.user?.id;
     const { code } = req.body || {};
     
     if (!authUser?.email) {
@@ -2099,7 +2099,7 @@ const now = () => new Date();
 // Send email verification
 app.post('/send-email-verification', authenticateToken, async (req, res) => {
   try {
-    const authUser = req.user?.user || req.user;
+    const authUser = req.user?.user?._id || req.user?._id || req.user?.id;
     
     // Safety validation
     if (!authUser || !authUser.email) {
@@ -4425,7 +4425,7 @@ Provide a helpful, personalized response.`;
 
   // Update user data API
   app.patch('/user/update', authenticateToken, async (req, res) => {
-  const authed = req.user?.user || req.user;
+  const authed = req.user?.user?._id || req.user?._id || req.user?.id;
   if (!authed?._id) return res.sendStatus(401);
 
   // Whitelist fields you allow to update
@@ -4723,8 +4723,8 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
 // =====================
   app.get('/dashboard/overview', authenticateToken, async (req, res) => {
     try {
-      const authed = req.user?.user || req.user;
-      const userId = authed?._id;
+      const userId = getAuthUserId(req);
+      const authed = req.user?.user?._id || req.user?._id || req.user?.id || {};
       
       console.log('Dashboard API called for user:', userId);
       console.log('Authenticated user:', authed);
@@ -5260,7 +5260,7 @@ Return only JSON with keys:
 
 app.get('/threads/:id', authenticateToken, async (req, res) => {
   try {
-    const userId = (req.user?.user || req.user)?._id;
+    const userId = (req.user?.user?._id || req.user?._id || req.user?.id)?._id;
     const t = await Thread.findOne({ _id: req.params.id, userId }).lean();
     if (!t) return res.status(404).json({ error: true, message: 'Thread not found' });
     res.json({ thread: t });
