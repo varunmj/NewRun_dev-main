@@ -3,21 +3,28 @@ import axios from "axios";
 import { navigate } from "../utils/navigate"; // tiny helper below; or use your router hook where you call APIs
 
 // ---- baseURL detection (Vite first) ----
-const fromVite =
+const fromViteBaseUrl =
   typeof import.meta !== "undefined" &&
   import.meta.env &&
-  import.meta.env.VITE_API_BASE_URL;
+  (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL);
 
 const fromCRA =
   typeof process !== "undefined" &&
   process.env &&
   (process.env.REACT_APP_API_BASE_URL || process.env.API_BASE_URL);
 
+const defaultFromHost =
+  typeof window !== "undefined" && /newrun\.club$/i.test(window.location.hostname)
+    ? "https://api.newrun.club"
+    : "http://localhost:8000";
+
 const API_BASE_URL =
-  fromVite ||
+  fromViteBaseUrl ||
   fromCRA ||
   (typeof window !== "undefined" && window.__API_BASE_URL__) ||
-  "http://localhost:8000";
+  defaultFromHost;
+
+export const API_BASE_URL_RESOLVED = (API_BASE_URL || defaultFromHost).replace(/\/+$/, "");
 
 // ---- token helpers (read multiple keys defensively) ----
 export function getToken() {
@@ -38,7 +45,7 @@ export function setToken(jwt) {
 }
 
 const axiosInstance = axios.create({
-  baseURL: API_BASE_URL.replace(/\/+$/, ""),
+  baseURL: API_BASE_URL_RESOLVED,
   withCredentials: false,
 });
 

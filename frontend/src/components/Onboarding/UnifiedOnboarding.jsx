@@ -1064,7 +1064,7 @@ export default function UnifiedOnboarding() {
           return;
         }
 
-        const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+        const API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || (window.location.hostname.endsWith('newrun.club') ? 'https://api.newrun.club' : 'http://localhost:8000')).replace(/\/+$/, '');
         const response = await fetch(`${API_BASE}/onboarding-data`, {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -1320,7 +1320,7 @@ export default function UnifiedOnboarding() {
           return;
         }
 
-        const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+        const API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || (window.location.hostname.endsWith('newrun.club') ? 'https://api.newrun.club' : 'http://localhost:8000')).replace(/\/+$/, '');
         const response = await fetch(`${API_BASE}/save-onboarding`, {
           method: 'POST',
           headers: {
