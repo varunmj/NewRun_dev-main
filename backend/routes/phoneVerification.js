@@ -12,7 +12,7 @@ const { authenticateToken } = require('../utilities');
 router.post('/send-verification', authenticateToken, async (req, res) => {
   try {
     const { phoneNumber } = req.body;
-    const userId = req.user.user?._id || req.user._id;
+    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
 
     // Validate phone number
     if (!phoneNumber) {
@@ -94,7 +94,7 @@ router.post('/send-verification', authenticateToken, async (req, res) => {
 router.post('/verify', authenticateToken, async (req, res) => {
   try {
     const { verificationCode } = req.body;
-    const userId = req.user.user?._id || req.user._id;
+    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
 
     if (!verificationCode) {
       return res.status(400).json({
@@ -169,7 +169,7 @@ router.post('/verify', authenticateToken, async (req, res) => {
  */
 router.post('/resend', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.user?._id || req.user._id;
+    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
 
     // Find user
     const user = await User.findById(userId);
@@ -237,7 +237,7 @@ router.post('/resend', authenticateToken, async (req, res) => {
  */
 router.get('/status', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.user?._id || req.user._id;
+    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
 
     const user = await User.findById(userId).select('phoneNumber phoneVerified phoneVerificationExpires');
     
@@ -272,7 +272,7 @@ router.get('/status', authenticateToken, async (req, res) => {
  */
 router.get('/verification-status', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.user?._id || req.user._id;
+    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
     const verificationStatus = await getUserVerificationStatus(userId);
     
     res.json(verificationStatus);
@@ -294,7 +294,7 @@ router.get('/verification-status', authenticateToken, async (req, res) => {
 router.post('/check-access', authenticateToken, async (req, res) => {
   try {
     const { feature } = req.body;
-    const userId = req.user.user?._id || req.user._id;
+    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
 
     if (!feature) {
       return res.status(400).json({
