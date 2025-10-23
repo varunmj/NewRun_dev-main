@@ -15,7 +15,6 @@ const { loginRateLimit, availabilityLimiter } = require('./middleware/rateLimite
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const session = require('express-session');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const crypto = require('crypto');
 
 // Helper function to track user activities
