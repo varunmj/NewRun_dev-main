@@ -4572,7 +4572,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
   // Initiate a conversation if it doesn't exist
   app.post('/conversations/initiate', authenticateToken, async (req, res) => {
     const { receiverId } = req.body; // Only pass receiverId from the frontend
-    const senderId = req.user.user._id; // Get the sender (current user) from the token
+    const senderId = (req.user?.user?._id || req.user?._id || req.user?.id); // Get the sender (current user) from the token
 
     try {
       let conversation = await Conversation.findOne({
@@ -4597,7 +4597,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
   app.post('/messages/send', authenticateToken, async (req, res) => {
     console.log("Authenticated User:", req.user); // Debugging line
     const { conversationId, content, attachments, gif, emoji } = req.body;
-    const senderId = req.user.user._id; // Current user from the token
+    const senderId = (req.user?.user?._id || req.user?._id || req.user?.id); // Current user from the token
   
     try {
       console.log("Request to send message with conversationId:", conversationId);
@@ -4647,7 +4647,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
 
   // Get all conversations of a user
   app.get('/conversations', authenticateToken, async (req, res) => {
-    const userId = req.user.user._id;
+    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
 
     try {
       const conversations = await Conversation.find({
@@ -4677,7 +4677,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
   // Get all messages of a specific conversation
   app.get('/conversations/:conversationId/messages', authenticateToken, async (req, res) => {
     const { conversationId } = req.params;
-    const userId = req.user.user._id;
+    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
 
     try {
       const conversation = await Conversation.findById(conversationId);
@@ -4705,7 +4705,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
 
   // Endpoint to get the count of unread messages
   app.get('/messages/unread-count', authenticateToken, async (req, res) => {
-    const userId = req.user.user._id;
+    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
     try {
       const unreadCount = await Message.countDocuments({
         receiverId: userId,
