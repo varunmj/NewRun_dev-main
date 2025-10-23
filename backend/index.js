@@ -109,10 +109,12 @@ passport.deserializeUser(async (id, done) => {
 
 // Google OAuth Strategy (only if credentials are provided)
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  const googleCallbackUrl = process.env.GOOGLE_CALLBACK_URL || `${process.env.BACKEND_URL || 'https://api.newrun.club'}/api/auth/google/callback`;
+  console.log('[OAuth] Google callback URL:', googleCallbackUrl);
   passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: `${process.env.BACKEND_URL || 'https://api.newrun.club'}/api/auth/google/callback`
+    callbackURL: googleCallbackUrl
   }, async (accessToken, refreshToken, profile, done) => {
   try {
     // Check if user already exists
@@ -1728,24 +1730,30 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     passport.authenticate('google', { scope: ['profile', 'email'] })
   );
 
-  app.get('/api/auth/google/callback', 
-    passport.authenticate('google', { failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=google_auth_failed` }),
-    async (req, res) => {
-      try {
-        const user = req.user;
+  app.get('/api/auth/google/callback', async (req, res, next) => {
+    try {
+      passport.authenticate('google', async (err, user, info) => {
+        if (err) {
+          console.error('Google OAuth Token error:', err);
+          const reason = encodeURIComponent(err.message || 'oauth_error');
+          return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=${reason}`);
+        }
+        if (!user) {
+          const reason = encodeURIComponent(info?.message || 'google_auth_failed');
+          return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=${reason}`);
+        }
+
         const userData = { user: user };
         const accessToken = jwt.sign(userData, process.env.ACCESS_TOKEN_SECRET, {
           expiresIn: '24h',
         });
-
-        // Redirect to frontend with token
-        res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?token=${accessToken}`);
-      } catch (error) {
-        console.error('Google OAuth callback error:', error);
-        res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=oauth_error`);
-      }
+        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?token=${accessToken}`);
+      })(req, res, next);
+    } catch (error) {
+      console.error('Google OAuth callback handler error:', error);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=oauth_error`);
     }
-  );
+  });
 } else {
   // Fallback when Google OAuth is not configured
   app.get('/api/auth/google', (req, res) => {
