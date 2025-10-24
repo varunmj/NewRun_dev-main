@@ -1338,6 +1338,7 @@ io.on('connection', (socket) => {
   });
 
    socket.on('registerUser', (userId) => {
+    console.log(`🔍 Debug - registerUser event received for userId: ${userId}`);
     if (userId) {
       socket.join(`user_${userId}`);
       console.log(`👤 User ${userId} joined room user_${userId}`);
@@ -1345,6 +1346,12 @@ io.on('connection', (socket) => {
       // Debug: List all rooms this socket is in
       const rooms = Array.from(socket.rooms);
       console.log(`🔍 Debug - Socket ${socket.id} is in rooms:`, rooms);
+      
+      // Debug: Check if the room was created
+      const roomExists = io.sockets.adapter.rooms.has(`user_${userId}`);
+      console.log(`🔍 Debug - Room user_${userId} exists after join:`, roomExists);
+    } else {
+      console.log(`❌ Debug - registerUser called with undefined/null userId`);
     }
   });
 
@@ -9001,6 +9008,7 @@ Provide specific, actionable recommendations for improving roommate matching.`;
 
     // Handle user viewing conversation - immediately update read receipts
     socket.on('user_viewing_conversation', async (data) => {
+      console.log('🔍 Debug - user_viewing_conversation event received:', data);
       if (data.conversationId && data.userId) {
         console.log('👁️ Socket.io - User viewing conversation:', data);
         
@@ -9043,7 +9051,16 @@ Provide specific, actionable recommendations for improving roommate matching.`;
               console.log(`📤 Debug - Emitted readReceiptUpdate to conversation_${data.conversationId}`);
               
               // Emit to sender's individual room for read receipt updates
-              io.to(`user_${msg.senderId}`).emit('readReceiptUpdate', {
+              const senderRoom = `user_${msg.senderId}`;
+              const senderRoomExists = io.sockets.adapter.rooms.has(senderRoom);
+              console.log(`🔍 Debug - Sender room ${senderRoom} exists:`, senderRoomExists);
+              
+              if (senderRoomExists) {
+                const roomSize = io.sockets.adapter.rooms.get(senderRoom)?.size || 0;
+                console.log(`🔍 Debug - Room ${senderRoom} has ${roomSize} sockets`);
+              }
+              
+              io.to(senderRoom).emit('readReceiptUpdate', {
                 messageId: msg._id,
                 conversationId: data.conversationId,
                 readStatus: 'read',
