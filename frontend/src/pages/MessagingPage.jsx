@@ -60,10 +60,13 @@ const MessagingPage = () => {
         const fetchUserInfo = async () => {
             try {
                 const response = await axiosInstance.get('/get-user');
+                console.log('User info response:', response.data);
                 if (response.data && response.data.user) {
-                    setUserId(response.data.userId);
+                    const userId = response.data.user._id;
+                    console.log('Setting userId:', userId);
+                    setUserId(userId);
                     fetchConversations();
-                    socket.emit('join_user', response.data.userId); // Connect user to their own socket room
+                    socket.emit('join_user', userId); // Connect user to their own socket room
                 }
             } catch (error) {
                 console.error('Unexpected error fetching user info:', error);
@@ -85,11 +88,15 @@ const MessagingPage = () => {
         const autoStartConversation = async () => {
             if (targetUserId && userId) {
                 console.log('Auto-starting conversation with:', targetUserId);
+                console.log('Current userId:', userId);
+                console.log('Available conversations:', conversations);
                 
                 // Find existing conversation with target user
-                const existingConversation = conversations.find(conv => 
-                    conv.participants.some(p => p._id === targetUserId)
-                );
+                const existingConversation = conversations.find(conv => {
+                    const hasTargetUser = conv.participants.some(p => p._id === targetUserId);
+                    console.log(`Conversation ${conv._id} has target user ${targetUserId}:`, hasTargetUser);
+                    return hasTargetUser;
+                });
                 
                 if (existingConversation) {
                     console.log('Found existing conversation:', existingConversation._id);
@@ -101,6 +108,7 @@ const MessagingPage = () => {
                         const response = await axiosInstance.post('/conversations/initiate', {
                             receiverId: targetUserId
                         });
+                        console.log('Conversation creation response:', response.data);
                         if (response.data.success) {
                             console.log('Conversation created successfully');
                             // Refresh conversations and then select the new one
@@ -111,6 +119,8 @@ const MessagingPage = () => {
                             if (newConversation) {
                                 console.log('Selecting new conversation:', newConversation._id);
                                 fetchMessages(newConversation._id);
+                            } else {
+                                console.error('Could not find newly created conversation');
                             }
                         }
                     } catch (error) {
