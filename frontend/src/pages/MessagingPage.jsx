@@ -7,6 +7,7 @@ import Navbar from '../components/Navbar/Navbar';
 import { format } from 'date-fns';
 import socketService from '../services/socketService';
 import { useUserStatus } from '../context/UserStatusContext';
+import ReadReceipt from '../components/ReadReceipt';
 import './messaging.css';
 
 const MessagingPage = () => {
@@ -172,6 +173,16 @@ const MessagingPage = () => {
             }));
         };
 
+        // Listen for read receipt updates
+        const handleReadReceiptUpdate = (data) => {
+            console.log('📖 Read receipt updated:', data);
+            setMessages(prev => prev.map(msg => 
+                msg._id === data.messageId 
+                    ? { ...msg, readStatus: data.readStatus, readAt: data.readAt, deliveredAt: data.deliveredAt }
+                    : msg
+            ));
+        };
+
         // Listen for typing indicators
         const handleUserTyping = (data) => {
             console.log('⌨️ User typing:', data);
@@ -183,6 +194,7 @@ const MessagingPage = () => {
         socketService.on('messageRead', handleMessageRead);
         socketService.on('userStatusUpdate', handleUserStatusUpdate);
         socketService.on('userTyping', handleUserTyping);
+        socketService.on('readReceiptUpdate', handleReadReceiptUpdate);
 
         // Cleanup socket listeners on unmount
         return () => {
@@ -190,6 +202,7 @@ const MessagingPage = () => {
             socketService.off('messageRead', handleMessageRead);
             socketService.off('userStatusUpdate', handleUserStatusUpdate);
             socketService.off('userTyping', handleUserTyping);
+            socketService.off('readReceiptUpdate', handleReadReceiptUpdate);
         };
     }, [userId, selectedConversation]);
 
@@ -531,9 +544,17 @@ const MessagingPage = () => {
                             }`}>
                                 <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
                             </div>
-                            <p className={`text-xs text-white/40 mt-1 ${isCurrentUser ? 'text-right' : 'text-left'}`}>
-                                {format(new Date(message.timestamp), 'h:mm a')}
-                            </p>
+                            <div className={`flex items-center gap-2 mt-1 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
+                                <p className={`text-xs text-white/40`}>
+                                    {format(new Date(message.timestamp), 'h:mm a')}
+                                </p>
+                                {isCurrentUser && (
+                                    <ReadReceipt 
+                                        readStatus={message.readStatus || 'sent'} 
+                                        isOwnMessage={true} 
+                                    />
+                                )}
+                            </div>
                         </div>
                         {isCurrentUser && (
                             <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold text-xs flex-shrink-0 overflow-hidden">

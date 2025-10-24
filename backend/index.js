@@ -4752,6 +4752,10 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
         attachments,
         gif,
         emoji,
+        readStatus: 'sent',
+        sentAt: new Date(),
+        deliveredAt: null,
+        readAt: null
       });
   
       await newMessage.save();
@@ -8905,18 +8909,68 @@ Provide specific, actionable recommendations for improving roommate matching.`;
           });
           console.log(`📤 Socket.io - Emitted newMessage to user_${messageData.receiverId}`);
         }
+
+        // Emit delivery receipt after a short delay (simulating delivery)
+        setTimeout(async () => {
+          try {
+            // Update message status to delivered
+            await Message_NewRUN.findByIdAndUpdate(messageData._id, {
+              readStatus: 'delivered',
+              deliveredAt: new Date()
+            });
+
+            // Emit delivery receipt
+            io.to(`conversation_${messageData.conversationId}`).emit('readReceiptUpdate', {
+              messageId: messageData._id,
+              conversationId: messageData.conversationId,
+              readStatus: 'delivered',
+              deliveredAt: new Date()
+            });
+            console.log(`📤 Socket.io - Emitted delivery receipt for message ${messageData._id}`);
+          } catch (error) {
+            console.error('Error updating message delivery status:', error);
+          }
+        }, 1000); // 1 second delay to simulate delivery
       } catch (error) {
         console.error('Error handling send_message:', error);
       }
     });
 
     // Handle message read status
-    socket.on('mark_message_read', (data) => {
+    socket.on('mark_message_read', async (data) => {
       if (data.conversationId && data.messageId) {
-        io.to(`conversation_${data.conversationId}`).emit('messageRead', {
-          messageId: data.messageId,
-          conversationId: data.conversationId
-        });
+        console.log('📖 Socket.io - Message marked as read:', data);
+        
+        try {
+          // Update message read status in database
+          await Message_NewRUN.findByIdAndUpdate(data.messageId, {
+            isRead: true,
+            readStatus: 'read',
+            readAt: new Date()
+          });
+
+          // Emit to conversation participants
+          io.to(`conversation_${data.conversationId}`).emit('messageRead', {
+            messageId: data.messageId,
+            conversationId: data.conversationId
+          });
+          
+          // Also emit mark_message_read event for navbar count updates
+          io.to(`conversation_${data.conversationId}`).emit('mark_message_read', {
+            messageId: data.messageId,
+            conversationId: data.conversationId
+          });
+
+          // Emit read receipt update
+          io.to(`conversation_${data.conversationId}`).emit('readReceiptUpdate', {
+            messageId: data.messageId,
+            conversationId: data.conversationId,
+            readStatus: 'read',
+            readAt: new Date()
+          });
+        } catch (error) {
+          console.error('Error updating message read status:', error);
+        }
       }
     });
 
