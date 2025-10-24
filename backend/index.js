@@ -4674,10 +4674,20 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
         return res.status(403).json({ success: false, message: 'Unauthorized access' });
       }
   
-      // Find the receiver (other participant in the conversation)
-      const receiverId = conversation.participants.find(id => id && senderId && id.toString() !== senderId.toString());
+      // Clean up null participants and find the receiver
+      const validParticipants = conversation.participants.filter(id => id !== null && id !== undefined);
+      
+      // If we have null participants, clean up the conversation
+      if (validParticipants.length !== conversation.participants.length) {
+        console.log("Cleaning up conversation with null participants");
+        conversation.participants = validParticipants;
+        await conversation.save();
+      }
+      
+      const receiverId = validParticipants.find(id => id && senderId && id.toString() !== senderId.toString());
       
       console.log("Conversation participants:", conversation.participants);
+      console.log("Valid participants:", validParticipants);
       console.log("Sender ID:", senderId);
       console.log("Receiver ID:", receiverId);
       
