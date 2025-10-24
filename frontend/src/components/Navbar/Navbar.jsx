@@ -57,7 +57,9 @@ function MessageIcon() {
     
     try {
       const response = await axiosInstance.get('/messages/unread-count');
-      setUnreadCount(response.data?.count || 0);
+      const count = response.data?.count || 0;
+      console.log('📊 Unread count loaded:', count);
+      setUnreadCount(count);
     } catch (error) {
       console.error('Error fetching unread count:', error);
       setUnreadCount(0);
@@ -65,10 +67,12 @@ function MessageIcon() {
   };
 
   useEffect(() => {
+    if (!isAuthenticated) return;
+    
     loadUnreadCount();
     
-    // Set up polling for unread count
-    const interval = setInterval(loadUnreadCount, 10000); // Check every 10 seconds for better responsiveness
+    // Set up polling for unread count (reduced frequency since we have Socket.io)
+    const interval = setInterval(loadUnreadCount, 30000); // Check every 30 seconds
     
     return () => clearInterval(interval);
   }, [isAuthenticated]);
@@ -77,31 +81,33 @@ function MessageIcon() {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    // Import socket.io-client dynamically
+    // Import socket service
     const setupSocket = async () => {
       try {
-        const { io } = await import('socket.io-client');
-        const socket = io(
-          import.meta.env.VITE_API_BASE?.replace(/\/$/, '') ||
-          import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ||
-          import.meta.env.VITE_API_URL?.replace(/\/$/, '') ||
-          (window.location.hostname.endsWith('newrun.club') ? 'https://api.newrun.club' : 'http://localhost:8000')
-        );
+        const socketService = (await import('../../services/socketService')).default;
+        
+        // Connect to socket service
+        socketService.connect();
 
         // Listen for new messages to update count
-        socket.on('newMessage', () => {
-          console.log('New message received, updating unread count');
+        const handleNewMessage = () => {
+          console.log('📨 New message received, updating unread count');
           loadUnreadCount();
-        });
+        };
 
         // Listen for message read events
-        socket.on('messageRead', () => {
-          console.log('Message read, updating unread count');
+        const handleMessageRead = () => {
+          console.log('✅ Message read, updating unread count');
           loadUnreadCount();
-        });
+        };
+
+        // Register listeners
+        socketService.on('newMessage', handleNewMessage);
+        socketService.on('messageRead', handleMessageRead);
 
         return () => {
-          socket.disconnect();
+          socketService.off('newMessage', handleNewMessage);
+          socketService.off('messageRead', handleMessageRead);
         };
       } catch (error) {
         console.error('Error setting up socket for message count:', error);
