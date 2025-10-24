@@ -67,32 +67,6 @@ const MessagingPage = () => {
         return otherParticipant ? otherParticipant._id : null;
     };
 
-    // Function to change user status
-    const changeUserStatus = (newStatus) => {
-        if (!userId) return;
-        
-        console.log('🔄 Changing user status to:', newStatus);
-        
-        // Update local status immediately for better UX
-        setUserStatuses(prev => ({
-            ...prev,
-            [userId]: newStatus
-        }));
-        
-        // Emit status change via Socket.io for real-time updates
-        socketService.updateUserStatus(userId, newStatus);
-        
-        // Also update conversations list
-        setConversations(prev => prev.map(conv => {
-            const updatedParticipants = conv.participants.map(participant => {
-                if (participant._id === userId) {
-                    return { ...participant, status: newStatus };
-                }
-                return participant;
-            });
-            return { ...conv, participants: updatedParticipants };
-        }));
-    };
 
 
     // Initialize Socket.io and fetch user info
@@ -745,23 +719,6 @@ const MessagingPage = () => {
                                              userStatuses[selectedUser._id] === 'away' ? 'Away' :
                                              userStatuses[selectedUser._id] === 'dnd' ? 'Do Not Disturb' : 'Offline'}
                                         </p>
-                                    </div>
-                                </div>
-                                
-                                {/* Status Change Controls */}
-                                <div className="ml-auto">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm text-white/60">Your Status:</span>
-                                        <select 
-                                            value={userStatuses[userId] || 'online'}
-                                            onChange={(e) => changeUserStatus(e.target.value)}
-                                            className="px-3 py-1 bg-white/10 border border-white/20 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                                        >
-                                            <option value="online" className="bg-gray-800">🟢 Online</option>
-                                            <option value="away" className="bg-gray-800">🟡 Away</option>
-                                            <option value="dnd" className="bg-gray-800">🔴 Do Not Disturb</option>
-                                            <option value="offline" className="bg-gray-800">⚫ Offline</option>
-                                        </select>
                                     </div>
                                 </div>
                             </div>
