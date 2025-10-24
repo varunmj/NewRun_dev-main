@@ -1756,14 +1756,14 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
         // Check if user has completed onboarding
         const hasCompletedOnboarding = user.onboardingData?.completed === true;
         console.log('[OAuth] User onboarding status:', { 
-          userId: userId, 
+          userId: user._id, 
           hasCompletedOnboarding,
           onboardingData: user.onboardingData 
         });
 
         // Keep JWT small to avoid exceeding proxy header limits on redirect
         const tokenPayload = {
-          id: userId,
+          id: user._id,
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
