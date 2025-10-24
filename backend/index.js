@@ -8968,6 +8968,7 @@ Provide specific, actionable recommendations for improving roommate matching.`;
             readStatus: 'read',
             readAt: new Date()
           });
+          console.log(`📤 Socket.io - Emitted readReceiptUpdate for message ${data.messageId}`);
         } catch (error) {
           console.error('Error updating message read status:', error);
         }
