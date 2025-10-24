@@ -79,6 +79,18 @@ class SocketService {
         console.error('Error parsing user data:', e);
       }
     }
+    
+    // Also try to get from token
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return payload.id;
+      } catch (e) {
+        console.error('Error parsing token:', e);
+      }
+    }
+    
     return null;
   }
 
@@ -143,6 +155,14 @@ class SocketService {
 
   markMessageRead(conversationId, messageId) {
     this.emit('mark_message_read', { conversationId, messageId });
+  }
+
+  // Set user ID and re-register
+  setUserId(userId) {
+    if (this.socket && this.isConnected && userId) {
+      console.log('🔄 Re-registering user with Socket.io:', userId);
+      this.emit('join_user', userId);
+    }
   }
 
   // Cleanup
