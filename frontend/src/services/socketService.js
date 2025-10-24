@@ -69,6 +69,11 @@ class SocketService {
   }
 
   getCurrentUserId() {
+    // Return the stored user ID if available
+    if (this.userId) {
+      return this.userId;
+    }
+    
     // Get user ID from localStorage or context
     const userData = localStorage.getItem('userData');
     if (userData) {
@@ -159,6 +164,9 @@ class SocketService {
 
   // Set user ID and re-register
   setUserId(userId) {
+    this.userId = userId;
+    console.log('🔑 Socket.io - User ID set:', userId);
+    
     if (this.socket && this.isConnected && userId) {
       console.log('🔄 Re-registering user with Socket.io:', userId);
       this.emit('join_user', userId);

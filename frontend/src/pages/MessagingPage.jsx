@@ -409,28 +409,32 @@ const MessagingPage = () => {
     const sendMessage = async () => {
         if (!newMessage.trim() || !selectedConversation) return;
 
+        const messageContent = newMessage;
         const messageData = {
             conversationId: selectedConversation,
-            content: newMessage,
+            content: messageContent,
             senderId: userId,
+            receiverId: getOtherParticipantId(),
+            timestamp: new Date().toISOString()
         };
 
         try {
             // Send via HTTP API to save to database
-            const response = await axiosInstance.post(`/messages/send`, messageData);
+            const response = await axiosInstance.post(`/messages/send`, {
+                conversationId: selectedConversation,
+                content: messageContent,
+                senderId: userId,
+            });
+            
             if (response.data.success) {
                 // Add message to local state immediately for better UX
                 setMessages(prev => [...prev, response.data.data]);
                 setNewMessage('');
                 
-                // Send via Socket.io for real-time delivery
-                socketService.sendMessage({
-                    conversationId: selectedConversation,
-                    content: newMessage,
-                    senderId: userId,
-                    receiverId: getOtherParticipantId(),
-                    messageId: response.data.data._id,
-                    timestamp: new Date().toISOString()
+                // Send via Socket.io for real-time delivery (with message ID from database)
+                socketService.emit('send_message', {
+                    ...messageData,
+                    messageId: response.data.data._id
                 });
                 
                 // Emit typing stop event
