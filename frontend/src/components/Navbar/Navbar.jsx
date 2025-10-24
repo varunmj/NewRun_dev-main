@@ -50,6 +50,7 @@ const initialsOf = (user) => {
 /* ---------- Message icon ---------- */
 function MessageIcon() {
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
   const { isAuthenticated } = useAuth();
 
   const loadUnreadCount = async () => {
@@ -90,24 +91,41 @@ function MessageIcon() {
         socketService.connect();
 
         // Listen for new messages to update count
-        const handleNewMessage = () => {
-          console.log('📨 New message received, updating unread count');
+        const handleNewMessage = (data) => {
+          console.log('📨 New message received, updating unread count:', data);
+          // Increment count immediately for better UX
+          setUnreadCount(prev => prev + 1);
+          // Trigger animation
+          setIsAnimating(true);
+          setTimeout(() => setIsAnimating(false), 1000);
+          // Also fetch from server to ensure accuracy
           loadUnreadCount();
         };
 
         // Listen for message read events
-        const handleMessageRead = () => {
-          console.log('✅ Message read, updating unread count');
+        const handleMessageRead = (data) => {
+          console.log('👁️ Message read, updating unread count:', data);
+          // Decrement count immediately for better UX
+          setUnreadCount(prev => Math.max(0, prev - 1));
+          // Also fetch from server to ensure accuracy
+          loadUnreadCount();
+        };
+
+        // Listen for conversation updates
+        const handleConversationUpdate = () => {
+          console.log('💬 Conversation updated, refreshing unread count');
           loadUnreadCount();
         };
 
         // Register listeners
         socketService.on('newMessage', handleNewMessage);
         socketService.on('messageRead', handleMessageRead);
+        socketService.on('conversationUpdate', handleConversationUpdate);
 
         return () => {
           socketService.off('newMessage', handleNewMessage);
           socketService.off('messageRead', handleMessageRead);
+          socketService.off('conversationUpdate', handleConversationUpdate);
         };
       } catch (error) {
         console.error('Error setting up socket for message count:', error);
@@ -115,6 +133,18 @@ function MessageIcon() {
     };
 
     setupSocket();
+    
+    // Set up periodic refresh for message count (every 30 seconds)
+    const refreshInterval = setInterval(() => {
+      if (isAuthenticated) {
+        console.log('🔄 Periodic refresh of unread count');
+        loadUnreadCount();
+      }
+    }, 30000); // 30 seconds
+
+    return () => {
+      clearInterval(refreshInterval);
+    };
   }, [isAuthenticated]);
 
   console.log('MessageIcon rendering - isAuthenticated:', isAuthenticated, 'unreadCount:', unreadCount);
@@ -122,14 +152,27 @@ function MessageIcon() {
   return (
     <Link
       to="/messaging"
-      className="relative grid h-9 w-9 place-items-center rounded-full bg-white/5 backdrop-blur-md text-white/85 ring-1 ring-white/20 hover:bg-white/10 hover:ring-white/30 transition-all duration-200"
+      className="relative grid h-9 w-9 place-items-center rounded-full bg-white/5 backdrop-blur-md text-white/85 ring-1 ring-white/20 hover:bg-white/10 hover:ring-white/30 transition-all duration-200 group"
       aria-label="Messages"
     >
-      <MdMessage className="text-xl" />
+      <MdMessage className={`text-xl transition-all duration-200 ${
+        unreadCount > 0 
+          ? 'text-blue-400 group-hover:text-blue-300 animate-pulse' 
+          : 'group-hover:text-white'
+      } ${isAnimating ? 'animate-bounce' : ''}`} />
+      
+      {/* Enhanced notification bubble with red/white design */}
       {unreadCount > 0 && (
-        <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 px-1 text-[10px] font-semibold text-white shadow-lg">
-          {unreadCount > 99 ? '99+' : unreadCount}
+        <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-red-500 border-2 border-white shadow-lg animate-bounce">
+          <span className="text-[10px] font-bold text-white">
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
         </span>
+      )}
+      
+      {/* Pulse effect for new messages */}
+      {unreadCount > 0 && (
+        <span className="absolute -right-1 -top-1 h-5 w-5 rounded-full bg-red-400 animate-ping opacity-75"></span>
       )}
     </Link>
   );
