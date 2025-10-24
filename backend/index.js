@@ -8777,17 +8777,22 @@ Provide specific, actionable recommendations for improving roommate matching.`;
       // Set current user as online
       userStatuses.set(currentUserId, Date.now());
       
+      console.log('🔍 Status check - Current user:', currentUserId);
+      console.log('🔍 Status check - Requested userIds:', userIds);
+      console.log('🔍 Status check - userStatuses Map:', Array.from(userStatuses.entries()));
+      
       // Return statuses - check all users for recent activity
       const statuses = {};
       userIds.forEach(userId => {
         // Check if user has been seen recently (within last 5 minutes)
         const lastSeen = userStatuses.get(userId);
-        if (lastSeen && Date.now() - lastSeen < 5 * 60 * 1000) {
-          statuses[userId] = 'online';
-        } else {
-          statuses[userId] = 'offline';
-        }
+        const isOnline = lastSeen && Date.now() - lastSeen < 5 * 60 * 1000;
+        statuses[userId] = isOnline ? 'online' : 'offline';
+        
+        console.log(`🔍 Status for user ${userId}: lastSeen=${lastSeen}, isOnline=${isOnline}`);
       });
+
+      console.log('🔍 Final statuses:', statuses);
 
       res.json({
         success: true,
@@ -8807,6 +8812,7 @@ Provide specific, actionable recommendations for improving roommate matching.`;
     const userId = getAuthUserId(req);
     if (userId) {
       userStatuses.set(userId, Date.now());
+      console.log(`🔍 Activity tracked for user ${userId} at ${new Date().toISOString()}`);
     }
     next();
   };
@@ -8826,7 +8832,8 @@ Provide specific, actionable recommendations for improving roommate matching.`;
         socket.join(`user_${userId}`);
         // Mark user as online
         userStatuses.set(userId, Date.now());
-        console.log(`User ${userId} joined their room and marked as online`);
+        console.log(`🔍 Socket.io - User ${userId} joined their room and marked as online at ${new Date().toISOString()}`);
+        console.log(`🔍 Socket.io - Current userStatuses Map:`, Array.from(userStatuses.entries()));
       }
     });
 
