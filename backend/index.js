@@ -8819,7 +8819,7 @@ Provide specific, actionable recommendations for improving roommate matching.`;
   // Middleware to track user activity for status
   const trackUserActivity = (req, res, next) => {
     const userId = getAuthUserId(req);
-    if (userId) {
+    if (userId && userId !== null && userId !== 'null') {
       userStatuses.set(userId, Date.now());
       console.log(`🔍 Activity tracked for user ${userId} at ${new Date().toISOString()}`);
     }
