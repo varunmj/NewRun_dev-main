@@ -52,12 +52,56 @@ const MessagingPage = () => {
         }
     };
 
+    // Get the other participant's ID for the current conversation
+    const getOtherParticipantId = () => {
+        if (!selectedConversation || !conversations.length) return null;
+        
+        const conversation = conversations.find(conv => conv._id === selectedConversation);
+        if (!conversation || !conversation.participants) return null;
+        
+        // Find the participant who is not the current user
+        const otherParticipant = conversation.participants.find(participant => 
+            participant._id !== userId
+        );
+        
+        return otherParticipant ? otherParticipant._id : null;
+    };
+
+    // Set up Socket.io event listeners for real-time messaging
+    const setupSocketListeners = () => {
+        // Listen for new messages
+        socketService.on('newMessage', (data) => {
+            console.log('🔔 Received new message via Socket.io:', data);
+            if (data.conversationId === selectedConversation) {
+                // Add message to current conversation
+                setMessages(prev => [...prev, data.message]);
+            }
+            // Refresh conversations to update last message
+            fetchConversations();
+        });
+        
+        // Listen for typing indicators
+        socketService.on('userTyping', (data) => {
+            console.log('⌨️ User typing:', data);
+            // You can implement typing indicators here
+        });
+        
+        // Listen for message read status
+        socketService.on('messageRead', (data) => {
+            console.log('👁️ Message read:', data);
+            // Update message read status in UI
+        });
+    };
+
     // Initialize Socket.io and fetch user info
     useEffect(() => {
         const initializeMessaging = async () => {
             try {
                 // Connect to Socket.io
                 socketService.connect();
+                
+                // Set up Socket.io event listeners for real-time messaging
+                setupSocketListeners();
                 
                 // Fetch user info
                 const response = await axiosInstance.get('/get-user');
@@ -372,13 +416,23 @@ const MessagingPage = () => {
         };
 
         try {
+            // Send via HTTP API to save to database
             const response = await axiosInstance.post(`/messages/send`, messageData);
             if (response.data.success) {
                 // Add message to local state immediately for better UX
                 setMessages(prev => [...prev, response.data.data]);
                 setNewMessage('');
-                // Refresh conversations to update last message
-                fetchConversations();
+                
+                // Send via Socket.io for real-time delivery
+                socketService.sendMessage({
+                    conversationId: selectedConversation,
+                    content: newMessage,
+                    senderId: userId,
+                    receiverId: getOtherParticipantId(),
+                    messageId: response.data.data._id,
+                    timestamp: new Date().toISOString()
+                });
+                
                 // Emit typing stop event
                 socketService.emit('stopTyping', { conversationId: selectedConversation, userId });
             }
