@@ -211,11 +211,14 @@ const MessagingPage = () => {
 
     // Fetch conversations list
     const fetchConversations = async () => {
+        console.log('🔍 Frontend - fetchConversations function called!');
         try {
-            console.log('Fetching conversations...');
+            console.log('🔍 Frontend - Fetching conversations...');
             const response = await axiosInstance.get('/conversations');
+            console.log('🔍 Frontend - Conversations response:', response.data);
+            
             if (response.data.success) {
-                console.log('Conversations fetched:', response.data.data);
+                console.log('🔍 Frontend - Conversations fetched:', response.data.data);
                 setConversations(response.data.data);
                 
                 // Initialize user statuses - start with offline for all users
@@ -231,12 +234,19 @@ const MessagingPage = () => {
                 setUserStatuses(initialStatuses);
                 
                 // Fetch actual user statuses from backend
-                fetchUserStatuses(response.data.data);
+                console.log('🔍 Frontend - About to call fetchUserStatuses with:', response.data.data.length, 'conversations');
+                try {
+                    await fetchUserStatuses(response.data.data);
+                } catch (error) {
+                    console.error('🔍 Frontend - Error in fetchUserStatuses:', error);
+                }
                 
                 return response.data.data;
+            } else {
+                console.log('🔍 Frontend - Conversations response not successful:', response.data);
             }
         } catch (error) {
-            console.error('Error fetching conversations:', error);
+            console.error('🔍 Frontend - Error fetching conversations:', error);
         }
         return [];
     };
@@ -244,6 +254,8 @@ const MessagingPage = () => {
     // Fetch user statuses from backend
     const fetchUserStatuses = async (conversations) => {
         try {
+            console.log('🔍 Frontend - fetchUserStatuses called with conversations:', conversations.length);
+            
             // Get all unique user IDs from conversations
             const userIds = new Set();
             conversations.forEach(conversation => {
@@ -254,21 +266,30 @@ const MessagingPage = () => {
                 });
             });
 
+            console.log('🔍 Frontend - userIds to check:', Array.from(userIds));
+
             if (userIds.size > 0) {
+                console.log('🔍 Frontend - Calling /users/statuses with userIds:', Array.from(userIds));
+                
                 // Fetch statuses for all users
                 const response = await axiosInstance.post('/users/statuses', {
                     userIds: Array.from(userIds)
                 });
+                
+                console.log('🔍 Frontend - Status response:', response.data);
                 
                 if (response.data.success) {
                     setUserStatuses(prev => ({
                         ...prev,
                         ...response.data.statuses
                     }));
+                    console.log('🔍 Frontend - Updated userStatuses:', response.data.statuses);
                 }
+            } else {
+                console.log('🔍 Frontend - No userIds to check, skipping status fetch');
             }
         } catch (error) {
-            console.error('Error fetching user statuses:', error);
+            console.error('🔍 Frontend - Error fetching user statuses:', error);
             // Keep the default online status if fetch fails
         }
     };
