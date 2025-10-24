@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useAuth } from './AuthContext';
+import socketService from '../services/socketService';
 
 const UserStatusContext = createContext();
 
@@ -11,6 +13,7 @@ export const useUserStatus = () => {
 };
 
 export const UserStatusProvider = ({ children }) => {
+  const { user } = useAuth();
   const [userStatus, setUserStatus] = useState('online');
   const [lastActivity, setLastActivity] = useState(Date.now());
   const [manualStatus, setManualStatus] = useState(false); // Track if user manually set status
@@ -45,6 +48,12 @@ export const UserStatusProvider = ({ children }) => {
   const setUserStatusManual = (status) => {
     setUserStatus(status);
     setManualStatus(true);
+    
+    // Emit status change via Socket.io for real-time updates
+    if (user?._id) {
+      console.log('🔄 UserStatusContext - Emitting status change:', { userId: user._id, status });
+      socketService.updateUserStatus(user._id, status);
+    }
   };
 
   // Reset manual status when going to online
@@ -73,6 +82,24 @@ export const UserStatusProvider = ({ children }) => {
       });
     };
   }, [userStatus]);
+
+  // Listen for real-time status updates from other users
+  useEffect(() => {
+    if (!user?._id) return;
+
+    const handleUserStatusUpdate = (data) => {
+      console.log('👤 UserStatusContext - Received status update:', data);
+      // This will be handled by the MessagingPage component
+      // We don't need to update local state here as it's for other users
+    };
+
+    // Listen for status updates from Socket.io
+    socketService.on('userStatusUpdate', handleUserStatusUpdate);
+
+    return () => {
+      socketService.off('userStatusUpdate', handleUserStatusUpdate);
+    };
+  }, [user?._id]);
 
   const value = {
     userStatus,
