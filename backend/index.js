@@ -8739,6 +8739,38 @@ Provide specific, actionable recommendations for improving roommate matching.`;
     });
   });
 
+  // Get user statuses endpoint
+  app.post('/users/statuses', async (req, res) => {
+    try {
+      const { userIds } = req.body;
+      
+      if (!userIds || !Array.isArray(userIds)) {
+        return res.status(400).json({
+          success: false,
+          message: 'User IDs array is required'
+        });
+      }
+
+      // For now, return all users as online
+      // In a real implementation, you would check actual user status from database
+      const statuses = {};
+      userIds.forEach(userId => {
+        statuses[userId] = 'online';
+      });
+
+      res.json({
+        success: true,
+        statuses
+      });
+    } catch (error) {
+      console.error('Error fetching user statuses:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching user statuses'
+      });
+    }
+  });
+
   // Socket.io event handlers
   io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
