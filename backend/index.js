@@ -1753,6 +1753,14 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=${reason}`);
         }
 
+        // Check if user has completed onboarding
+        const hasCompletedOnboarding = user.onboardingData?.completed === true;
+        console.log('[OAuth] User onboarding status:', { 
+          userId: user._id, 
+          hasCompletedOnboarding,
+          onboardingData: user.onboardingData 
+        });
+
         // Keep JWT small to avoid exceeding proxy header limits on redirect
         const tokenPayload = {
           id: user._id,
@@ -1765,7 +1773,10 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           expiresIn: '24h',
         });
         console.log('[OAuth] Redirecting with JWT length:', accessToken.length);
-        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?token=${accessToken}`);
+        
+        // Redirect to onboarding if not completed, otherwise dashboard
+        const redirectPath = hasCompletedOnboarding ? '/dashboard' : '/onboarding';
+        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}${redirectPath}?token=${accessToken}`);
       })(req, res, next);
     } catch (error) {
       console.error('Google OAuth callback handler error:', error);
@@ -4425,8 +4436,8 @@ Provide a helpful, personalized response.`;
 
   // Update user data API
   app.patch('/user/update', authenticateToken, async (req, res) => {
-  const authed = req.user?.user?._id || req.user?._id || req.user?.id;
-  if (!authed?._id) return res.sendStatus(401);
+  const userId = getAuthUserId(req);
+  if (!userId) return res.sendStatus(401);
 
   // Whitelist fields you allow to update
   const {
@@ -4470,7 +4481,7 @@ Provide a helpful, personalized response.`;
 
   try {
     const updated = await User.findByIdAndUpdate(
-      authed._id,
+      userId,
       { $set },
       { new: true, runValidators: true }
     ).lean();
@@ -4537,7 +4548,7 @@ function buildUserUpdate(body = {}) {
 
 async function updateUserHandler(req, res) {
   try {
-    const userId = req?.user?.user?._id || req?.user?._id;  // supports both payload shapes
+    const userId = getAuthUserId(req);
     if (!userId) return res.status(401).json({ error: true, message: 'Unauthorized' });
 
     console.log('Backend received data:', req.body);
