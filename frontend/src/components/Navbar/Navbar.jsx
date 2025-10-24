@@ -122,17 +122,26 @@ function MessageIcon() {
           loadUnreadCount();
         };
 
+        // Listen for read receipt updates
+        const handleReadReceiptUpdate = (data) => {
+          console.log('📖 Read receipt update received in navbar:', data);
+          // Refresh unread count when read receipts are updated
+          loadUnreadCount();
+        };
+
         // Register listeners
         socketService.on('newMessage', handleNewMessage);
         socketService.on('messageRead', handleMessageRead);
         socketService.on('conversationUpdate', handleConversationUpdate);
         socketService.on('mark_message_read', handleMessageMarkedRead);
+        socketService.on('readReceiptUpdate', handleReadReceiptUpdate);
 
         return () => {
           socketService.off('newMessage', handleNewMessage);
           socketService.off('messageRead', handleMessageRead);
           socketService.off('conversationUpdate', handleConversationUpdate);
           socketService.off('mark_message_read', handleMessageMarkedRead);
+          socketService.off('readReceiptUpdate', handleReadReceiptUpdate);
         };
       } catch (error) {
         console.error('Error setting up socket for message count:', error);
@@ -164,7 +173,7 @@ function MessageIcon() {
     >
       <MdMessage className={`text-xl transition-all duration-200 ${
         unreadCount > 0 
-          ? 'text-blue-400 group-hover:text-blue-300 animate-pulse' 
+          ? 'text-blue-400 group-hover:text-blue-300' 
           : 'group-hover:text-white'
       }`} />
       
@@ -177,10 +186,6 @@ function MessageIcon() {
         </span>
       )}
       
-      {/* Pulse effect for new messages */}
-      {unreadCount > 0 && (
-        <span className="absolute -right-1 -top-1 h-5 w-5 rounded-full bg-red-400 animate-ping opacity-75"></span>
-      )}
     </Link>
   );
 }
