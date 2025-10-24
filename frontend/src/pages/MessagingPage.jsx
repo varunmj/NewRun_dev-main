@@ -113,6 +113,10 @@ const MessagingPage = () => {
     useEffect(() => {
         if (!userId) return;
 
+        // Register user with socket for individual room
+        socketService.emit('registerUser', userId);
+        console.log('👤 Registered user with socket:', userId);
+
         // Listen for new messages with duplicate prevention
         const handleNewMessage = (data) => {
             console.log('📨 Received new message via socket:', data);
