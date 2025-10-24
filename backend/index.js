@@ -4680,8 +4680,10 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
       });
 
       if (!conversation) {
+        // Ensure no duplicate participants
+        const participants = [senderId, receiverId].filter((id, index, arr) => arr.indexOf(id) === index);
         conversation = new Conversation({
-          participants: [senderId, receiverId],
+          participants: participants,
         });
         await conversation.save();
       }
@@ -4781,17 +4783,32 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
       })
         .populate({
           path: 'participants',
-          select: 'firstName lastName', // Populate participant names
+          select: 'firstName lastName avatar', // Populate participant names and avatar
         })
         .populate({
           path: 'lastMessage',
           select: 'content timestamp senderId',
           populate: {
             path: 'senderId', // Populate sender's name in the last message
-            select: 'firstName lastName',
+            select: 'firstName lastName avatar',
           },
         })
         .sort({ lastUpdated: -1 });
+
+      // Clean up duplicate participants in conversations
+      for (const conversation of conversations) {
+        if (conversation.participants) {
+          const uniqueParticipants = conversation.participants.filter((participant, index, arr) => 
+            arr.findIndex(p => p._id && participant._id && p._id.toString() === participant._id.toString()) === index
+          );
+          
+          if (uniqueParticipants.length !== conversation.participants.length) {
+            console.log(`Cleaning up duplicate participants in conversation ${conversation._id}`);
+            conversation.participants = uniqueParticipants;
+            await conversation.save();
+          }
+        }
+      }
 
       res.status(200).json({ success: true, data: conversations });
     } catch (error) {
@@ -4818,7 +4835,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
       })
         .populate({
           path: 'senderId',
-          select: 'firstName lastName', // Populate sender names in each message
+          select: 'firstName lastName avatar', // Populate sender names and avatar in each message
         })
         .sort({ timestamp: 1 }); // Sort messages by timestamp (earliest first)
 
@@ -8739,6 +8756,9 @@ Provide specific, actionable recommendations for improving roommate matching.`;
     });
   });
 
+  // In-memory user status tracking
+  const userStatuses = new Map();
+  
   // Get user statuses endpoint
   app.post('/users/statuses', async (req, res) => {
     try {
@@ -8751,11 +8771,26 @@ Provide specific, actionable recommendations for improving roommate matching.`;
         });
       }
 
-      // For now, return all users as online
-      // In a real implementation, you would check actual user status from database
+      // Get current user from token
+      const currentUserId = getAuthUserId(req);
+      
+      // Set current user as online
+      userStatuses.set(currentUserId, 'online');
+      
+      // Return statuses - only current user is online, others are offline
       const statuses = {};
       userIds.forEach(userId => {
-        statuses[userId] = 'online';
+        if (userId === currentUserId) {
+          statuses[userId] = 'online';
+        } else {
+          // Check if user has been seen recently (within last 5 minutes)
+          const lastSeen = userStatuses.get(userId);
+          if (lastSeen && Date.now() - lastSeen < 5 * 60 * 1000) {
+            statuses[userId] = 'online';
+          } else {
+            statuses[userId] = 'offline';
+          }
+        }
       });
 
       res.json({
@@ -8779,7 +8814,9 @@ Provide specific, actionable recommendations for improving roommate matching.`;
     socket.on('join_user', (userId) => {
       if (userId) {
         socket.join(`user_${userId}`);
-        console.log(`User ${userId} joined their room`);
+        // Mark user as online
+        userStatuses.set(userId, Date.now());
+        console.log(`User ${userId} joined their room and marked as online`);
       }
     });
 
@@ -8853,6 +8890,8 @@ Provide specific, actionable recommendations for improving roommate matching.`;
 
     socket.on('disconnect', () => {
       console.log('User disconnected:', socket.id);
+      // Note: In a real implementation, you would track which user disconnected
+      // and mark them as offline. For now, we'll rely on the 5-minute timeout.
     });
   });
 

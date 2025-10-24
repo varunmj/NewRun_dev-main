@@ -218,13 +218,13 @@ const MessagingPage = () => {
                 console.log('Conversations fetched:', response.data.data);
                 setConversations(response.data.data);
                 
-                // Initialize user statuses - assume all users are online initially
+                // Initialize user statuses - start with offline for all users
                 const initialStatuses = {};
                 response.data.data.forEach(conversation => {
                     conversation.participants.forEach(participant => {
                         if (participant._id !== userId) {
-                            // Set initial status as online for all users
-                            initialStatuses[participant._id] = 'online';
+                            // Set initial status as offline for all users
+                            initialStatuses[participant._id] = 'offline';
                         }
                     });
                 });
@@ -598,7 +598,7 @@ const MessagingPage = () => {
                                         <h2 className="text-xl font-semibold text-white">
                                             {`${selectedUser.firstName} ${selectedUser.lastName}`}
                                         </h2>
-                                        <p className={`text-sm flex items-center gap-2 ${
+                                        <p className={`text-sm ${
                                             userStatuses[selectedUser._id] === 'online' 
                                                 ? 'text-green-400' 
                                                 : userStatuses[selectedUser._id] === 'away'
@@ -607,15 +607,6 @@ const MessagingPage = () => {
                                                 ? 'text-red-400'
                                                 : 'text-gray-400'
                                         }`}>
-                                            <div className={`w-2 h-2 rounded-full ${
-                                                userStatuses[selectedUser._id] === 'online' 
-                                                    ? 'bg-green-400 animate-pulse' 
-                                                    : userStatuses[selectedUser._id] === 'away'
-                                                    ? 'bg-yellow-400'
-                                                    : userStatuses[selectedUser._id] === 'dnd'
-                                                    ? 'bg-red-400'
-                                                    : 'bg-gray-400'
-                                            }`}></div>
                                             {userStatuses[selectedUser._id] === 'online' ? 'Online' :
                                              userStatuses[selectedUser._id] === 'away' ? 'Away' :
                                              userStatuses[selectedUser._id] === 'dnd' ? 'Do Not Disturb' : 'Offline'}
