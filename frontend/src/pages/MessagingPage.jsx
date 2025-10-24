@@ -181,6 +181,9 @@ const MessagingPage = () => {
         const handleReadReceiptUpdate = (data) => {
             console.log('📖 Read receipt updated:', data);
             console.log('🔍 Debug - Current messages before update:', messages.length);
+            console.log('🔍 Debug - Looking for messageId:', data.messageId);
+            console.log('🔍 Debug - Current message IDs:', messages.map(msg => ({ id: msg._id, content: msg.content, readStatus: msg.readStatus })));
+            
             setMessages(prev => {
                 const updated = prev.map(msg => {
                     if (msg._id === data.messageId) {
