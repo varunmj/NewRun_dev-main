@@ -404,24 +404,7 @@ const MessagingPage = () => {
             if (response.data.success) {
                 setMessages(response.data.data);
 
-                // Mark all messages in this conversation as read immediately
-                const unreadMessages = response.data.data.filter(msg => 
-                    msg.receiverId === userId && !msg.isRead
-                );
-                
-                if (unreadMessages.length > 0) {
-                    console.log(`📖 Marking ${unreadMessages.length} messages as read in conversation ${conversationId}`);
-                    
-                    // Emit mark_message_read event for each unread message
-                    unreadMessages.forEach(msg => {
-                        socketService.emit('mark_message_read', {
-                            conversationId: conversationId,
-                            messageId: msg._id
-                        });
-                    });
-                }
-
-                // Also emit a "user_viewing_conversation" event to immediately update read receipts
+                // Emit a "user_viewing_conversation" event to immediately update read receipts
                 socketService.emit('user_viewing_conversation', {
                     conversationId: conversationId,
                     userId: userId
