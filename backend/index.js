@@ -8914,7 +8914,7 @@ Provide specific, actionable recommendations for improving roommate matching.`;
         setTimeout(async () => {
           try {
             // Update message status to delivered
-            await Message_NewRUN.findByIdAndUpdate(messageData._id, {
+            await Message.findByIdAndUpdate(messageData._id, {
               readStatus: 'delivered',
               deliveredAt: new Date()
             });
@@ -8943,7 +8943,7 @@ Provide specific, actionable recommendations for improving roommate matching.`;
         
         try {
           // Update message read status in database
-          await Message_NewRUN.findByIdAndUpdate(data.messageId, {
+          await Message.findByIdAndUpdate(data.messageId, {
             isRead: true,
             readStatus: 'read',
             readAt: new Date()
@@ -8960,6 +8960,15 @@ Provide specific, actionable recommendations for improving roommate matching.`;
             messageId: data.messageId,
             conversationId: data.conversationId
           });
+          
+          // Also emit to user's individual room for navbar updates
+          const message = await Message.findById(data.messageId);
+          if (message && message.senderId) {
+            io.to(`user_${message.senderId}`).emit('mark_message_read', {
+              messageId: data.messageId,
+              conversationId: data.conversationId
+            });
+          }
 
           // Emit read receipt update
           io.to(`conversation_${data.conversationId}`).emit('readReceiptUpdate', {
