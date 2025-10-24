@@ -8920,6 +8920,46 @@ Provide specific, actionable recommendations for improving roommate matching.`;
       }
     });
 
+    // Handle user status changes
+    socket.on('user_status_change', (data) => {
+      try {
+        console.log('🔄 Socket.io - User status change:', data);
+        
+        if (data.userId && data.status) {
+          // Update user status in memory
+          userStatuses.set(data.userId, Date.now());
+          
+          // Broadcast status change to all users in conversations with this user
+          // Get all conversations for this user
+          Conversation.find({
+            participants: data.userId
+          }).then(conversations => {
+            conversations.forEach(conversation => {
+              // Emit to all participants in the conversation
+              io.to(`conversation_${conversation._id}`).emit('userStatusUpdate', {
+                userId: data.userId,
+                status: data.status,
+                timestamp: Date.now()
+              });
+              console.log(`📤 Socket.io - Emitted status update to conversation_${conversation._id}`);
+            });
+          }).catch(error => {
+            console.error('Error finding conversations for status update:', error);
+          });
+          
+          // Also emit to user's personal room for global status updates
+          io.to(`user_${data.userId}`).emit('userStatusUpdate', {
+            userId: data.userId,
+            status: data.status,
+            timestamp: Date.now()
+          });
+          console.log(`📤 Socket.io - Emitted status update to user_${data.userId}`);
+        }
+      } catch (error) {
+        console.error('Error handling user_status_change:', error);
+      }
+    });
+
     socket.on('disconnect', () => {
       console.log('User disconnected:', socket.id);
       // Note: In a real implementation, you would track which user disconnected
