@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import ProfileCard from './ProfileCard';
 import VerifiedIcon from '../../assets/icons/icons8-verified-48.png';
-import { getUniversityLogoUrl, prefetchUniversityLogo } from '../../utils/clearbitLogo';
+import { getUniversityLogoUrl, prefetchUniversityLogo, hasLogoFailed } from '../../utils/clearbitLogo';
 import './MatchCard.css';
 
 // Smart display name per PM rules
@@ -172,24 +172,38 @@ Looking forward to hearing from you! 😊`;
           </div>
         )}
         
-        {!hideOverlays && item.university && (
+        {!hideOverlays && item.university && !hasLogoFailed(item.university) && (
           <div className="university-badge">
             <img
               className="university-logo-img"
               src={getUniversityLogoUrl(item.university)}
               alt={item.university}
-              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              onError={(e) => { 
+                e.currentTarget.style.display = 'none';
+                // Mark as failed for future attempts
+                const key = `nr:uniLogo:${item.university.toLowerCase().trim()}:failed`;
+                try {
+                  localStorage.setItem(key, 'true');
+                } catch {}
+              }}
             />
           </div>
         )}
         
-        {!hideOverlays && item.university && (
+        {!hideOverlays && item.university && !hasLogoFailed(item.university) && (
           <img 
             aria-hidden 
             className="university-watermark" 
             src={getUniversityLogoUrl(item.university)} 
             alt="" 
-            onError={(e)=>{e.currentTarget.style.display='none';}} 
+            onError={(e)=>{
+              e.currentTarget.style.display='none';
+              // Mark as failed for future attempts
+              const key = `nr:uniLogo:${item.university.toLowerCase().trim()}:failed`;
+              try {
+                localStorage.setItem(key, 'true');
+              } catch {}
+            }} 
           />
         )}
         

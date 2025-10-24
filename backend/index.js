@@ -4601,6 +4601,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
         read: false
       });
 
+      console.log(`Unread count for user ${userId}: ${unreadCount}`);
       res.json({ success: true, count: unreadCount });
     } catch (error) {
       console.error('Error fetching unread count:', error);
@@ -4618,6 +4619,14 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
       console.error("Invalid senderId:", senderId);
       return res.status(401).json({ success: false, message: 'Invalid user authentication' });
     }
+
+    // Prevent self-conversations
+    if (senderId === receiverId) {
+      console.error("Cannot create conversation with self:", senderId);
+      return res.status(400).json({ success: false, message: 'Cannot create conversation with yourself' });
+    }
+
+    console.log("Creating conversation between:", senderId, "and", receiverId);
 
     try {
       let conversation = await Conversation.findOne({
@@ -4665,7 +4674,17 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
         return res.status(403).json({ success: false, message: 'Unauthorized access' });
       }
   
+      // Find the receiver (other participant in the conversation)
       const receiverId = conversation.participants.find(id => id && senderId && id.toString() !== senderId.toString());
+      
+      console.log("Conversation participants:", conversation.participants);
+      console.log("Sender ID:", senderId);
+      console.log("Receiver ID:", receiverId);
+      
+      if (!receiverId) {
+        console.error("Could not find receiver in conversation participants");
+        return res.status(400).json({ success: false, message: 'Invalid conversation: receiver not found' });
+      }
   
       const newMessage = new Message({
         conversationId,

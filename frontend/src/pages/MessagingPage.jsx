@@ -84,26 +84,32 @@ const MessagingPage = () => {
     useEffect(() => {
         const autoStartConversation = async () => {
             if (targetUserId && userId) {
+                console.log('Auto-starting conversation with:', targetUserId);
+                
                 // Find existing conversation with target user
                 const existingConversation = conversations.find(conv => 
                     conv.participants.some(p => p._id === targetUserId)
                 );
                 
                 if (existingConversation) {
+                    console.log('Found existing conversation:', existingConversation._id);
                     fetchMessages(existingConversation._id);
                 } else {
+                    console.log('Creating new conversation with:', targetUserId);
                     // Create new conversation
                     try {
                         const response = await axiosInstance.post('/conversations/initiate', {
                             receiverId: targetUserId
                         });
                         if (response.data.success) {
+                            console.log('Conversation created successfully');
                             // Refresh conversations and then select the new one
                             const updatedConversations = await fetchConversations();
                             const newConversation = updatedConversations.find(conv => 
                                 conv.participants.some(p => p._id === targetUserId)
                             );
                             if (newConversation) {
+                                console.log('Selecting new conversation:', newConversation._id);
                                 fetchMessages(newConversation._id);
                             }
                         }
@@ -115,15 +121,32 @@ const MessagingPage = () => {
         };
 
         if (targetUserId && userId) {
+            // Trigger immediately, don't wait for conversations to load
             autoStartConversation();
         }
-    }, [targetUserId, userId, conversations]);
+    }, [targetUserId, userId]);
+
+    // Handle case where conversations are loaded after auto-start logic
+    useEffect(() => {
+        if (targetUserId && userId && conversations.length > 0) {
+            const existingConversation = conversations.find(conv => 
+                conv.participants.some(p => p._id === targetUserId)
+            );
+            
+            if (existingConversation && !selectedConversation) {
+                console.log('Found conversation after loading:', existingConversation._id);
+                fetchMessages(existingConversation._id);
+            }
+        }
+    }, [conversations, targetUserId, userId, selectedConversation]);
 
     // Fetch conversations list
     const fetchConversations = async () => {
         try {
+            console.log('Fetching conversations...');
             const response = await axiosInstance.get('/conversations');
             if (response.data.success) {
+                console.log('Conversations fetched:', response.data.data);
                 setConversations(response.data.data);
                 return response.data.data;
             }
@@ -203,7 +226,9 @@ const MessagingPage = () => {
         return messages.map((message, index) => {
             const messageDate = new Date(message.timestamp); 
             const formattedDate = format(messageDate, 'MMM dd, yyyy');
+            console.log('Message senderId:', message.senderId, 'Current userId:', userId);
             const isCurrentUser = message.senderId === userId || (message.senderId && message.senderId._id === userId);
+            console.log('Is current user:', isCurrentUser);
             const senderName = isCurrentUser ? 'You' : `${message.senderId?.firstName || ''} ${message.senderId?.lastName || ''}`;
             const avatarText = isCurrentUser ? "You" : `${senderName.split(' ').map(name => name[0]).join('')}`;
     
@@ -287,7 +312,17 @@ const MessagingPage = () => {
                     
                     <div className="flex-1 overflow-y-auto p-4 space-y-2">
                         {conversations.map((conversation) => {
-                            const otherParticipants = conversation.participants.filter(p => p._id !== userId);
+                            console.log('Conversation participants:', conversation.participants);
+                            console.log('Current userId:', userId);
+                            
+                            const otherParticipants = conversation.participants.filter(p => {
+                                const isOther = p._id !== userId;
+                                console.log(`Participant ${p._id} vs userId ${userId}: ${isOther}`);
+                                return isOther;
+                            });
+                            
+                            console.log('Other participants:', otherParticipants);
+                            
                             const participantNames = otherParticipants.length > 0
                                 ? otherParticipants.map(p => `${p.firstName} ${p.lastName}`).join(', ')
                                 : 'Unknown User';

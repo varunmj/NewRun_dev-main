@@ -146,9 +146,25 @@ export function prefetchUniversityLogo(name) {
     inMemoryCache.set(key, url);
   };
   img.onerror = () => {
-    // leave cache empty so we can try again next time or fall back to hidden
+    // Mark as failed in cache to avoid repeated attempts
+    try {
+      localStorage.setItem(LS_PREFIX + key + ':failed', 'true');
+    } catch {}
+    inMemoryCache.set(key + ':failed', true);
   };
   img.src = url;
+}
+
+// Check if a logo has failed to load previously
+export function hasLogoFailed(name) {
+  const key = normalizeName(name);
+  if (!key) return false;
+  
+  try {
+    return localStorage.getItem(LS_PREFIX + key + ':failed') === 'true';
+  } catch {}
+  
+  return inMemoryCache.get(key + ':failed') === true;
 }
 
 export default getUniversityLogoUrl;
