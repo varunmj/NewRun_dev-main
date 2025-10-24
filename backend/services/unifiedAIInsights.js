@@ -592,7 +592,7 @@ class UnifiedAIInsights {
       const User = require('../models/user.model');
 
       const baseQuery = {
-        _id: { $ne: userId },
+        _id: { $ne: user._id },
         email: { $not: /@example\.com$/ }
       };
 

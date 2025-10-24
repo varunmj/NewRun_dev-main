@@ -440,7 +440,7 @@ function transformUserToMatchCard(user, userStatus = USER_STATUS.ONLINE) {
   });
   
   return {
-    userId: user.id || userId || "current-user",
+    userId: user.id || user._id || "current-user",
     firstName: user.firstName || "",
     lastName: user.lastName || "",
     name: displayName(user),
