@@ -15,6 +15,7 @@ import {
   MdAutoAwesome,
   MdNotificationsNone,
   MdClose,
+  MdMessage,
 } from "react-icons/md";
 
 /* ---------- helpers ---------- */
@@ -45,6 +46,48 @@ const initialsOf = (user) => {
     .join("");
 };
 
+
+/* ---------- Message icon ---------- */
+function MessageIcon() {
+  const [unreadCount, setUnreadCount] = useState(0);
+  const { isAuthenticated } = useAuth();
+
+  const loadUnreadCount = async () => {
+    if (!isAuthenticated) return;
+    
+    try {
+      const response = await axiosInstance.get('/messages/unread-count');
+      setUnreadCount(response.data?.count || 0);
+    } catch (error) {
+      console.error('Error fetching unread count:', error);
+      setUnreadCount(0);
+    }
+  };
+
+  useEffect(() => {
+    loadUnreadCount();
+    
+    // Set up polling for unread count
+    const interval = setInterval(loadUnreadCount, 30000); // Check every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
+  return (
+    <Link
+      to="/messaging"
+      className="relative grid h-9 w-9 place-items-center rounded-full bg-white/5 backdrop-blur-md text-white/85 ring-1 ring-white/20 hover:bg-white/10 hover:ring-white/30 transition-all duration-200"
+      aria-label="Messages"
+    >
+      <MdMessage className="text-xl" />
+      {unreadCount > 0 && (
+        <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 px-1 text-[10px] font-semibold text-white shadow-lg">
+          {unreadCount > 99 ? '99+' : unreadCount}
+        </span>
+      )}
+    </Link>
+  );
+}
 
 /* ---------- Notification bell ---------- */
 function NotificationBell() {
@@ -313,6 +356,7 @@ export default function Navbar() {
           {isAuthenticated ? (
             <>
               {/* Show for authenticated users */}
+              <MessageIcon />
               <NotificationBell />
               <UserDropdown />
             </>

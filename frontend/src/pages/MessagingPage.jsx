@@ -83,7 +83,7 @@ const MessagingPage = () => {
     // Auto-start conversation with target user if specified
     useEffect(() => {
         const autoStartConversation = async () => {
-            if (targetUserId && userId && conversations.length > 0) {
+            if (targetUserId && userId) {
                 // Find existing conversation with target user
                 const existingConversation = conversations.find(conv => 
                     conv.participants.some(p => p._id === targetUserId)
@@ -98,8 +98,14 @@ const MessagingPage = () => {
                             receiverId: targetUserId
                         });
                         if (response.data.success) {
-                            fetchConversations(); // Refresh conversations
-                            // The conversation will be selected when it's created
+                            // Refresh conversations and then select the new one
+                            const updatedConversations = await fetchConversations();
+                            const newConversation = updatedConversations.find(conv => 
+                                conv.participants.some(p => p._id === targetUserId)
+                            );
+                            if (newConversation) {
+                                fetchMessages(newConversation._id);
+                            }
                         }
                     } catch (error) {
                         console.error('Error creating conversation:', error);
@@ -108,7 +114,7 @@ const MessagingPage = () => {
             }
         };
 
-        if (targetUserId && userId && conversations.length > 0) {
+        if (targetUserId && userId) {
             autoStartConversation();
         }
     }, [targetUserId, userId, conversations]);
@@ -119,10 +125,12 @@ const MessagingPage = () => {
             const response = await axiosInstance.get('/conversations');
             if (response.data.success) {
                 setConversations(response.data.data);
+                return response.data.data;
             }
         } catch (error) {
             console.error('Error fetching conversations:', error);
         }
+        return [];
     };
 
     // Fetch messages for the selected conversation and join its socket room
