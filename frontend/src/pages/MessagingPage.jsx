@@ -18,6 +18,7 @@ const MessagingPage = () => {
     const [newMessage, setNewMessage] = useState('');
     const [selectedUser, setSelectedUser] = useState(null);
     const [userStatuses, setUserStatuses] = useState({}); // Track user statuses
+    const [userInfo, setUserInfo] = useState(null); // Current user info
     const messagesEndRef = useRef(null);
     const { userStatus } = useUserStatus();
     
@@ -65,6 +66,7 @@ const MessagingPage = () => {
                     const userId = response.data.user._id;
                     console.log('Setting userId:', userId);
                     setUserId(userId);
+                    setUserInfo(response.data.user);
                     await fetchConversations();
                 }
             } catch (error) {
@@ -346,8 +348,23 @@ const MessagingPage = () => {
                     {dateSeparator}
                     <div className={`flex gap-3 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
                         {!isCurrentUser && (
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-teal-500 to-blue-500 flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
-                                {avatarText.slice(0, 2)}
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0 overflow-hidden">
+                                {message.senderId?.avatar ? (
+                                    <img
+                                        src={message.senderId.avatar}
+                                        alt={senderName}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                            e.target.style.display = 'none';
+                                            e.target.nextSibling.style.display = 'flex';
+                                        }}
+                                    />
+                                ) : null}
+                                <div className={`w-full h-full bg-gradient-to-r from-teal-500 to-blue-500 flex items-center justify-center ${
+                                    message.senderId?.avatar ? 'hidden' : 'flex'
+                                }`}>
+                                    {avatarText.slice(0, 2)}
+                                </div>
                             </div>
                         )}
                         <div className={`max-w-md ${isCurrentUser ? 'order-first' : ''}`}>
@@ -363,8 +380,23 @@ const MessagingPage = () => {
                             </p>
                         </div>
                         {isCurrentUser && (
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
-                                You
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold text-xs flex-shrink-0 overflow-hidden">
+                                {userInfo?.avatar ? (
+                                    <img
+                                        src={userInfo.avatar}
+                                        alt="You"
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                            e.target.style.display = 'none';
+                                            e.target.nextSibling.style.display = 'flex';
+                                        }}
+                                    />
+                                ) : null}
+                                <div className={`w-full h-full flex items-center justify-center ${
+                                    userInfo?.avatar ? 'hidden' : 'flex'
+                                }`}>
+                                    You
+                                </div>
                             </div>
                         )}
                     </div>
@@ -432,7 +464,20 @@ const MessagingPage = () => {
                                 >
                                     <div className="flex items-center gap-3">
                                         <div className="relative">
-                                            <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold shadow-lg">
+                                            {otherParticipants[0]?.avatar ? (
+                                                <img
+                                                    src={otherParticipants[0].avatar}
+                                                    alt={participantNames}
+                                                    className="w-12 h-12 rounded-full object-cover shadow-lg"
+                                                    onError={(e) => {
+                                                        e.target.style.display = 'none';
+                                                        e.target.nextSibling.style.display = 'flex';
+                                                    }}
+                                                />
+                                            ) : null}
+                                            <div className={`w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold shadow-lg ${
+                                                otherParticipants[0]?.avatar ? 'hidden' : 'flex'
+                                            }`}>
                                                 {participantNames.split(' ').map(name => name[0]).join('').slice(0, 2)}
                                             </div>
                                             {/* User Status Indicator */}
@@ -475,18 +520,57 @@ const MessagingPage = () => {
                             <div className="p-6 border-b border-white/10 bg-[#0f1115]/80 backdrop-blur-xl">
                                 <div className="flex items-center gap-4">
                                     <div className="relative">
-                                        <div className="w-12 h-12 rounded-full bg-gradient-to-r from-teal-500 to-blue-500 flex items-center justify-center text-white font-semibold shadow-lg">
+                                        {selectedUser.avatar ? (
+                                            <img
+                                                src={selectedUser.avatar}
+                                                alt={`${selectedUser.firstName} ${selectedUser.lastName}`}
+                                                className="w-12 h-12 rounded-full object-cover shadow-lg"
+                                                onError={(e) => {
+                                                    e.target.style.display = 'none';
+                                                    e.target.nextSibling.style.display = 'flex';
+                                                }}
+                                            />
+                                        ) : null}
+                                        <div className={`w-12 h-12 rounded-full bg-gradient-to-r from-teal-500 to-blue-500 flex items-center justify-center text-white font-semibold shadow-lg ${
+                                            selectedUser.avatar ? 'hidden' : 'flex'
+                                        }`}>
                                             {selectedUser.firstName[0] + selectedUser.lastName[0]}
                                         </div>
-                                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-[#0b0c0f] animate-pulse"></div>
+                                        <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-[#0b0c0f] ${
+                                            userStatuses[selectedUser._id] === 'online' 
+                                                ? 'bg-green-400 animate-pulse' 
+                                                : userStatuses[selectedUser._id] === 'away'
+                                                ? 'bg-yellow-400'
+                                                : userStatuses[selectedUser._id] === 'dnd'
+                                                ? 'bg-red-400'
+                                                : 'bg-gray-400'
+                                        }`}></div>
                                     </div>
                                     <div>
                                         <h2 className="text-xl font-semibold text-white">
                                             {`${selectedUser.firstName} ${selectedUser.lastName}`}
                                         </h2>
-                                        <p className="text-sm text-green-400 flex items-center gap-2">
-                                            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                                            Online
+                                        <p className={`text-sm flex items-center gap-2 ${
+                                            userStatuses[selectedUser._id] === 'online' 
+                                                ? 'text-green-400' 
+                                                : userStatuses[selectedUser._id] === 'away'
+                                                ? 'text-yellow-400'
+                                                : userStatuses[selectedUser._id] === 'dnd'
+                                                ? 'text-red-400'
+                                                : 'text-gray-400'
+                                        }`}>
+                                            <div className={`w-2 h-2 rounded-full ${
+                                                userStatuses[selectedUser._id] === 'online' 
+                                                    ? 'bg-green-400 animate-pulse' 
+                                                    : userStatuses[selectedUser._id] === 'away'
+                                                    ? 'bg-yellow-400'
+                                                    : userStatuses[selectedUser._id] === 'dnd'
+                                                    ? 'bg-red-400'
+                                                    : 'bg-gray-400'
+                                            }`}></div>
+                                            {userStatuses[selectedUser._id] === 'online' ? 'Online' :
+                                             userStatuses[selectedUser._id] === 'away' ? 'Away' :
+                                             userStatuses[selectedUser._id] === 'dnd' ? 'Do Not Disturb' : 'Offline'}
                                         </p>
                                     </div>
                                 </div>
