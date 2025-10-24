@@ -71,6 +71,7 @@ const MatchCard = ({
     
     // Create a pre-filled message with roommate request details
     const matchReasons = item.reasons?.slice(0, 3).map(r => r.text).join(', ') || 'We have compatible preferences';
+    const hasBudget = typeof item.budget === "number";
     const preFilledMessage = `Hi ${nameShort}! 👋 
 
 I found you through NewRun's roommate matching and we have a ${Math.round(item.matchScore || 0)}% compatibility score! 

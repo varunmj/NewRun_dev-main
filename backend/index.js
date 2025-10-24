@@ -1545,7 +1545,7 @@ app.get('/verify-email', async (req, res) => {
 // Email verification code endpoint (Enterprise-grade)
 app.post('/verify-email-code', authenticateToken, async (req, res) => {
   try {
-    const authUser = req.user?.user?._id || req.user?._id || req.user?.id;
+    const authUser = getAuthUserId(req);
     const { code } = req.body || {};
     
     if (!authUser?.email) {
@@ -1778,10 +1778,10 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
         const redirectPath = hasCompletedOnboarding ? '/dashboard' : '/onboarding';
         return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}${redirectPath}?token=${accessToken}`);
       })(req, res, next);
-    } catch (error) {
+      } catch (error) {
       console.error('Google OAuth callback handler error:', error);
       return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=oauth_error`);
-    }
+      }
   });
 } else {
   // Fallback when Google OAuth is not configured
@@ -2110,7 +2110,7 @@ const now = () => new Date();
 // Send email verification
 app.post('/send-email-verification', authenticateToken, async (req, res) => {
   try {
-    const authUser = req.user?.user?._id || req.user?._id || req.user?.id;
+    const authUser = getAuthUserId(req);
     
     // Safety validation
     if (!authUser || !authUser.email) {
@@ -4590,7 +4590,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
   // Initiate a conversation if it doesn't exist
   app.post('/conversations/initiate', authenticateToken, async (req, res) => {
     const { receiverId } = req.body; // Only pass receiverId from the frontend
-    const senderId = (req.user?.user?._id || req.user?._id || req.user?.id); // Get the sender (current user) from the token
+    const senderId = getAuthUserId(req); // Get the sender (current user) from the token
 
     try {
       let conversation = await Conversation.findOne({
@@ -4615,7 +4615,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
   app.post('/messages/send', authenticateToken, async (req, res) => {
     console.log("Authenticated User:", req.user); // Debugging line
     const { conversationId, content, attachments, gif, emoji } = req.body;
-    const senderId = (req.user?.user?._id || req.user?._id || req.user?.id); // Current user from the token
+    const senderId = getAuthUserId(req); // Current user from the token
   
     try {
       console.log("Request to send message with conversationId:", conversationId);
@@ -4742,7 +4742,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
   app.get('/dashboard/overview', authenticateToken, async (req, res) => {
     try {
       const userId = getAuthUserId(req);
-      const authed = req.user?.user?._id || req.user?._id || req.user?.id || {};
+      const authed = getAuthUserId(req) || {};
       
       console.log('Dashboard API called for user:', userId);
       console.log('Authenticated user:', authed);
@@ -5278,7 +5278,7 @@ Return only JSON with keys:
 
 app.get('/threads/:id', authenticateToken, async (req, res) => {
   try {
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id)?._id;
+    const userId = getAuthUserId(req);
     const t = await Thread.findOne({ _id: req.params.id, userId }).lean();
     if (!t) return res.status(404).json({ error: true, message: 'Thread not found' });
     res.json({ thread: t });
