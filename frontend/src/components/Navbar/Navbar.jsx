@@ -111,6 +111,8 @@ function MessageIcon() {
     setupSocket();
   }, [isAuthenticated]);
 
+  console.log('MessageIcon rendering - isAuthenticated:', isAuthenticated, 'unreadCount:', unreadCount);
+
   return (
     <Link
       to="/messaging"

@@ -5,6 +5,8 @@ const mongoose = require('mongoose');
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
+const { Server } = require('socket.io');
+const http = require('http');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const multerS3 = require('multer-s3');
@@ -66,12 +68,19 @@ const app = express();
 
 const http = require('http');
 const server = http.createServer(app);
-const io = require('socket.io')(server, { 
-    cors: { 
-        origin: ["https://newrun.club", "https://www.newrun.club", "http://localhost:3000"], 
-        methods: ['GET', 'POST'],
-        credentials: true
-    }
+
+// Initialize Socket.io
+const io = new Server(server, {
+  cors: {
+    origin: [
+      "http://localhost:3000",
+      "http://localhost:5173", 
+      "https://newrun.club",
+      "https://www.newrun.club"
+    ],
+    methods: ["GET", "POST"],
+    credentials: true
+  }
 });
 
 
@@ -4598,7 +4607,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
       // Count unread messages for this user
       const unreadCount = await Message.countDocuments({
         receiverId: userId,
-        read: false
+        isRead: false
       });
 
       console.log(`Unread count for user ${userId}: ${unreadCount}`);
@@ -4783,20 +4792,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
     }
   });
 
-  // Endpoint to get the count of unread messages
-  app.get('/messages/unread-count', authenticateToken, async (req, res) => {
-    const userId = getAuthUserId(req);
-    try {
-      const unreadCount = await Message.countDocuments({
-        receiverId: userId,
-        isRead: false
-      });
-      res.status(200).json({ success: true, count: unreadCount });
-    } catch (error) {
-      console.error('Error fetching unread message count:', error);
-      res.status(500).json({ success: false, message: 'Failed to fetch unread message count' });
-    }
-  });
+  // This endpoint is a duplicate - removing it
 
 // =====================
 // Dashboard Overview (NEW)
@@ -8706,10 +8702,96 @@ Provide specific, actionable recommendations for improving roommate matching.`;
     });
   });
 
+  // Socket.io event handlers
+  io.on('connection', (socket) => {
+    console.log('User connected:', socket.id);
+
+    // Join user to their own room for personal notifications
+    socket.on('join_user', (userId) => {
+      if (userId) {
+        socket.join(`user_${userId}`);
+        console.log(`User ${userId} joined their room`);
+      }
+    });
+
+    // Join conversation room
+    socket.on('join_conversation', (conversationId) => {
+      if (conversationId) {
+        socket.join(`conversation_${conversationId}`);
+        console.log(`User joined conversation ${conversationId}`);
+      }
+    });
+
+    // Leave conversation room
+    socket.on('leave_conversation', (conversationId) => {
+      if (conversationId) {
+        socket.leave(`conversation_${conversationId}`);
+        console.log(`User left conversation ${conversationId}`);
+      }
+    });
+
+    // Handle typing indicators
+    socket.on('typing', (data) => {
+      if (data.conversationId) {
+        socket.to(`conversation_${data.conversationId}`).emit('userTyping', {
+          userId: data.userId,
+          conversationId: data.conversationId,
+          isTyping: true
+        });
+      }
+    });
+
+    socket.on('stopTyping', (data) => {
+      if (data.conversationId) {
+        socket.to(`conversation_${data.conversationId}`).emit('userTyping', {
+          userId: data.userId,
+          conversationId: data.conversationId,
+          isTyping: false
+        });
+      }
+    });
+
+    // Handle new messages
+    socket.on('send_message', async (messageData) => {
+      try {
+        // Emit to all users in the conversation
+        io.to(`conversation_${messageData.conversationId}`).emit('newMessage', {
+          conversationId: messageData.conversationId,
+          message: messageData
+        });
+        
+        // Also emit to the sender's personal room for unread count updates
+        if (messageData.receiverId) {
+          io.to(`user_${messageData.receiverId}`).emit('newMessage', {
+            conversationId: messageData.conversationId,
+            message: messageData
+          });
+        }
+      } catch (error) {
+        console.error('Error handling send_message:', error);
+      }
+    });
+
+    // Handle message read status
+    socket.on('mark_message_read', (data) => {
+      if (data.conversationId && data.messageId) {
+        io.to(`conversation_${data.conversationId}`).emit('messageRead', {
+          messageId: data.messageId,
+          conversationId: data.conversationId
+        });
+      }
+    });
+
+    socket.on('disconnect', () => {
+      console.log('User disconnected:', socket.id);
+    });
+  });
+
   const PORT = process.env.PORT || 8000;
 
   server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+    console.log(`Socket.io server is running`);
   });
   
   module.exports = app;
