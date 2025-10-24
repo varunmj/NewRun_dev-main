@@ -66,7 +66,6 @@ const emailService = require('./services/emailService');
 
 const app = express();
 
-const http = require('http');
 const server = http.createServer(app);
 
 // Initialize Socket.io
