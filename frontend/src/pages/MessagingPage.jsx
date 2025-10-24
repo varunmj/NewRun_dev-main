@@ -73,8 +73,13 @@ const MessagingPage = () => {
         socketService.on('newMessage', (data) => {
             console.log('🔔 Received new message via Socket.io:', data);
             if (data.conversationId === selectedConversation) {
-                // Add message to current conversation
-                setMessages(prev => [...prev, data.message]);
+                // Only add message if it's not from the current user (to avoid duplicates)
+                if (data.message.senderId !== userId) {
+                    console.log('📨 Adding message from other user:', data.message);
+                    setMessages(prev => [...prev, data.message]);
+                } else {
+                    console.log('🚫 Skipping message from current user to avoid duplicate');
+                }
             }
             // Refresh conversations to update last message
             fetchConversations();
