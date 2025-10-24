@@ -1338,7 +1338,14 @@ io.on('connection', (socket) => {
   });
 
    socket.on('registerUser', (userId) => {
-    if (userId) socket.join(`user:${userId}`);
+    if (userId) {
+      socket.join(`user_${userId}`);
+      console.log(`👤 User ${userId} joined room user_${userId}`);
+      
+      // Debug: List all rooms this socket is in
+      const rooms = Array.from(socket.rooms);
+      console.log(`🔍 Debug - Socket ${socket.id} is in rooms:`, rooms);
+    }
   });
 
   socket.on('disconnect', () => {
@@ -8913,20 +8920,28 @@ Provide specific, actionable recommendations for improving roommate matching.`;
         // Emit delivery receipt after a short delay (simulating delivery)
         setTimeout(async () => {
           try {
-            // Update message status to delivered
-            await Message.findByIdAndUpdate(messageData._id, {
-              readStatus: 'delivered',
-              deliveredAt: new Date()
-            });
+            // Use messageId from frontend instead of _id
+            const messageId = messageData.messageId || messageData._id;
+            console.log(`🔍 Debug - Delivery receipt: messageData.messageId=${messageData.messageId}, messageData._id=${messageData._id}, final messageId=${messageId}`);
+            
+            if (messageId) {
+              // Update message status to delivered
+              await Message.findByIdAndUpdate(messageId, {
+                readStatus: 'delivered',
+                deliveredAt: new Date()
+              });
 
-            // Emit delivery receipt
-            io.to(`conversation_${messageData.conversationId}`).emit('readReceiptUpdate', {
-              messageId: messageData._id,
-              conversationId: messageData.conversationId,
-              readStatus: 'delivered',
-              deliveredAt: new Date()
-            });
-            console.log(`📤 Socket.io - Emitted delivery receipt for message ${messageData._id}`);
+              // Emit delivery receipt
+              io.to(`conversation_${messageData.conversationId}`).emit('readReceiptUpdate', {
+                messageId: messageId,
+                conversationId: messageData.conversationId,
+                readStatus: 'delivered',
+                deliveredAt: new Date()
+              });
+              console.log(`📤 Socket.io - Emitted delivery receipt for message ${messageId}`);
+            } else {
+              console.error('❌ Message ID is undefined for delivery receipt');
+            }
           } catch (error) {
             console.error('Error updating message delivery status:', error);
           }
@@ -9016,21 +9031,51 @@ Provide specific, actionable recommendations for improving roommate matching.`;
 
             // Emit read receipt updates for all messages
             unreadMessages.forEach(msg => {
+              console.log(`🔍 Debug - Processing message ${msg._id} from sender ${msg.senderId}`);
+              
+              // Emit to conversation room
               io.to(`conversation_${data.conversationId}`).emit('readReceiptUpdate', {
                 messageId: msg._id,
                 conversationId: data.conversationId,
                 readStatus: 'read',
                 readAt: new Date()
               });
+              console.log(`📤 Debug - Emitted readReceiptUpdate to conversation_${data.conversationId}`);
               
-              // Also emit to sender's individual room
+              // Emit to sender's individual room for read receipt updates
+              io.to(`user_${msg.senderId}`).emit('readReceiptUpdate', {
+                messageId: msg._id,
+                conversationId: data.conversationId,
+                readStatus: 'read',
+                readAt: new Date()
+              });
+              console.log(`📤 Debug - Emitted readReceiptUpdate to user_${msg.senderId}`);
+              
+              // Also emit mark_message_read for navbar updates
               io.to(`user_${msg.senderId}`).emit('mark_message_read', {
                 messageId: msg._id,
                 conversationId: data.conversationId
               });
+              console.log(`📤 Debug - Emitted mark_message_read to user_${msg.senderId}`);
             });
 
             console.log(`📤 Socket.io - Updated ${unreadMessages.length} messages to read status`);
+            
+            // Debug: Log all socket rooms for the sender
+            unreadMessages.forEach(msg => {
+              console.log(`🔍 Debug - Sender ${msg.senderId} should receive readReceiptUpdate for message ${msg._id}`);
+              console.log(`🔍 Debug - Available rooms for sender:`, Array.from(io.sockets.adapter.rooms.keys()).filter(room => room.includes(msg.senderId)));
+              
+              // Check if sender's room exists
+              const senderRoom = `user_${msg.senderId}`;
+              const roomExists = io.sockets.adapter.rooms.has(senderRoom);
+              console.log(`🔍 Debug - Room ${senderRoom} exists:`, roomExists);
+              
+              if (roomExists) {
+                const roomSize = io.sockets.adapter.rooms.get(senderRoom)?.size || 0;
+                console.log(`🔍 Debug - Room ${senderRoom} has ${roomSize} sockets`);
+              }
+            });
           }
         } catch (error) {
           console.error('Error updating read receipts for viewing user:', error);
