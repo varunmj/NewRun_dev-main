@@ -8775,7 +8775,16 @@ Provide specific, actionable recommendations for improving roommate matching.`;
       const currentUserId = getAuthUserId(req);
       
       // Set current user as online
-      userStatuses.set(currentUserId, Date.now());
+      if (currentUserId) {
+        userStatuses.set(currentUserId, Date.now());
+      }
+      
+      // Clean up null entries from userStatuses
+      for (const [key, value] of userStatuses.entries()) {
+        if (key === null || key === 'null' || key === undefined) {
+          userStatuses.delete(key);
+        }
+      }
       
       console.log('🔍 Status check - Current user:', currentUserId);
       console.log('🔍 Status check - Requested userIds:', userIds);
@@ -8828,12 +8837,14 @@ Provide specific, actionable recommendations for improving roommate matching.`;
 
     // Join user to their own room for personal notifications
     socket.on('join_user', (userId) => {
-      if (userId) {
+      if (userId && userId !== null && userId !== 'null') {
         socket.join(`user_${userId}`);
         // Mark user as online
         userStatuses.set(userId, Date.now());
         console.log(`🔍 Socket.io - User ${userId} joined their room and marked as online at ${new Date().toISOString()}`);
         console.log(`🔍 Socket.io - Current userStatuses Map:`, Array.from(userStatuses.entries()));
+      } else {
+        console.log(`⚠️ Socket.io - Invalid userId received:`, userId);
       }
     });
 
