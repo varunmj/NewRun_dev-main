@@ -390,7 +390,7 @@ app.post('/community/threads/:id/answers', async (req, res) => {
 app.post('/community/threads/:id/vote', authenticateToken, async (req, res) => {
   try {
     const { type = 'upvote' } = req.body || {}; // 'upvote' or 'downvote'
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
     const threadId = req.params.id;
     
     const t = await CommunityThread.findById(threadId);
@@ -454,7 +454,7 @@ app.post('/community/threads/:id/vote', authenticateToken, async (req, res) => {
 // Bookmark thread (idempotent)
 app.post('/community/threads/:id/bookmark', authenticateToken, async (req, res) => {
   try {
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
     const threadId = req.params.id;
     
     console.log('Bookmark request - userId:', userId, 'threadId:', threadId);
@@ -496,7 +496,7 @@ app.post('/community/threads/:id/bookmark', authenticateToken, async (req, res) 
 // Remove bookmark (idempotent)
 app.delete('/community/threads/:id/bookmark', authenticateToken, async (req, res) => {
   try {
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
     const threadId = req.params.id;
     
     // Validate ObjectIds
@@ -518,7 +518,7 @@ app.delete('/community/threads/:id/bookmark', authenticateToken, async (req, res
 // Get user's bookmarked threads
 app.get('/community/bookmarks', authenticateToken, async (req, res) => {
   try {
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
     const page  = parseInt(req.query.page || 1, 10);
     const limit = parseInt(req.query.limit || 20, 10);
     const skip  = (page - 1) * limit;
@@ -557,7 +557,7 @@ app.get('/community/bookmarks', authenticateToken, async (req, res) => {
 // Check if thread is bookmarked by user
 app.get('/community/threads/:id/bookmark-status', authenticateToken, async (req, res) => {
   try {
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
     const threadId = req.params.id;
     
     const bookmark = await UserBookmark.findOne({ userId, threadId });
@@ -576,7 +576,7 @@ app.get('/community/threads/:id/bookmark-status', authenticateToken, async (req,
 // Get user's vote status for a thread
 app.get('/community/threads/:id/vote-status', authenticateToken, async (req, res) => {
   try {
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
     const threadId = req.params.id;
     
     const thread = await CommunityThread.findById(threadId);
@@ -603,7 +603,7 @@ app.get('/community/threads/:id/vote-status', authenticateToken, async (req, res
 app.post('/community/threads/:id/answers/:answerId/vote', authenticateToken, async (req, res) => {
   try {
     const { type = 'upvote' } = req.body || {};
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
     const threadId = req.params.id;
     const answerId = req.params.answerId;
     
@@ -673,7 +673,7 @@ app.post('/community/threads/:id/answers/:answerId/vote', authenticateToken, asy
 app.post('/community/threads/:id/answers/:answerId/reply', authenticateToken, async (req, res) => {
   try {
     const { body } = req.body;
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
     const threadId = req.params.id;
     const answerId = req.params.answerId;
     
@@ -729,7 +729,7 @@ app.post('/community/threads/:id/answers/:answerId/reply', authenticateToken, as
 app.post('/community/threads/:id/comments/:commentId/vote', authenticateToken, async (req, res) => {
   try {
     const { type = 'upvote' } = req.body || {};
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
     const threadId = req.params.id;
     const commentId = req.params.commentId;
     
@@ -806,7 +806,7 @@ app.post('/community/threads/:id/comments/:commentId/vote', authenticateToken, a
 app.post('/community/threads/:id/answers/:answerId/comments', authenticateToken, async (req, res) => {
   try {
     const { body } = req.body;
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
     const threadId = req.params.id;
     const answerId = req.params.answerId;
     
@@ -851,7 +851,7 @@ app.post('/community/threads/:id/answers/:answerId/comments', authenticateToken,
 // Delete answer
 app.delete('/community/threads/:id/answers/:answerId', authenticateToken, async (req, res) => {
   try {
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
     const threadId = req.params.id;
     const answerId = req.params.answerId;
     
@@ -880,7 +880,7 @@ app.delete('/community/threads/:id/answers/:answerId', authenticateToken, async 
 // Delete comment
 app.delete('/community/threads/:id/comments/:commentId', authenticateToken, async (req, res) => {
   try {
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
     const threadId = req.params.id;
     const commentId = req.params.commentId;
     
@@ -919,7 +919,7 @@ app.delete('/community/threads/:id/comments/:commentId', authenticateToken, asyn
 // Delete reply (nested reply to comment)
 app.delete('/community/threads/:id/comments/:commentId/replies/:replyId', authenticateToken, async (req, res) => {
   try {
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
     const threadId = req.params.id;
     const commentId = req.params.commentId;
     const replyId = req.params.replyId;
@@ -967,7 +967,7 @@ app.delete('/community/threads/:id/comments/:commentId/replies/:replyId', authen
 app.post('/community/threads/:id/comments/:commentId/replies', authenticateToken, async (req, res) => {
   try {
     const { body } = req.body;
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
     const threadId = req.params.id;
     const commentId = req.params.commentId;
     
@@ -1024,7 +1024,7 @@ app.post('/community/threads/:id/comments/:commentId/replies', authenticateToken
 // Get answer vote status
 app.get('/community/threads/:id/answers/:answerId/vote-status', authenticateToken, async (req, res) => {
   try {
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
     const threadId = req.params.id;
     const answerId = req.params.answerId;
     
@@ -2819,11 +2819,11 @@ app.post("/upload-images", upload.array("images", 5), async (req, res) => {
 app.post("/upload-avatar", authenticateToken, upload.single("avatar"), async (req, res) => {
   try {
     console.log('📸 Avatar upload request received');
-    console.log('📸 User ID:', req.user?.user?._id || req.user?._id);
+    console.log('📸 User ID:', getAuthUserId(req));
     console.log('📸 File:', req.file);
     console.log('📸 File location:', req.file?.location);
     
-    const userId = req.user?.user?._id || req.user?._id;
+    const userId = getAuthUserId(req);
     
     if (!userId) {
       return res.status(401).json({ error: true, message: "Unauthorized" });
@@ -3351,7 +3351,7 @@ app.get("/search-properties", async (req, res) => {
 app.put('/property/:propertyId/like', authenticateToken, async (req, res) => {
   try {
     const { propertyId } = req.params;
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id); // compat if you change middleware later
+    const userId = getAuthUserId(req); // compat if you change middleware later
     const property = await Property.findById(propertyId);
     if (!property) return res.status(404).json({ error: true, message: 'Property not found' });
 
@@ -3855,7 +3855,7 @@ app.get('/marketplace/items', async (req, res) => {
   // Get details of a single marketplace item
   app.get("/marketplace/item/:id", authenticateToken, async (req, res) => {
     const itemId = req.params.id;
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
 
     try {
         const item = await MarketplaceItem.findById(itemId)
@@ -4665,7 +4665,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
 
   // Get all conversations of a user
   app.get('/conversations', authenticateToken, async (req, res) => {
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
 
     try {
       const conversations = await Conversation.find({
@@ -4695,7 +4695,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
   // Get all messages of a specific conversation
   app.get('/conversations/:conversationId/messages', authenticateToken, async (req, res) => {
     const { conversationId } = req.params;
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
 
     try {
       const conversation = await Conversation.findById(conversationId);
@@ -4723,7 +4723,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
 
   // Endpoint to get the count of unread messages
   app.get('/messages/unread-count', authenticateToken, async (req, res) => {
-    const userId = (req.user?.user?._id || req.user?._id || req.user?.id);
+    const userId = getAuthUserId(req);
     try {
       const unreadCount = await Message.countDocuments({
         receiverId: userId,
