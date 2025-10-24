@@ -68,9 +68,47 @@ function MessageIcon() {
     loadUnreadCount();
     
     // Set up polling for unread count
-    const interval = setInterval(loadUnreadCount, 30000); // Check every 30 seconds
+    const interval = setInterval(loadUnreadCount, 10000); // Check every 10 seconds for better responsiveness
     
     return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
+  // Socket.io for real-time updates
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // Import socket.io-client dynamically
+    const setupSocket = async () => {
+      try {
+        const { io } = await import('socket.io-client');
+        const socket = io(
+          import.meta.env.VITE_API_BASE?.replace(/\/$/, '') ||
+          import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ||
+          import.meta.env.VITE_API_URL?.replace(/\/$/, '') ||
+          (window.location.hostname.endsWith('newrun.club') ? 'https://api.newrun.club' : 'http://localhost:8000')
+        );
+
+        // Listen for new messages to update count
+        socket.on('newMessage', () => {
+          console.log('New message received, updating unread count');
+          loadUnreadCount();
+        });
+
+        // Listen for message read events
+        socket.on('messageRead', () => {
+          console.log('Message read, updating unread count');
+          loadUnreadCount();
+        });
+
+        return () => {
+          socket.disconnect();
+        };
+      } catch (error) {
+        console.error('Error setting up socket for message count:', error);
+      }
+    };
+
+    setupSocket();
   }, [isAuthenticated]);
 
   return (

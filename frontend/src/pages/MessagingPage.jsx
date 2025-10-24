@@ -75,6 +75,40 @@ const MessagingPage = () => {
         fetchUserInfo();
     }, []);
 
+    // Socket.io event listeners for live updates
+    useEffect(() => {
+        // Listen for new messages
+        socket.on('newMessage', (data) => {
+            console.log('Received new message via socket:', data);
+            if (data.conversationId === selectedConversation) {
+                setMessages(prev => [...prev, data.message]);
+            }
+            // Refresh conversations to update last message
+            fetchConversations();
+        });
+
+        // Listen for message read status updates
+        socket.on('messageRead', (data) => {
+            console.log('Message read status updated:', data);
+            setMessages(prev => prev.map(msg => 
+                msg._id === data.messageId ? { ...msg, read: true } : msg
+            ));
+        });
+
+        // Listen for typing indicators
+        socket.on('userTyping', (data) => {
+            console.log('User typing:', data);
+            // You can implement typing indicators here
+        });
+
+        // Cleanup socket listeners on unmount
+        return () => {
+            socket.off('newMessage');
+            socket.off('messageRead');
+            socket.off('userTyping');
+        };
+    }, [selectedConversation]);
+
     // Handle pre-filled message and auto-start conversation
     useEffect(() => {
         if (preFilledMessage) {
@@ -220,10 +254,13 @@ const MessagingPage = () => {
         try {
             const response = await axiosInstance.post(`/messages/send`, messageData);
             if (response.data.success) {
-                socket.emit('send_message', messageData); // Emit message to server
+                // Add message to local state immediately for better UX
+                setMessages(prev => [...prev, response.data.data]);
                 setNewMessage('');
-                setMessages([...messages, response.data.data]);
+                // Refresh conversations to update last message
                 fetchConversations();
+                // Emit typing stop event
+                socket.emit('stopTyping', { conversationId: selectedConversation, userId });
             }
         } catch (error) {
             console.error('Error sending message:', error);

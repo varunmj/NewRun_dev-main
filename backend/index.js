@@ -5734,12 +5734,19 @@ function generateMatchExplanations(user, candidate, score) {
       // Pre-filter candidates. DO NOT require synapse; allow partial profiles.
       const match = { _id: { $ne: me._id } };
 
+      console.log(`Synapse matches for user ${userId} (${me.firstName} ${me.lastName})`);
+      console.log(`Scope: ${scope}, University: ${me.university}, Home Country: ${meHomeCountry}`);
+
       if (scope === "school" && me.university) {
         match.university = me.university;               // <-- top-level university
+        console.log(`Filtering by university: ${me.university}`);
       } else if (scope === "country" && meHomeCountry) {
         match["synapse.culture.home.country"] = meHomeCountry;
+        console.log(`Filtering by country: ${meHomeCountry}`);
       }
       // else "any": no extra narrowing
+
+      console.log('Match filter:', JSON.stringify(match, null, 2));
 
       // Enhanced scoring weights for better compatibility matching
       const W = {
@@ -5845,7 +5852,9 @@ function generateMatchExplanations(user, candidate, score) {
         }
       ];
 
+      console.log('Executing aggregation pipeline...');
       const rows = await User.aggregate(pipeline);
+      console.log(`Found ${rows.length} potential matches`);
 
       // Post-process for UI niceties (overlap, reasons, flags)
       const toSet = (a) => Array.from(new Set((Array.isArray(a) ? a : []).filter(Boolean)));
