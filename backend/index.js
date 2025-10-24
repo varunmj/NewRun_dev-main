@@ -4587,10 +4587,37 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
   // Messaging and Conversation Routes
   // =====================
 
+  // Get unread message count for user
+  app.get('/messages/unread-count', authenticateToken, async (req, res) => {
+    try {
+      const userId = getAuthUserId(req);
+      if (!userId) {
+        return res.status(401).json({ success: false, message: 'Invalid user authentication' });
+      }
+
+      // Count unread messages for this user
+      const unreadCount = await Message.countDocuments({
+        receiverId: userId,
+        read: false
+      });
+
+      res.json({ success: true, count: unreadCount });
+    } catch (error) {
+      console.error('Error fetching unread count:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch unread count' });
+    }
+  });
+
   // Initiate a conversation if it doesn't exist
   app.post('/conversations/initiate', authenticateToken, async (req, res) => {
     const { receiverId } = req.body; // Only pass receiverId from the frontend
     const senderId = getAuthUserId(req); // Get the sender (current user) from the token
+
+    // Check if senderId is valid
+    if (!senderId) {
+      console.error("Invalid senderId:", senderId);
+      return res.status(401).json({ success: false, message: 'Invalid user authentication' });
+    }
 
     try {
       let conversation = await Conversation.findOne({
@@ -4620,6 +4647,12 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
     try {
       console.log("Request to send message with conversationId:", conversationId);
       
+      // Check if senderId is valid
+      if (!senderId) {
+        console.error("Invalid senderId:", senderId);
+        return res.status(401).json({ success: false, message: 'Invalid user authentication' });
+      }
+      
       const conversation = await Conversation.findById(conversationId);
   
       if (!conversation) {
@@ -4632,7 +4665,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
         return res.status(403).json({ success: false, message: 'Unauthorized access' });
       }
   
-      const receiverId = conversation.participants.find(id => id.toString() !== senderId.toString());
+      const receiverId = conversation.participants.find(id => id && senderId && id.toString() !== senderId.toString());
   
       const newMessage = new Message({
         conversationId,
