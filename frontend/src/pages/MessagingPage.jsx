@@ -448,10 +448,7 @@ const MessagingPage = () => {
         try {
             const unreadMessages = messages.filter(msg => !msg.isRead && msg.receiverId === userId);
             if (unreadMessages.length > 0) {
-                // Update read status in backend
-                await axiosInstance.post(`/conversations/${conversationId}/mark-read`);
-                
-                // Emit read status via Socket.io
+                // Only emit read status via Socket.io - let the socket handler do the database updates
                 unreadMessages.forEach(msg => {
                     socketService.markMessageRead(conversationId, msg._id);
                 });
