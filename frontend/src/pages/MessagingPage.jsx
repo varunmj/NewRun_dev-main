@@ -180,18 +180,23 @@ const MessagingPage = () => {
         // Listen for read receipt updates
         const handleReadReceiptUpdate = (data) => {
             console.log('📖 Read receipt updated:', data);
-            setMessages(prev => prev.map(msg => {
-                if (msg._id === data.messageId) {
-                    console.log('🔄 Updating message read status:', msg._id, 'from', msg.readStatus, 'to', data.readStatus);
-                    return { 
-                        ...msg, 
-                        readStatus: data.readStatus, 
-                        readAt: data.readAt, 
-                        deliveredAt: data.deliveredAt 
-                    };
-                }
-                return msg;
-            }));
+            console.log('🔍 Debug - Current messages before update:', messages.length);
+            setMessages(prev => {
+                const updated = prev.map(msg => {
+                    if (msg._id === data.messageId) {
+                        console.log('🔄 Updating message read status:', msg._id, 'from', msg.readStatus, 'to', data.readStatus);
+                        return { 
+                            ...msg, 
+                            readStatus: data.readStatus, 
+                            readAt: data.readAt, 
+                            deliveredAt: data.deliveredAt 
+                        };
+                    }
+                    return msg;
+                });
+                console.log('🔍 Debug - Messages after update:', updated.length);
+                return updated;
+            });
         };
 
         // Listen for typing indicators
