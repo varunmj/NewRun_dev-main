@@ -8775,21 +8775,17 @@ Provide specific, actionable recommendations for improving roommate matching.`;
       const currentUserId = getAuthUserId(req);
       
       // Set current user as online
-      userStatuses.set(currentUserId, 'online');
+      userStatuses.set(currentUserId, Date.now());
       
-      // Return statuses - only current user is online, others are offline
+      // Return statuses - check all users for recent activity
       const statuses = {};
       userIds.forEach(userId => {
-        if (userId === currentUserId) {
+        // Check if user has been seen recently (within last 5 minutes)
+        const lastSeen = userStatuses.get(userId);
+        if (lastSeen && Date.now() - lastSeen < 5 * 60 * 1000) {
           statuses[userId] = 'online';
         } else {
-          // Check if user has been seen recently (within last 5 minutes)
-          const lastSeen = userStatuses.get(userId);
-          if (lastSeen && Date.now() - lastSeen < 5 * 60 * 1000) {
-            statuses[userId] = 'online';
-          } else {
-            statuses[userId] = 'offline';
-          }
+          statuses[userId] = 'offline';
         }
       });
 
@@ -8805,6 +8801,20 @@ Provide specific, actionable recommendations for improving roommate matching.`;
       });
     }
   });
+
+  // Middleware to track user activity for status
+  const trackUserActivity = (req, res, next) => {
+    const userId = getAuthUserId(req);
+    if (userId) {
+      userStatuses.set(userId, Date.now());
+    }
+    next();
+  };
+
+  // Apply activity tracking to key endpoints
+  app.use('/conversations', trackUserActivity);
+  app.use('/messages', trackUserActivity);
+  app.use('/get-user', trackUserActivity);
 
   // Socket.io event handlers
   io.on('connection', (socket) => {
