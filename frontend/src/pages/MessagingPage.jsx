@@ -217,12 +217,60 @@ const MessagingPage = () => {
             if (response.data.success) {
                 console.log('Conversations fetched:', response.data.data);
                 setConversations(response.data.data);
+                
+                // Initialize user statuses - assume all users are online initially
+                const initialStatuses = {};
+                response.data.data.forEach(conversation => {
+                    conversation.participants.forEach(participant => {
+                        if (participant._id !== userId) {
+                            // Set initial status as online for all users
+                            initialStatuses[participant._id] = 'online';
+                        }
+                    });
+                });
+                setUserStatuses(initialStatuses);
+                
+                // Fetch actual user statuses from backend
+                fetchUserStatuses(response.data.data);
+                
                 return response.data.data;
             }
         } catch (error) {
             console.error('Error fetching conversations:', error);
         }
         return [];
+    };
+
+    // Fetch user statuses from backend
+    const fetchUserStatuses = async (conversations) => {
+        try {
+            // Get all unique user IDs from conversations
+            const userIds = new Set();
+            conversations.forEach(conversation => {
+                conversation.participants.forEach(participant => {
+                    if (participant._id !== userId) {
+                        userIds.add(participant._id);
+                    }
+                });
+            });
+
+            if (userIds.size > 0) {
+                // Fetch statuses for all users
+                const response = await axiosInstance.post('/users/statuses', {
+                    userIds: Array.from(userIds)
+                });
+                
+                if (response.data.success) {
+                    setUserStatuses(prev => ({
+                        ...prev,
+                        ...response.data.statuses
+                    }));
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching user statuses:', error);
+            // Keep the default online status if fetch fails
+        }
     };
 
     // Fetch messages for the selected conversation and join its socket room
