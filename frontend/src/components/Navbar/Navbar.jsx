@@ -50,7 +50,6 @@ const initialsOf = (user) => {
 /* ---------- Message icon ---------- */
 function MessageIcon() {
   const [unreadCount, setUnreadCount] = useState(0);
-  const [isAnimating, setIsAnimating] = useState(false);
   const { isAuthenticated } = useAuth();
 
   const loadUnreadCount = async () => {
@@ -95,9 +94,6 @@ function MessageIcon() {
           console.log('📨 New message received, updating unread count:', data);
           // Increment count immediately for better UX
           setUnreadCount(prev => prev + 1);
-          // Trigger animation
-          setIsAnimating(true);
-          setTimeout(() => setIsAnimating(false), 1000);
           // Also fetch from server to ensure accuracy
           loadUnreadCount();
         };
@@ -117,15 +113,26 @@ function MessageIcon() {
           loadUnreadCount();
         };
 
+        // Listen for message read events (when user opens a message)
+        const handleMessageMarkedRead = (data) => {
+          console.log('👁️ Message marked as read, updating unread count:', data);
+          // Decrement count immediately for better UX
+          setUnreadCount(prev => Math.max(0, prev - 1));
+          // Also fetch from server to ensure accuracy
+          loadUnreadCount();
+        };
+
         // Register listeners
         socketService.on('newMessage', handleNewMessage);
         socketService.on('messageRead', handleMessageRead);
         socketService.on('conversationUpdate', handleConversationUpdate);
+        socketService.on('mark_message_read', handleMessageMarkedRead);
 
         return () => {
           socketService.off('newMessage', handleNewMessage);
           socketService.off('messageRead', handleMessageRead);
           socketService.off('conversationUpdate', handleConversationUpdate);
+          socketService.off('mark_message_read', handleMessageMarkedRead);
         };
       } catch (error) {
         console.error('Error setting up socket for message count:', error);
@@ -159,11 +166,11 @@ function MessageIcon() {
         unreadCount > 0 
           ? 'text-blue-400 group-hover:text-blue-300 animate-pulse' 
           : 'group-hover:text-white'
-      } ${isAnimating ? 'animate-bounce' : ''}`} />
+      }`} />
       
       {/* Enhanced notification bubble with red/white design */}
       {unreadCount > 0 && (
-        <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-red-500 border-2 border-white shadow-lg animate-bounce">
+        <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-red-500 border-2 border-white shadow-lg">
           <span className="text-[10px] font-bold text-white">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
