@@ -22,7 +22,7 @@ async function resetPassword() {
       const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
       
       // Update user password
-      await User.findByIdAndUpdate(user._id, { password: hashedPassword });
+      await User.findByIdAndUpdate(userId, { password: hashedPassword });
       
       console.log('Password reset successful!');
       console.log('New password:', newPassword);
