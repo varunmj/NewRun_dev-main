@@ -67,36 +67,6 @@ const MessagingPage = () => {
         return otherParticipant ? otherParticipant._id : null;
     };
 
-    // Set up Socket.io event listeners for real-time messaging
-    const setupSocketListeners = () => {
-        // Listen for new messages
-        socketService.on('newMessage', (data) => {
-            console.log('🔔 Received new message via Socket.io:', data);
-            if (data.conversationId === selectedConversation) {
-                // Only add message if it's not from the current user (to avoid duplicates)
-                if (data.message.senderId !== userId) {
-                    console.log('📨 Adding message from other user:', data.message);
-                    setMessages(prev => [...prev, data.message]);
-                } else {
-                    console.log('🚫 Skipping message from current user to avoid duplicate');
-                }
-            }
-            // Refresh conversations to update last message
-            fetchConversations();
-        });
-        
-        // Listen for typing indicators
-        socketService.on('userTyping', (data) => {
-            console.log('⌨️ User typing:', data);
-            // You can implement typing indicators here
-        });
-        
-        // Listen for message read status
-        socketService.on('messageRead', (data) => {
-            console.log('👁️ Message read:', data);
-            // Update message read status in UI
-        });
-    };
 
     // Initialize Socket.io and fetch user info
     useEffect(() => {
@@ -105,8 +75,7 @@ const MessagingPage = () => {
                 // Connect to Socket.io
                 socketService.connect();
                 
-                // Set up Socket.io event listeners for real-time messaging
-                setupSocketListeners();
+                // Socket.io listeners are set up in the useEffect below
                 
                 // Fetch user info
                 const response = await axiosInstance.get('/get-user');
@@ -130,6 +99,10 @@ const MessagingPage = () => {
         
         // Cleanup on unmount
         return () => {
+            // Remove all Socket.io listeners
+            socketService.off('newMessage');
+            socketService.off('userTyping');
+            socketService.off('messageRead');
             socketService.disconnect();
         };
     }, []);
@@ -138,11 +111,33 @@ const MessagingPage = () => {
     useEffect(() => {
         if (!userId) return;
 
-        // Listen for new messages
+        // Listen for new messages with duplicate prevention
         const handleNewMessage = (data) => {
             console.log('📨 Received new message via socket:', data);
             if (data.conversationId === selectedConversation) {
-                setMessages(prev => [...prev, data.message]);
+                // Check if message already exists to prevent duplicates
+                setMessages(prev => {
+                    const messageExists = prev.some(msg => 
+                        msg._id === data.message._id || 
+                        (msg.content === data.message.content && 
+                         msg.senderId === data.message.senderId && 
+                         Math.abs(new Date(msg.timestamp) - new Date(data.message.timestamp)) < 1000)
+                    );
+                    
+                    if (messageExists) {
+                        console.log('🚫 Message already exists, skipping duplicate:', data.message);
+                        return prev;
+                    }
+                    
+                    // Only add message if it's not from the current user (to avoid duplicates)
+                    if (data.message.senderId !== userId) {
+                        console.log('📨 Adding message from other user:', data.message);
+                        return [...prev, data.message];
+                    } else {
+                        console.log('🚫 Skipping message from current user to avoid duplicate');
+                        return prev;
+                    }
+                });
             }
             // Refresh conversations to update last message
             fetchConversations();
@@ -452,8 +447,22 @@ const MessagingPage = () => {
 
     const renderMessagesWithDate = () => {
         let lastDate = null;
+        
+        // Deduplicate messages before rendering
+        const uniqueMessages = messages.reduce((acc, message) => {
+            const exists = acc.some(msg => 
+                msg._id === message._id || 
+                (msg.content === message.content && 
+                 msg.senderId === message.senderId && 
+                 Math.abs(new Date(msg.timestamp) - new Date(message.timestamp)) < 1000)
+            );
+            if (!exists) {
+                acc.push(message);
+            }
+            return acc;
+        }, []);
     
-        return messages.map((message, index) => {
+        return uniqueMessages.map((message, index) => {
             const messageDate = new Date(message.timestamp); 
             const formattedDate = format(messageDate, 'MMM dd, yyyy');
             console.log('Message senderId:', message.senderId, 'Current userId:', userId);
@@ -479,7 +488,7 @@ const MessagingPage = () => {
             }
     
             return (
-                <React.Fragment key={index}>
+                <React.Fragment key={message._id || `${message.senderId}-${message.timestamp}-${index}`}>
                     {dateSeparator}
                     <div className={`flex gap-3 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
                         {!isCurrentUser && (
