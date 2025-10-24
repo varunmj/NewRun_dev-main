@@ -162,6 +162,12 @@ class SocketService {
     this.emit('mark_message_read', { conversationId, messageId });
   }
 
+  // Emit user status change
+  updateUserStatus(userId, status) {
+    this.emit('user_status_change', { userId, status });
+    console.log('📤 Socket.io - Emitted user status change:', { userId, status });
+  }
+
   // Set user ID and re-register
   setUserId(userId) {
     this.userId = userId;
