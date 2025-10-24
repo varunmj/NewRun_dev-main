@@ -267,15 +267,17 @@ const MessagingPage = () => {
 
     // Listen for incoming messages using Socket.io
     useEffect(() => {
-        socket.on('receive_message', (messageData) => {
+        const handleReceiveMessage = (messageData) => {
             if (messageData.conversationId === selectedConversation) {
                 setMessages(prevMessages => [...prevMessages, messageData]);
                 fetchConversations();
             }
-        });
+        };
+
+        socketService.on('receive_message', handleReceiveMessage);
 
         return () => {
-            socket.off('receive_message');
+            socketService.off('receive_message', handleReceiveMessage);
         };
     }, [selectedConversation]);
 
