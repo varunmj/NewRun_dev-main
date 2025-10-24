@@ -4617,6 +4617,44 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
     }
   });
 
+  // Mark messages as read in a conversation
+  app.post('/conversations/:conversationId/mark-read', authenticateToken, async (req, res) => {
+    try {
+      const userId = getAuthUserId(req);
+      const { conversationId } = req.params;
+      
+      if (!userId) {
+        return res.status(401).json({ success: false, message: 'Invalid user authentication' });
+      }
+
+      // Update all unread messages in this conversation for this user
+      const result = await Message.updateMany(
+        {
+          conversationId: conversationId,
+          receiverId: userId,
+          isRead: false
+        },
+        {
+          $set: { isRead: true }
+        }
+      );
+
+      console.log(`Marked ${result.modifiedCount} messages as read for user ${userId} in conversation ${conversationId}`);
+      
+      // Emit read status to other participants
+      io.to(`conversation_${conversationId}`).emit('messageRead', {
+        conversationId: conversationId,
+        userId: userId,
+        modifiedCount: result.modifiedCount
+      });
+
+      res.json({ success: true, modifiedCount: result.modifiedCount });
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // Initiate a conversation if it doesn't exist
   app.post('/conversations/initiate', authenticateToken, async (req, res) => {
     const { receiverId } = req.body; // Only pass receiverId from the frontend

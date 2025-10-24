@@ -1,19 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import io from 'socket.io-client';
 import axiosInstance from '../utils/axiosInstance';
 import { Input, Button, Avatar, Card } from '@heroui/react';
 import { motion } from 'framer-motion';
 import Navbar from '../components/Navbar/Navbar';
 import { format } from 'date-fns';
+import socketService from '../services/socketService';
+import { useUserStatus } from '../context/UserStatusContext';
 import './messaging.css';
-
-const socket = io(
-  import.meta.env.VITE_API_BASE?.replace(/\/$/, '') ||
-  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ||
-  import.meta.env.VITE_API_URL?.replace(/\/$/, '') ||
-  (window.location.hostname.endsWith('newrun.club') ? 'https://api.newrun.club' : 'http://localhost:8000')
-);
 
 const MessagingPage = () => {
     const [searchParams] = useSearchParams();
@@ -23,7 +17,9 @@ const MessagingPage = () => {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [selectedUser, setSelectedUser] = useState(null);
+    const [userStatuses, setUserStatuses] = useState({}); // Track user statuses
     const messagesEndRef = useRef(null);
+    const { userStatus } = useUserStatus();
     
     // Get URL parameters
     const targetUserId = searchParams.get('to');
@@ -55,59 +51,86 @@ const MessagingPage = () => {
         }
     };
 
-    // Fetch user info and connect to Socket.io on mount
+    // Initialize Socket.io and fetch user info
     useEffect(() => {
-        const fetchUserInfo = async () => {
+        const initializeMessaging = async () => {
             try {
+                // Connect to Socket.io
+                socketService.connect();
+                
+                // Fetch user info
                 const response = await axiosInstance.get('/get-user');
                 console.log('User info response:', response.data);
                 if (response.data && response.data.user) {
                     const userId = response.data.user._id;
                     console.log('Setting userId:', userId);
                     setUserId(userId);
-                    fetchConversations();
-                    socket.emit('join_user', userId); // Connect user to their own socket room
+                    await fetchConversations();
                 }
             } catch (error) {
-                console.error('Unexpected error fetching user info:', error);
+                console.error('Error initializing messaging:', error);
             }
         };
-        fetchUserInfo();
+        
+        initializeMessaging();
+        
+        // Cleanup on unmount
+        return () => {
+            socketService.disconnect();
+        };
     }, []);
 
     // Socket.io event listeners for live updates
     useEffect(() => {
+        if (!userId) return;
+
         // Listen for new messages
-        socket.on('newMessage', (data) => {
-            console.log('Received new message via socket:', data);
+        const handleNewMessage = (data) => {
+            console.log('📨 Received new message via socket:', data);
             if (data.conversationId === selectedConversation) {
                 setMessages(prev => [...prev, data.message]);
             }
             // Refresh conversations to update last message
             fetchConversations();
-        });
+        };
 
         // Listen for message read status updates
-        socket.on('messageRead', (data) => {
-            console.log('Message read status updated:', data);
+        const handleMessageRead = (data) => {
+            console.log('✅ Message read status updated:', data);
             setMessages(prev => prev.map(msg => 
-                msg._id === data.messageId ? { ...msg, read: true } : msg
+                msg._id === data.messageId ? { ...msg, isRead: true } : msg
             ));
-        });
+        };
+
+        // Listen for user status updates
+        const handleUserStatusUpdate = (data) => {
+            console.log('👤 User status updated:', data);
+            setUserStatuses(prev => ({
+                ...prev,
+                [data.userId]: data.status
+            }));
+        };
 
         // Listen for typing indicators
-        socket.on('userTyping', (data) => {
-            console.log('User typing:', data);
+        const handleUserTyping = (data) => {
+            console.log('⌨️ User typing:', data);
             // You can implement typing indicators here
-        });
+        };
+
+        // Register event listeners
+        socketService.on('newMessage', handleNewMessage);
+        socketService.on('messageRead', handleMessageRead);
+        socketService.on('userStatusUpdate', handleUserStatusUpdate);
+        socketService.on('userTyping', handleUserTyping);
 
         // Cleanup socket listeners on unmount
         return () => {
-            socket.off('newMessage');
-            socket.off('messageRead');
-            socket.off('userTyping');
+            socketService.off('newMessage', handleNewMessage);
+            socketService.off('messageRead', handleMessageRead);
+            socketService.off('userStatusUpdate', handleUserStatusUpdate);
+            socketService.off('userTyping', handleUserTyping);
         };
-    }, [selectedConversation]);
+    }, [userId, selectedConversation]);
 
     // Handle pre-filled message and auto-start conversation
     useEffect(() => {
@@ -214,10 +237,31 @@ const MessagingPage = () => {
                 setSelectedUser(otherParticipant);
 
                 // Join the conversation room for real-time updates
-                socket.emit('join_conversation', conversationId);
+                socketService.joinConversation(conversationId);
+                
+                // Mark messages as read
+                markMessagesAsRead(conversationId);
             }
         } catch (error) {
             console.error('Error fetching messages:', error);
+        }
+    };
+
+    // Mark messages as read
+    const markMessagesAsRead = async (conversationId) => {
+        try {
+            const unreadMessages = messages.filter(msg => !msg.isRead && msg.receiverId === userId);
+            if (unreadMessages.length > 0) {
+                // Update read status in backend
+                await axiosInstance.post(`/conversations/${conversationId}/mark-read`);
+                
+                // Emit read status via Socket.io
+                unreadMessages.forEach(msg => {
+                    socketService.markMessageRead(conversationId, msg._id);
+                });
+            }
+        } catch (error) {
+            console.error('Error marking messages as read:', error);
         }
     };
 
@@ -260,7 +304,7 @@ const MessagingPage = () => {
                 // Refresh conversations to update last message
                 fetchConversations();
                 // Emit typing stop event
-                socket.emit('stopTyping', { conversationId: selectedConversation, userId });
+                socketService.emit('stopTyping', { conversationId: selectedConversation, userId });
             }
         } catch (error) {
             console.error('Error sending message:', error);
@@ -389,7 +433,16 @@ const MessagingPage = () => {
                                             <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold shadow-lg">
                                                 {participantNames.split(' ').map(name => name[0]).join('').slice(0, 2)}
                                             </div>
-                                            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-[#0f1115] animate-pulse"></div>
+                                            {/* User Status Indicator */}
+                                            <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-[#0f1115] ${
+                                                userStatuses[otherParticipants[0]?._id] === 'online' 
+                                                    ? 'bg-green-400 animate-pulse' 
+                                                    : userStatuses[otherParticipants[0]?._id] === 'away'
+                                                    ? 'bg-yellow-400'
+                                                    : userStatuses[otherParticipants[0]?._id] === 'dnd'
+                                                    ? 'bg-red-400'
+                                                    : 'bg-gray-400'
+                                            }`}></div>
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <h3 className="font-semibold text-white truncate">
