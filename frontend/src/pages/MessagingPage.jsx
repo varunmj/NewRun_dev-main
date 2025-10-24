@@ -66,6 +66,9 @@ const MessagingPage = () => {
                     const userId = response.data.user._id;
                     console.log('Setting userId:', userId);
                     setUserId(userId);
+                    
+                    // Re-register with Socket.io using the correct user ID
+                    socketService.setUserId(userId);
                     setUserInfo(response.data.user);
                     await fetchConversations();
                 }
