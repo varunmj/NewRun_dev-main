@@ -49,7 +49,7 @@ async function testStateManagementFlow() {
     }
     
     authToken = signupResponse.data.accessToken;
-    userId = signupResponse.data.user._id;
+    userId = signupResponse.data.userId;
     console.log('✅ Account created successfully');
     console.log('   User ID:', userId);
     console.log('   Token received:', !!authToken);
@@ -69,7 +69,7 @@ async function testStateManagementFlow() {
       console.log('✅ User data fetched successfully');
       console.log('   User name:', userResponse.data.user.firstName, userResponse.data.user.lastName);
       console.log('   User email:', userResponse.data.user.email);
-      console.log('   User ID:', userResponse.data.user._id);
+      console.log('   User ID:', userResponse.data.userId);
     }
     console.log('');
 

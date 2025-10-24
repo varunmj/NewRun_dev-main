@@ -43,7 +43,7 @@ export default function MarketplaceItemCard({
       : item?.price || "";
 
   // Check if current user is the owner
-  const isOwner = user && item?.userId && user._id === item.userId;
+  const isOwner = user && item?.userId && userId === item.userId;
 
   return (
     <button

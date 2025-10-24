@@ -101,7 +101,7 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-passport.serializeUser((user, done) => done(null, user._id));
+passport.serializeUser((user, done) => done(null, userId));
 passport.deserializeUser(async (id, done) => {
   try { const user = await User.findById(id); done(null, user); }
   catch (e) { done(e); }
@@ -1413,7 +1413,7 @@ app.post("/create-account", async(req,res)=>{
     // Generate both verification methods
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const verificationToken = jwt.sign(
-      { userId: user._id, email: user.email },
+      { userId: userId, email: user.email },
       process.env.ACCESS_TOKEN_SECRET,
       { expiresIn: '24h' }
     );
@@ -1756,14 +1756,14 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
         // Check if user has completed onboarding
         const hasCompletedOnboarding = user.onboardingData?.completed === true;
         console.log('[OAuth] User onboarding status:', { 
-          userId: user._id, 
+          userId: userId, 
           hasCompletedOnboarding,
           onboardingData: user.onboardingData 
         });
 
         // Keep JWT small to avoid exceeding proxy header limits on redirect
         const tokenPayload = {
-          id: user._id,
+          id: userId,
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
@@ -2485,14 +2485,21 @@ app.post('/reset-password-otp', async (req, res) => {
 // Save onboarding data
 app.post('/save-onboarding', authenticateToken, async (req, res) => {
   try {
-    const { user } = req.user;
+    const userId = getAuthUserId(req);
     const { onboardingData } = req.body;
 
     console.log('🔧 SAVE ONBOARDING API CALLED');
-    console.log('👤 User ID:', user._id);
-    console.log('👤 User email:', user.email);
+    console.log('👤 User ID:', userId);
     console.log('📊 Request body:', JSON.stringify(req.body, null, 2));
     console.log('📊 Onboarding data:', JSON.stringify(onboardingData, null, 2));
+    // Get user from database to check current onboarding data
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        error: true,
+        message: 'User not found'
+      });
+    }
     console.log('📊 Current user.onboardingData before update:', JSON.stringify(user.onboardingData, null, 2));
 
     if (!onboardingData) {
@@ -2515,7 +2522,7 @@ app.post('/save-onboarding', authenticateToken, async (req, res) => {
     console.log('💾 User document before save:', JSON.stringify(user, null, 2));
     
     // Fetch the user document from database to get the Mongoose document with save() method
-    const userDoc = await User.findById(user._id);
+    const userDoc = await User.findById(userId);
     
     if (!userDoc) {
       console.error('❌ User document not found in database');
@@ -2540,14 +2547,14 @@ app.post('/save-onboarding', authenticateToken, async (req, res) => {
     console.log('💾 Saved user document:', JSON.stringify(savedUser, null, 2));
 
     // Verify the data was actually saved by fetching from database
-    const verifyUser = await User.findById(user._id);
+    const verifyUser = await User.findById(userId);
     console.log('🔍 Verification - User from database:', JSON.stringify(verifyUser, null, 2));
 
     res.json({
       error: false,
       message: 'Onboarding data saved successfully',
       user: {
-        id: user._id,
+        id: userId,
         onboardingData: userDoc.onboardingData
       }
     });
@@ -2579,7 +2586,7 @@ app.post('/save-onboarding', authenticateToken, async (req, res) => {
 app.get('/onboarding-data', authenticateToken, async (req, res) => {
   try {
     // Get user ID from JWT token (support both token shapes)
-    const userId = req.user.user?._id || req.user._id || req.user.id;
+    const userId = getAuthUserId(req);
     console.log('Onboarding data request for user ID:', userId);
     
     if (!userId) {
@@ -2616,10 +2623,10 @@ app.get('/onboarding-data', authenticateToken, async (req, res) => {
 // Update university endpoint (allows users to correct their university after onboarding)
 app.post('/update-university', authenticateToken, async (req, res) => {
   try {
-    const { user } = req.user;
+    const userId = getAuthUserId(req);
     const { university } = req.body;
 
-    console.log(`🏫 University update request for user ${user._id}`, { university });
+    console.log(`🏫 University update request for user ${userId}`, { university });
 
     if (!university || typeof university !== 'string') {
       return res.status(400).json({
@@ -2637,7 +2644,7 @@ app.post('/update-university', authenticateToken, async (req, res) => {
     }
 
     // Find and update user
-    const userDoc = await User.findById(user._id);
+    const userDoc = await User.findById(userId);
     if (!userDoc) {
       return res.status(404).json({
         error: true,
@@ -2658,7 +2665,7 @@ app.post('/update-university', authenticateToken, async (req, res) => {
 
     await userDoc.save();
 
-    console.log(`✅ University updated successfully for user ${user._id}`);
+    console.log(`✅ University updated successfully for user ${userId}`);
 
     res.json({
       error: false,
@@ -2684,7 +2691,7 @@ app.post('/update-university', authenticateToken, async (req, res) => {
 //     const { user } = req.user;
 
 //     try {
-//         const isUser = await User.findOne({ _id: user._id });
+//         const isUser = await User.findOne({ _id: userId });
 
 //         if (!isUser) {
 //             return res.sendStatus(401);
@@ -3008,7 +3015,7 @@ app.put('/edit-property/:propertyId', authenticateToken, async (req, res) => {
   const { user } = req.user;
 
   try {
-    const property = await Property.findOne({ _id: propertyId, userId: user._id });
+    const property = await Property.findOne({ _id: propertyId, userId: userId });
 
     if (!property) {
       return res.status(404).json({ error: true, message: 'Property not found' });
@@ -3041,7 +3048,7 @@ app.get("/get-all-property-user", authenticateToken, async (req, res) => {
     const { user } = req.user;
 
     try {
-        const properties = await Property.find({ userId: user._id })
+        const properties = await Property.find({ userId: userId })
             .sort({ isPinned: -1 })
             .populate('userId', 'firstName lastName');  // Populate user info
 
@@ -3060,7 +3067,7 @@ app.get("/get-all-property-user", authenticateToken, async (req, res) => {
 
 // Get all properties (for all users):
 app.get("/get-all-property", async (req, res) => {
-  const userId = req.user ? req.user._id : null; // Check if user is authenticated
+  const userId = req.user ? req.userId : null; // Check if user is authenticated
   try {
       const properties = await Property.find({})
           .sort({ isPinned: -1 })
@@ -3092,14 +3099,14 @@ app.delete("/delete-property/:propertyId",authenticateToken,async(req,res)=>{
     const {user} = req.user;
 
     try{
-        const property = await Property.findOne({ _id: propertyId, userId:user._id
+        const property = await Property.findOne({ _id: propertyId, userId:userId
         });
 
         if(!property){
             return res.status(404).json({error:true,message:"Note not found"});
         }
 
-        await Property.deleteOne({ _id: propertyId, userId:user._id
+        await Property.deleteOne({ _id: propertyId, userId:userId
         });
 
         return res.json({
@@ -3116,7 +3123,7 @@ app.delete("/delete-property/:propertyId",authenticateToken,async(req,res)=>{
 //API for // Find the property by ID
 app.get("/properties/:id", async (req, res) => {
   const propertyId = req.params.id;
-  const userId = req.user ? req.user._id : null;
+  const userId = req.user ? req.userId : null;
 
   try {
       // Find the property by ID
@@ -3166,7 +3173,7 @@ app.put("/update-property-pinned/:propertyId",authenticateToken,async(req,res)=>
     const {user} =req.user;
 
     try{
-        const property = await Property.findOne({_id:propertyId,userId:user._id});
+        const property = await Property.findOne({_id:propertyId,userId:userId});
 
         if(!property){
             return res.status(404).json({error:true,message:"Note not found"});
@@ -3298,7 +3305,7 @@ app.get("/search-properties", async (req, res) => {
     const totalPages = Math.ceil(totalCount / Number(limit));
 
     // Add likes count and liked status for each property
-    const userId = req.user ? req.user._id : null;
+    const userId = req.user ? req.userId : null;
     const propertiesWithLikes = propertiesWithTimestamps.map((property) => ({
       ...property,
       likesCount: property.likes ? property.likes.length : 0,
@@ -3715,7 +3722,7 @@ app.post("/marketplace/item", authenticateToken, async (req, res) => {
       };
       
       const newItem = new MarketplaceItem({
-        userId: user._id,
+        userId: userId,
         title: title.trim(),
         description: description.trim(),
         price: Number(price) || 0,
@@ -3922,7 +3929,7 @@ app.post('/marketplace/favorites/:id', (req, res) => {
     } = req.body;
   
     try {
-      const item = await MarketplaceItem.findOne({ _id: itemId, userId: user._id });
+      const item = await MarketplaceItem.findOne({ _id: itemId, userId: userId });
   
       if (!item) {
         return res.status(404).json({ error: true, message: "Item not found or unauthorized" });
@@ -3959,7 +3966,7 @@ app.post('/marketplace/favorites/:id', (req, res) => {
     const { user } = req.user;
   
     try {
-      const item = await MarketplaceItem.findOne({ _id: itemId, userId: user._id });
+      const item = await MarketplaceItem.findOne({ _id: itemId, userId: userId });
   
       if (!item) {
         return res.status(404).json({ error: true, message: "Item not found or unauthorized" });
@@ -4015,7 +4022,7 @@ app.post('/marketplace/favorites/:id', (req, res) => {
     const { user } = req.user;
   
     try {
-      const items = await MarketplaceItem.find({ userId: user._id }); // Fetch items created by the logged-in user
+      const items = await MarketplaceItem.find({ userId: userId }); // Fetch items created by the logged-in user
       res.json({
         error: false,
         items,
@@ -7240,7 +7247,7 @@ Provide specific, actionable recommendations for improving roommate matching.`;
       }
 
       // Generate cache key based on user data and insight type
-      const cacheKey = `recommendations-${user._id}-${insightType}-${JSON.stringify({
+      const cacheKey = `recommendations-${userId}-${insightType}-${JSON.stringify({
         university: user.university,
         budgetRange: user.onboardingData?.budgetRange,
         language: user.synapse?.culture?.primaryLanguage,

@@ -30,7 +30,7 @@ async function testAuthenticationFlow() {
     }
     
     console.log('✅ Account created successfully');
-    console.log('   User ID:', signupResponse.data.user._id);
+    console.log('   User ID:', signupResponse.data.userId);
     console.log('   Token received:', !!signupResponse.data.accessToken);
     console.log('');
 

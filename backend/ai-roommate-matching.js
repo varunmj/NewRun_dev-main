@@ -274,7 +274,7 @@ async function getRoommateRecommendationsDirectly(user, insightType) {
       let roommateQuery = { 
         'synapse.visibility.showAvatarInPreviews': true,
         university: user.university,
-        _id: { $ne: user._id } // Exclude self
+        _id: { $ne: userId } // Exclude self
       };
       
       // Add budget compatibility filter

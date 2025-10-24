@@ -62,7 +62,7 @@ export default function PropertyCard({ property }) {
   } = property;
 
   // Check if current user is the owner
-  const isOwner = user && userId && user._id === userId;
+  const isOwner = user && userId && userId === userId;
 
   const cover = useMemo(() => pickCover(images), [images]);
   const [loaded, setLoaded] = useState(false);

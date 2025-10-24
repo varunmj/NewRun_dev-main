@@ -139,7 +139,7 @@ export default function PropertyDetailPage() {
   const fetchUser = async () => {
     try {
       const r = await axiosInstance.get("/get-user");
-      if (r?.data?.user?._id) setUserId(r.data.user._id);
+      if (r?.data?.user?._id) setUserId(r.data.userId);
     } catch {}
   };
 

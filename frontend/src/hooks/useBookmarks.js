@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CommunityService from "../services/CommunityService";
 
 export default function useBookmarks(user) {
-  const userId = ((user && (user.userId || user._id)) || "").toString();
+  const userId = ((user && (user.userId || userId)) || "").toString();
   const [bookmarkedIds, setBookmarkedIds] = useState(() => new Set());
   const [bookmarkInFlight, setBookmarkInFlight] = useState({});
   const seeded = useRef(false);

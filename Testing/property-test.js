@@ -58,7 +58,7 @@ async function testPropertyManagementFlow() {
     }
     
     authToken = signupResponse.data.accessToken;
-    userId = signupResponse.data.user._id;
+    userId = signupResponse.data.userId;
     console.log('✅ Account created successfully');
     console.log('   User ID:', userId);
     console.log('   Token received:', !!authToken);

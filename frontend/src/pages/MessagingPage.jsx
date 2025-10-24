@@ -61,9 +61,9 @@ const MessagingPage = () => {
             try {
                 const response = await axiosInstance.get('/get-user');
                 if (response.data && response.data.user) {
-                    setUserId(response.data.user._id);
+                    setUserId(response.data.userId);
                     fetchConversations();
-                    socket.emit('join_user', response.data.user._id); // Connect user to their own socket room
+                    socket.emit('join_user', response.data.userId); // Connect user to their own socket room
                 }
             } catch (error) {
                 console.error('Unexpected error fetching user info:', error);

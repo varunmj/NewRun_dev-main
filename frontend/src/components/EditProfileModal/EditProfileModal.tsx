@@ -135,7 +135,21 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }: {
     };
   };
 
+  // Extract synapse data for lifestyle preferences
+  const getSynapseData = (user: any) => {
+    const synapse = user?.synapse || {};
+    return {
+      culture: synapse.culture || {},
+      logistics: synapse.logistics || {},
+      lifestyle: synapse.lifestyle || {},
+      habits: synapse.habits || {},
+      pets: synapse.pets || {},
+      dealbreakers: synapse.dealbreakers || [],
+    };
+  };
+
   const onboardingData = getOnboardingData(initialUser);
+  const synapseData = getSynapseData(initialUser);
 
 
 
@@ -153,11 +167,12 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }: {
     defaultValues: {
       firstName: initialUser?.firstName || "",
       lastName: initialUser?.lastName || "",
-      currentLocation: initialUser?.currentLocation || "",
+      // Data priority: onboardingData (most recent) > initialUser (existing) > synapse (lifestyle)
+      currentLocation: onboardingData?.city || initialUser?.currentLocation || "",
       hometown: initialUser?.hometown || "",
-      birthday: toDateInputValue(initialUser?.birthday), // Convert to YYYY-MM-DD format
-      graduationDate: initialUser?.graduationDate || "",
-      university: initialUser?.university || "",
+      birthday: toDateInputValue(onboardingData?.birthday || initialUser?.birthday), // Convert to YYYY-MM-DD format
+      graduationDate: toDateInputValue(onboardingData?.graduationDate || initialUser?.graduationDate) || "",
+      university: onboardingData?.university || initialUser?.university || "",
       schoolDepartment: initialUser?.schoolDepartment || "",
       campusDisplayName: initialUser?.campusDisplayName || "",
       campusPlaceId: initialUser?.campusPlaceId || "",
