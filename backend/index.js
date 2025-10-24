@@ -8877,18 +8877,22 @@ Provide specific, actionable recommendations for improving roommate matching.`;
     // Handle new messages
     socket.on('send_message', async (messageData) => {
       try {
+        console.log('🔔 Socket.io - Received send_message:', messageData);
+        
         // Emit to all users in the conversation
         io.to(`conversation_${messageData.conversationId}`).emit('newMessage', {
           conversationId: messageData.conversationId,
           message: messageData
         });
+        console.log(`📤 Socket.io - Emitted newMessage to conversation_${messageData.conversationId}`);
         
-        // Also emit to the sender's personal room for unread count updates
+        // Also emit to the receiver's personal room for unread count updates
         if (messageData.receiverId) {
           io.to(`user_${messageData.receiverId}`).emit('newMessage', {
             conversationId: messageData.conversationId,
             message: messageData
           });
+          console.log(`📤 Socket.io - Emitted newMessage to user_${messageData.receiverId}`);
         }
       } catch (error) {
         console.error('Error handling send_message:', error);
