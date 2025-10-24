@@ -9014,11 +9014,13 @@ Provide specific, actionable recommendations for improving roommate matching.`;
         
         try {
           // Find all unread messages in this conversation for this user
+          console.log(`🔍 Debug - Searching for unread messages in conversation ${data.conversationId} for user ${data.userId}`);
           const unreadMessages = await Message.find({
             conversationId: data.conversationId,
             receiverId: data.userId,
             isRead: false
           });
+          console.log(`🔍 Debug - Found ${unreadMessages.length} unread messages:`, unreadMessages.map(msg => ({ id: msg._id, content: msg.content, isRead: msg.isRead })));
 
           if (unreadMessages.length > 0) {
             console.log(`📖 Found ${unreadMessages.length} unread messages for user ${data.userId} in conversation ${data.conversationId}`);
