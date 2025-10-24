@@ -8930,7 +8930,7 @@ Provide specific, actionable recommendations for improving roommate matching.`;
           } catch (error) {
             console.error('Error updating message delivery status:', error);
           }
-        }, 1000); // 1 second delay to simulate delivery
+        }, 500); // 500ms delay for better UX to simulate delivery
       } catch (error) {
         console.error('Error handling send_message:', error);
       }
@@ -8980,6 +8980,60 @@ Provide specific, actionable recommendations for improving roommate matching.`;
           console.log(`📤 Socket.io - Emitted readReceiptUpdate for message ${data.messageId}`);
         } catch (error) {
           console.error('Error updating message read status:', error);
+        }
+      }
+    });
+
+    // Handle user viewing conversation - immediately update read receipts
+    socket.on('user_viewing_conversation', async (data) => {
+      if (data.conversationId && data.userId) {
+        console.log('👁️ Socket.io - User viewing conversation:', data);
+        
+        try {
+          // Find all unread messages in this conversation for this user
+          const unreadMessages = await Message.find({
+            conversationId: data.conversationId,
+            receiverId: data.userId,
+            isRead: false
+          });
+
+          if (unreadMessages.length > 0) {
+            console.log(`📖 Found ${unreadMessages.length} unread messages for user ${data.userId} in conversation ${data.conversationId}`);
+            
+            // Update all unread messages to read status
+            await Message.updateMany(
+              {
+                conversationId: data.conversationId,
+                receiverId: data.userId,
+                isRead: false
+              },
+              {
+                isRead: true,
+                readStatus: 'read',
+                readAt: new Date()
+              }
+            );
+
+            // Emit read receipt updates for all messages
+            unreadMessages.forEach(msg => {
+              io.to(`conversation_${data.conversationId}`).emit('readReceiptUpdate', {
+                messageId: msg._id,
+                conversationId: data.conversationId,
+                readStatus: 'read',
+                readAt: new Date()
+              });
+              
+              // Also emit to sender's individual room
+              io.to(`user_${msg.senderId}`).emit('mark_message_read', {
+                messageId: msg._id,
+                conversationId: data.conversationId
+              });
+            });
+
+            console.log(`📤 Socket.io - Updated ${unreadMessages.length} messages to read status`);
+          }
+        } catch (error) {
+          console.error('Error updating read receipts for viewing user:', error);
         }
       }
     });

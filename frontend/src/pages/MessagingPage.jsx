@@ -221,6 +221,17 @@ const MessagingPage = () => {
         }
     }, [preFilledMessage]);
 
+    // Emit user viewing conversation when conversation changes
+    useEffect(() => {
+        if (selectedConversation && userId) {
+            console.log('👁️ User viewing conversation:', selectedConversation);
+            socketService.emit('user_viewing_conversation', {
+                conversationId: selectedConversation,
+                userId: userId
+            });
+        }
+    }, [selectedConversation, userId]);
+
     // Auto-start conversation with target user if specified
     useEffect(() => {
         const autoStartConversation = async () => {
@@ -381,7 +392,7 @@ const MessagingPage = () => {
             if (response.data.success) {
                 setMessages(response.data.data);
 
-                // Mark all messages in this conversation as read
+                // Mark all messages in this conversation as read immediately
                 const unreadMessages = response.data.data.filter(msg => 
                     msg.receiverId === userId && !msg.isRead
                 );
@@ -397,6 +408,12 @@ const MessagingPage = () => {
                         });
                     });
                 }
+
+                // Also emit a "user_viewing_conversation" event to immediately update read receipts
+                socketService.emit('user_viewing_conversation', {
+                    conversationId: conversationId,
+                    userId: userId
+                });
 
                 // Fetch participant details
                 const conversation = conversations.find(c => c._id === conversationId);
