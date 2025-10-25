@@ -4642,6 +4642,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
       }
 
       // Update all unread messages in this conversation for this user
+      const now = new Date();
       const result = await Message.updateMany(
         {
           conversationId: conversationId,
@@ -4649,17 +4650,18 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
           isRead: false
         },
         {
-          $set: { isRead: true }
+          $set: { isRead: true, readStatus: 'read', readAt: now }
         }
       );
 
       console.log(`Marked ${result.modifiedCount} messages as read for user ${userId} in conversation ${conversationId}`);
       
-      // Emit read status to other participants
-      io.to(`conversation_${conversationId}`).emit('messageRead', {
+      // Emit read receipt update (batch)
+      io.to(`conversation_${conversationId}`).emit('readReceiptUpdate', {
         conversationId: conversationId,
-        userId: userId,
-        modifiedCount: result.modifiedCount
+        messageId: null,
+        readStatus: 'read',
+        readAt: now
       });
 
       res.json({ success: true, modifiedCount: result.modifiedCount });
