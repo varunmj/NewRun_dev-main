@@ -404,7 +404,8 @@ const MessagingPage = () => {
             setSelectedConversation(conversationId);
             const response = await axiosInstance.get(`/conversations/${conversationId}/messages`);
             if (response.data.success) {
-                setMessages(response.data.data);
+                const msgs = response.data.data;
+                setMessages(msgs);
 
                 // Emit a "user_viewing_conversation" event to immediately update read receipts
                 socketService.emit('user_viewing_conversation', {
@@ -424,8 +425,8 @@ const MessagingPage = () => {
                 socketService.joinConversation(conversationId);
                 activeConversationRef.current = conversationId;
                 
-                // Mark messages as read (socket) and ensure REST fallback for unread counters
-                markMessagesAsRead(conversationId);
+                // Mark messages as read using fresh array and REST fallback
+                await markMessagesAsRead(conversationId, msgs);
                 try {
                     await axiosInstance.post(`/conversations/${conversationId}/mark-read`);
                 } catch (e) {
@@ -438,14 +439,13 @@ const MessagingPage = () => {
     };
 
     // Mark messages as read
-    const markMessagesAsRead = async (conversationId) => {
+    const markMessagesAsRead = async (conversationId, msgs) => {
         try {
-            const unreadMessages = messages.filter(msg => !msg.isRead && msg.receiverId === userId);
+            const list = Array.isArray(msgs) ? msgs : messages;
+            const unreadMessages = list.filter(msg => !msg.isRead && (msg.receiverId === userId || msg.receiverId?._id === userId));
             if (unreadMessages.length > 0) {
-                // Only emit read status via Socket.io - let the socket handler do the database updates
-                unreadMessages.forEach(msg => {
-                    socketService.markMessageRead(conversationId, msg._id);
-                });
+                // Prefer server endpoint to avoid partial socket failures
+                await axiosInstance.post(`/conversations/${conversationId}/mark-read`);
             }
         } catch (error) {
             console.error('Error marking messages as read:', error);
@@ -486,12 +486,8 @@ const MessagingPage = () => {
                 setMessages(prev => [...prev, response.data.data]);
                 setNewMessage('');
                 
-                // Send via Socket.io for real-time delivery (with message ID from database)
-                socketService.emit('send_message', {
-                    ...messageData,
-                    messageId: response.data.data._id
-                });
-                
+                // No additional socket emit; server already broadcasts newMessage
+
                 // Emit typing stop event
                 socketService.emit('stopTyping', { conversationId: selectedConversation, userId });
             }
