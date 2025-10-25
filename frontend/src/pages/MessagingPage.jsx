@@ -21,6 +21,8 @@ const MessagingPage = () => {
     const [userStatuses, setUserStatuses] = useState({}); // Track user statuses
     const [userInfo, setUserInfo] = useState(null); // Current user info
     const messagesEndRef = useRef(null);
+    const activeConversationRef = useRef(null);
+    const typingTimeoutRef = useRef(null);
     const { userStatus } = useUserStatus();
     
     // Get URL parameters
@@ -113,9 +115,9 @@ const MessagingPage = () => {
     useEffect(() => {
         if (!userId) return;
 
-        // Register user with socket for individual room
-        socketService.emit('registerUser', userId);
-        console.log('👤 Registered user with socket:', userId);
+        // Ensure socket knows current user (join_user is handled internally)
+        socketService.setUserId(userId);
+        console.log('👤 Set userId in socket service:', userId);
 
         // Listen for new messages with duplicate prevention
         const handleNewMessage = (data) => {
@@ -415,8 +417,12 @@ const MessagingPage = () => {
                 const otherParticipant = conversation.participants.find(p => p._id !== userId);
                 setSelectedUser(otherParticipant);
 
-                // Join the conversation room for real-time updates
+                // Leave previous conversation room if any, then join the new one
+                if (activeConversationRef.current && activeConversationRef.current !== conversationId) {
+                    socketService.leaveConversation(activeConversationRef.current);
+                }
                 socketService.joinConversation(conversationId);
+                activeConversationRef.current = conversationId;
                 
                 // Mark messages as read
                 markMessagesAsRead(conversationId);
@@ -441,21 +447,7 @@ const MessagingPage = () => {
         }
     };
 
-    // Listen for incoming messages using Socket.io
-    useEffect(() => {
-        const handleReceiveMessage = (messageData) => {
-            if (messageData.conversationId === selectedConversation) {
-                setMessages(prevMessages => [...prevMessages, messageData]);
-                fetchConversations();
-            }
-        };
-
-        socketService.on('receive_message', handleReceiveMessage);
-
-        return () => {
-            socketService.off('receive_message', handleReceiveMessage);
-        };
-    }, [selectedConversation]);
+    // Legacy receive_message listener removed; using 'newMessage' only
 
     // Scroll to the bottom whenever new messages arrive
     useEffect(() => {
@@ -501,6 +493,18 @@ const MessagingPage = () => {
         } catch (error) {
             console.error('Error sending message:', error);
         }
+    };
+
+    // Typing indicator with debounce
+    const handleInputChange = (e) => {
+        const value = e.target.value;
+        setNewMessage(value);
+        if (!selectedConversation || !userId) return;
+        socketService.emit('typing', { conversationId: selectedConversation, userId });
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => {
+            socketService.emit('stopTyping', { conversationId: selectedConversation, userId });
+        }, 1000);
     };
 
     const renderMessagesWithDate = () => {
@@ -790,7 +794,7 @@ const MessagingPage = () => {
                                         <input
                                             type="text"
                                             value={newMessage}
-                                            onChange={(e) => setNewMessage(e.target.value)}
+                                            onChange={handleInputChange}
                                             onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                                             placeholder="Type your message..."
                                             className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 backdrop-blur-sm shadow-lg"
