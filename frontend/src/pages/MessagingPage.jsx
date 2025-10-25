@@ -58,16 +58,10 @@ const MessagingPage = () => {
     // Get the other participant's ID for the current conversation
     const getOtherParticipantId = () => {
         if (!selectedConversation || !conversations.length) return null;
-        
         const conversation = conversations.find(conv => conv._id === selectedConversation);
         if (!conversation || !conversation.participants) return null;
-        
-        // Find the participant who is not the current user
-        const otherParticipant = conversation.participants.find(participant => 
-            participant._id !== userId
-        );
-        
-        return otherParticipant ? otherParticipant._id : null;
+        const other = conversation.participants.find(p => (p._id || p).toString() !== String(userId));
+        return other ? (other._id || other).toString() : null;
     };
 
 
@@ -182,25 +176,20 @@ const MessagingPage = () => {
         // Listen for read receipt updates
         const handleReadReceiptUpdate = (data) => {
             console.log('📖 Read receipt updated:', data);
-            console.log('🔍 Debug - Current messages before update:', messages.length);
-            console.log('🔍 Debug - Looking for messageId:', data.messageId);
-            console.log('🔍 Debug - Current message IDs:', messages.map(msg => ({ id: msg._id, content: msg.content, readStatus: msg.readStatus })));
-            
             setMessages(prev => {
-                const updated = prev.map(msg => {
-                    if (msg._id === data.messageId) {
-                        console.log('🔄 Updating message read status:', msg._id, 'from', msg.readStatus, 'to', data.readStatus);
-                        return { 
-                            ...msg, 
-                            readStatus: data.readStatus, 
-                            readAt: data.readAt, 
-                            deliveredAt: data.deliveredAt 
-                        };
-                    }
-                    return msg;
-                });
-                console.log('🔍 Debug - Messages after update:', updated.length);
-                return updated;
+                // Batch: mark all messages to me as read in this conversation
+                if (!data.messageId && data.conversationId === selectedConversation) {
+                    return prev.map(msg => {
+                        const recv = (msg.receiverId === userId) || (msg.receiverId && msg.receiverId._id === userId);
+                        return recv ? { ...msg, isRead: true, readStatus: data.readStatus || 'read', readAt: data.readAt } : msg;
+                    });
+                }
+                // Single message update
+                return prev.map(msg =>
+                    msg._id === data.messageId
+                        ? { ...msg, readStatus: data.readStatus, readAt: data.readAt, deliveredAt: data.deliveredAt }
+                        : msg
+                );
             });
         };
 
@@ -513,15 +502,16 @@ const MessagingPage = () => {
         
         // Deduplicate messages before rendering
         const uniqueMessages = messages.reduce((acc, message) => {
-            const exists = acc.some(msg => 
-                msg._id === message._id || 
-                (msg.content === message.content && 
-                 msg.senderId === message.senderId && 
-                 Math.abs(new Date(msg.timestamp) - new Date(message.timestamp)) < 1000)
-            );
-            if (!exists) {
-                acc.push(message);
-            }
+            const bSender = typeof message.senderId === 'object' ? message.senderId?._id : message.senderId;
+            const exists = acc.some(m => {
+                const aSender = typeof m.senderId === 'object' ? m.senderId?._id : m.senderId;
+                return (
+                    m._id === message._id ||
+                    (m.content === message.content && aSender === bSender &&
+                     Math.abs(new Date(m.timestamp) - new Date(message.timestamp)) < 1000)
+                );
+            });
+            if (!exists) acc.push(message);
             return acc;
         }, []);
     
@@ -529,7 +519,8 @@ const MessagingPage = () => {
             const messageDate = new Date(message.timestamp); 
             const formattedDate = format(messageDate, 'MMM dd, yyyy');
             console.log('Message senderId:', message.senderId, 'Current userId:', userId);
-            const isCurrentUser = message.senderId === userId || (message.senderId && message.senderId._id === userId);
+            const senderStr = (typeof message.senderId === 'object' ? message.senderId?._id : message.senderId)?.toString();
+            const isCurrentUser = senderStr === String(userId);
             console.log('Is current user:', isCurrentUser);
             const senderName = isCurrentUser ? 'You' : `${message.senderId?.firstName || ''} ${message.senderId?.lastName || ''}`;
             const avatarText = isCurrentUser ? "You" : `${senderName.split(' ').map(name => name[0]).join('')}`;
@@ -656,8 +647,8 @@ const MessagingPage = () => {
                             console.log('Current userId:', userId);
                             
                             const otherParticipants = conversation.participants.filter(p => {
-                                const isOther = p._id !== userId;
-                                console.log(`Participant ${p._id} vs userId ${userId}: ${isOther}`);
+                                const isOther = ((p._id || p).toString() !== String(userId));
+                                console.log(`Participant ${(p._id || p).toString()} vs userId ${userId}: ${isOther}`);
                                 return isOther;
                             });
                             
