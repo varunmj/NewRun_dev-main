@@ -4778,7 +4778,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
       conversation.lastUpdated = Date.now();
       await conversation.save();
   
-      io.to(conversationId).emit('newMessage', {
+      io.to(`conversation_${conversationId}`).emit('newMessage', {
         conversationId,
         message: newMessage,
       });
