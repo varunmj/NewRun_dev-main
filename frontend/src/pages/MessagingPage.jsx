@@ -424,8 +424,13 @@ const MessagingPage = () => {
                 socketService.joinConversation(conversationId);
                 activeConversationRef.current = conversationId;
                 
-                // Mark messages as read
+                // Mark messages as read (socket) and ensure REST fallback for unread counters
                 markMessagesAsRead(conversationId);
+                try {
+                    await axiosInstance.post(`/conversations/${conversationId}/mark-read`);
+                } catch (e) {
+                    console.warn('Mark-read REST fallback failed (non-fatal):', e?.message || e);
+                }
             }
         } catch (error) {
             console.error('Error fetching messages:', error);
