@@ -8777,8 +8777,8 @@ Provide specific, actionable recommendations for improving roommate matching.`;
   // In-memory user status tracking
   const userStatuses = new Map();
   
-  // Get user statuses endpoint
-  app.post('/users/statuses', async (req, res) => {
+  // Get user statuses endpoint (requires auth to identify current user reliably)
+  app.post('/users/statuses', authenticateToken, async (req, res) => {
     try {
       const { userIds } = req.body;
       
