@@ -34,6 +34,17 @@ import RoommateMatches from "./pages/RoommateMatches";
 import SolveThreads from "./pages/SolveThreads";
 import NotFound from "./pages/NotFound";
 import RouteGuard from "./components/Auth/RouteGuard";
+
+// Service pages
+import SimCards from "./pages/services/SimCards";
+import Banking from "./pages/services/Banking";
+import HealthInsurance from "./pages/services/HealthInsurance";
+import Visa from "./pages/services/Visa";
+import Tax from "./pages/services/Tax";
+import Credit from "./pages/services/Credit";
+import Food from "./pages/services/Food";
+import Loans from "./pages/services/Loans";
+import Courses from "./pages/services/Courses";
 // New Platform Entities - Temporarily disabled (moved to Upcoming Features)
 // import StudentFinance from "./pages/StudentFinance";
 // import AcademicHub from "./pages/AcademicHub";
@@ -192,6 +203,80 @@ const App = () => {
             element={
               <ProtectedRoute>
                 <SolveThreads />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Service Routes */}
+          <Route
+            path="/services/sim-cards"
+            element={
+              <ProtectedRoute>
+                <SimCards />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/services/banking"
+            element={
+              <ProtectedRoute>
+                <Banking />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/services/health-insurance"
+            element={
+              <ProtectedRoute>
+                <HealthInsurance />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/services/visa"
+            element={
+              <ProtectedRoute>
+                <Visa />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/services/tax"
+            element={
+              <ProtectedRoute>
+                <Tax />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/services/credit"
+            element={
+              <ProtectedRoute>
+                <Credit />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/services/food"
+            element={
+              <ProtectedRoute>
+                <Food />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/services/loans"
+            element={
+              <ProtectedRoute>
+                <Loans />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/services/courses"
+            element={
+              <ProtectedRoute>
+                <Courses />
               </ProtectedRoute>
             }
           />

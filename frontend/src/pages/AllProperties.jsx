@@ -158,9 +158,9 @@ export default function AllProperties() {
       min: minPrice, max: maxPrice,   // backend v1
       minPrice, maxPrice,             // backend v2
       
-      // Simplified - just send what backend expects
-      sortBy: sortField,
-      sortOrder: sortDir,
+      // Only add sort if it's not the default
+      ...(sortField !== 'createdAt' && { sortBy: sortField }),
+      ...(sortDir !== 'desc' && { sortOrder: sortDir }),
     };
     Object.keys(p).forEach((k) => (p[k] === "" || p[k] == null) && delete p[k]);
     return p;
@@ -173,9 +173,29 @@ export default function AllProperties() {
       // Debug logging
       console.log('Sending filters:', filters);
       
-      const r = await axiosInstance.get("/search-properties", {
-        params: { ...filters, cursor: append ? cursor : undefined, limit: 24 },
-      });
+      // Check if any filters are applied
+      const hasFilters = Object.keys(filters).length > 0;
+      
+      console.log('🔍 Frontend - hasFilters:', hasFilters);
+      console.log('🔍 Frontend - filters object:', filters);
+      
+      let r;
+      if (hasFilters) {
+        console.log('🔍 Frontend - Using /search-properties endpoint');
+        // Use search-properties endpoint when filters are applied
+        r = await axiosInstance.get("/search-properties", {
+          params: { ...filters, cursor: append ? cursor : undefined, limit: 24 },
+        });
+      } else {
+        console.log('🔍 Frontend - Using /get-all-property endpoint');
+        // Use get-all-property endpoint when no filters (show all properties)
+        r = await axiosInstance.get("/get-all-property", {
+          params: { limit: 24 },
+        });
+      }
+      
+      console.log('🔍 Frontend - API Response:', r?.data);
+      
       const next = r?.data?.properties || [];
       
       // Client-side fallback sort

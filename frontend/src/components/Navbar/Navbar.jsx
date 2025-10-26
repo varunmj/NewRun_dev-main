@@ -16,6 +16,15 @@ import {
   MdNotificationsNone,
   MdClose,
   MdMessage,
+  MdPhone,
+  MdAccountBalance,
+  MdHealthAndSafety,
+  MdDescription,
+  MdAttachMoney,
+  MdCreditCard,
+  MdRestaurant,
+  MdSchool,
+  MdWork,
 } from "react-icons/md";
 
 /* ---------- helpers ---------- */
@@ -407,6 +416,18 @@ export default function Navbar() {
     { title: "Build my plan", desc: "Let AI craft everything for me.", to: "/onboarding", icon: MdAutoAwesome },
   ];
 
+  const serviceItems = [
+    { title: "SIM Cards", desc: "Pre-activated plans with campus coverage.", to: "/services/sim-cards", icon: MdPhone, featured: true },
+    { title: "Banking", desc: "Student accounts without SSN required.", to: "/services/banking", icon: MdAccountBalance },
+    { title: "Health Insurance", desc: "Comprehensive student health plans.", to: "/services/health-insurance", icon: MdHealthAndSafety },
+    { title: "Visa Services", desc: "F-1 visa guidance and renewals.", to: "/services/visa", icon: MdDescription },
+    { title: "Tax Services", desc: "Student tax filing assistance.", to: "/services/tax", icon: MdAttachMoney },
+    { title: "Credit Building", desc: "Build your US credit history.", to: "/services/credit", icon: MdCreditCard },
+    { title: "Food Delivery", desc: "Campus meal plans and delivery.", to: "/services/food", icon: MdRestaurant },
+    { title: "Student Loans", desc: "Educational financing options.", to: "/services/loans", icon: MdSchool },
+    { title: "Academic Courses", desc: "Transferable credit courses.", to: "/services/courses", icon: MdWork },
+  ];
+
   return (
     <header className="sticky top-0 z-[100] w-full">
       <div className="mx-auto mt-3 flex max-w-7xl items-center justify-between rounded-2xl bg-[#0b0c0f]/90 px-4 py-2.5 backdrop-blur border border-white/5">
@@ -420,6 +441,7 @@ export default function Navbar() {
         {/* center links */}
         <nav className="hidden items-center gap-8 md:flex">
           <MegaMenu label="Products" items={productItems} />
+          <MegaMenu label="Services" items={serviceItems} />
           <Link
             to="/solve-threads"
             className={`text-sm font-semibold ${loc.pathname.startsWith("/solve-threads") ? "text-orange-400" : "text-orange-400/80 hover:text-orange-400"}`}
