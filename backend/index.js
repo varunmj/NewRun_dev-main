@@ -1480,14 +1480,14 @@ app.post("/create-account", async(req,res)=>{
         emailVerificationSent: true
     });
 });
-<<<<<<< Updated upstream
+
 
 // Email verification link endpoint
 app.get('/verify-email', async (req, res) => {
-=======
+
 // Consolidated email verification endpoint (code-based only)
 app.post('/verify-email', async (req, res) => {
->>>>>>> Stashed changes
+
   try {
     const { code } = req.body;
     
