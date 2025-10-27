@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { validateEmail } from "../utils/helper";
 import { Eye, EyeOff, XCircle, CheckCircle2, RotateCcw } from "lucide-react";
 import { BorderBeam } from "../components/ui/border-beam";
+import { getOnboardingKey, migrateOnboardingData, safeLocalStorage } from "../constants/localStorageKeys";
 
 export default function SignUp() {
   const nav = useNavigate();
@@ -299,37 +300,52 @@ export default function SignUp() {
       });
 
       if (res?.data?.error) {
-        setError(res.data.message || "Could not create account.");
+        const errorMsg = res.data.message || "Could not create account.";
+        setError(errorMsg);
+        
+        // If the error is about username being taken, update the username availability state
+        if (errorMsg.includes("Username already taken")) {
+          setUsernameAvailability({ status: 'done', available: false });
+        }
         return;
       }
       
       if (res?.data?.accessToken) {
         // Record local consent receipt
-        try {
-          localStorage.setItem(
-            'nr_terms_consent',
-            JSON.stringify({ accepted: true, version: TERMS_VERSION, acceptedAt: new Date().toISOString() })
-          );
-        } catch {}
+        safeLocalStorage.setItem(
+          'nr_terms_consent',
+          JSON.stringify({ accepted: true, version: TERMS_VERSION, acceptedAt: new Date().toISOString() })
+        );
 
         // Use AuthContext login method
         const loginResult = await login(res.data.user, res.data.accessToken);
         
         if (loginResult.success) {
-          // Check if user has completed onboarding
-          const onboardingData = localStorage.getItem('nr_unified_onboarding');
-          if (onboardingData) {
-            const parsed = JSON.parse(onboardingData);
-            if (parsed.completed) {
-              // User has completed onboarding, go to dashboard
-              nav("/dashboard");
+          // Check if user has verified their email first
+          if (res.data.user.emailVerified) {
+            // Email is verified, proceed with normal flow
+            const onboardingData = migrateOnboardingData();
+            if (onboardingData) {
+              if (onboardingData.completed) {
+                // User has completed onboarding, go to dashboard
+                nav("/dashboard");
+              } else {
+                // User has partial onboarding data, continue from where they left off
+                nav("/onboarding");
+              }
             } else {
-              // User has partial onboarding data, continue from where they left off
+              // New user, start onboarding
               nav("/onboarding");
             }
           } else {
-            // New user, start onboarding
-            nav("/onboarding");
+            // Email not verified, redirect to verification page
+            nav("/verify-email", { 
+              state: { 
+                email: res.data.user.email,
+                from: 'signup',
+                message: 'Please verify your email to continue'
+              }
+            });
           }
         } else {
           setError(loginResult.error || "Account created but login failed. Please try logging in.");
@@ -341,6 +357,11 @@ export default function SignUp() {
       console.error('Signup error:', err);
       const msg = err?.response?.data?.message || "An unexpected error occurred. Please try again!";
       setError(msg);
+      
+      // If the error is about username being taken, update the username availability state
+      if (msg.includes("Username already taken")) {
+        setUsernameAvailability({ status: 'done', available: false });
+      }
     } finally {
       setIsLoading(false);
     }

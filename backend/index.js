@@ -12,7 +12,7 @@ const multer = require('multer');
 const multerS3 = require('multer-s3');
 const AWS = require('aws-sdk');
 const axios = require('axios');
-const { authenticateToken, getAuthUserId } = require('./utilities');
+const { authenticateToken, getAuthUserId, requireEmailVerified } = require('./utilities');
 const { loginRateLimit, availabilityLimiter } = require('./middleware/rateLimiter');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
@@ -1435,7 +1435,7 @@ app.post("/create-account", async(req,res)=>{
     // Generate both verification methods
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const verificationToken = jwt.sign(
-      { userId: userId, email: user.email },
+      { userId: user._id, email: user.email },
       process.env.ACCESS_TOKEN_SECRET,
       { expiresIn: '24h' }
     );
@@ -1480,111 +1480,51 @@ app.post("/create-account", async(req,res)=>{
         emailVerificationSent: true
     });
 });
+<<<<<<< Updated upstream
 
 // Email verification link endpoint
 app.get('/verify-email', async (req, res) => {
+=======
+// Consolidated email verification endpoint (code-based only)
+app.post('/verify-email', async (req, res) => {
+>>>>>>> Stashed changes
   try {
-    const { token } = req.query;
-
-    if (!token) {
-      return res.status(400).json({
-        error: true,
-        message: 'Verification token is required'
-      });
-    }
-
-    // Verify the token
-    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-    const { userId, email } = decoded;
-
-    // Find the user
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        error: true,
-        message: 'User not found'
-      });
-    }
-
-    // Check if email matches
-    if (user.email !== email) {
-      return res.status(400).json({
-        error: true,
-        message: 'Invalid verification token'
-      });
-    }
-
-    // Check if already verified
-    if (user.emailVerified) {
-      return res.status(400).json({
-        error: true,
-        message: 'Email already verified'
-      });
-    }
-
-    // Check if token is expired
-    if (user.emailVerificationExpires && new Date() > user.emailVerificationExpires) {
-      return res.status(400).json({
-        error: true,
-        message: 'Verification token has expired. Please request a new verification email.'
-      });
-    }
-
-    // Mark email as verified
-    user.emailVerified = true;
-    user.emailVerificationToken = null;
-    user.emailVerificationCode = null;
-    user.emailVerificationExpires = null;
-    await user.save();
-
-    // Redirect to frontend with success message
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    res.redirect(`${frontendUrl}/login?verified=true&message=Email verified successfully!`);
-
-  } catch (error) {
-    console.error('Email verification error:', error);
-    
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(400).json({
-        error: true,
-        message: 'Invalid verification token'
-      });
-    }
-    
-    if (error.name === 'TokenExpiredError') {
-      return res.status(400).json({
-        error: true,
-        message: 'Verification token has expired'
-      });
-    }
-
-    res.status(500).json({
-      error: true,
-      message: 'Internal server error'
-    });
-  }
-});
-// Email verification code endpoint (Enterprise-grade)
-app.post('/verify-email-code', authenticateToken, async (req, res) => {
-  try {
-    const authUser = getAuthUserId(req);
-    const { code } = req.body || {};
-    
-    if (!authUser?.email) {
-      return res.status(401).json({ 
-        error: true, 
-        message: 'Unauthorized' 
-      });
-    }
+    const { code } = req.body;
     
     if (!code) {
       return res.status(400).json({ 
         error: true, 
-        message: 'Code is required' 
+        message: 'Verification code is required' 
       });
     }
 
-    const user = await User.findById(authUser._id);
+    // Find the OTP record
+    const record = await EmailOTP.findOne({ code: String(code) }).sort({ lastSentAt: -1 });
+    if (!record) {
+      return res.status(400).json({ 
+        error: true, 
+        message: 'Invalid or expired code.' 
+      });
+    }
+
+    // Check if code is expired
+    if (record.expiresAt < new Date()) {
+      return res.status(400).json({ 
+        error: true, 
+        message: 'Code expired. Please request a new one.' 
+      });
+    }
+
+    // Check attempt limit
+    if (record.attempts >= 5) { // MAX_ATTEMPTS
+      return res.status(429).json({ 
+        error: true, 
+        message: 'Too many attempts. Request a new code.' 
+      });
+    }
+
+    // Find the user
+    const user = await User.findOne({ email: record.email });
     if (!user) {
       return res.status(404).json({ 
         error: true, 
@@ -1596,32 +1536,10 @@ app.post('/verify-email-code', authenticateToken, async (req, res) => {
       return res.json({ 
         error: false, 
         message: 'Email already verified' 
-      }); // idempotent
-    }
-
-    const record = await EmailOTP.findOne({ email: user.email }).sort({ lastSentAt: -1 });
-    if (!record) {
-      return res.status(400).json({ 
-        error: true, 
-        message: 'Invalid or expired code.' 
       });
     }
 
-    if (record.expiresAt < now()) {
-      return res.status(400).json({ 
-        error: true, 
-        message: 'Code expired. Please request a new one.' 
-      });
-    }
-
-    if (record.attempts >= MAX_ATTEMPTS) {
-      return res.status(429).json({ 
-        error: true, 
-        message: 'Too many attempts. Request a new code.' 
-      });
-    }
-
-    // compare
+    // Verify the code
     if (record.code !== String(code)) {
       record.attempts += 1;
       await record.save();
@@ -1631,12 +1549,12 @@ app.post('/verify-email-code', authenticateToken, async (req, res) => {
       });
     }
 
-    // success
+    // Success - mark email as verified
     user.emailVerified = true;
     await user.save();
     await EmailOTP.deleteMany({ email: user.email });
 
-    // welcome email (async but awaited for simplicity)
+    // Send welcome email
     try {
       await emailService.sendWelcomeEmail(user.email, user.firstName || 'there');
       console.log('Welcome email sent to:', user.email);
@@ -1647,7 +1565,12 @@ app.post('/verify-email-code', authenticateToken, async (req, res) => {
 
     return res.json({ 
       error: false, 
-      message: 'Email verified successfully! Welcome to NewRun!' 
+      message: 'Email verified successfully! Welcome to NewRun!',
+      user: {
+        id: user._id,
+        email: user.email,
+        emailVerified: true
+      }
     });
   } catch (error) {
     console.error('Email verification error:', error);
@@ -2130,20 +2053,19 @@ const DAILY_CAP = 10;
 const now = () => new Date();
 
 // Send email verification
-app.post('/send-email-verification', authenticateToken, async (req, res) => {
+app.post('/send-email-verification', async (req, res) => {
   try {
-    const authUser = getAuthUserId(req);
+    const { email } = req.body;
     
-    // Safety validation
-    if (!authUser || !authUser.email) {
-      return res.status(401).json({
+    if (!email) {
+      return res.status(400).json({
         error: true,
-        message: 'Unauthorized or invalid token'
+        message: 'Email is required'
       });
     }
     
-    // Fetch the actual user document from database
-    const user = await User.findById(authUser._id);
+    // Find user by email
+    const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({
         error: true,
@@ -2237,70 +2159,6 @@ app.post('/send-email-verification', authenticateToken, async (req, res) => {
 });
 
 // Verify email with token
-app.post('/verify-email', async (req, res) => {
-  try {
-    const { token } = req.body;
-
-    if (!token) {
-      return res.status(400).json({
-        error: true,
-        message: 'Verification token is required'
-      });
-    }
-
-    // Verify token
-    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-    const user = await User.findById(decoded.userId);
-
-    if (!user) {
-      return res.status(404).json({
-        error: true,
-        message: 'User not found'
-      });
-    }
-
-    if (user.emailVerified) {
-      return res.status(400).json({
-        error: true,
-        message: 'Email already verified'
-      });
-    }
-
-    if (user.emailVerificationToken !== token) {
-      return res.status(400).json({
-        error: true,
-        message: 'Invalid verification token'
-      });
-    }
-
-    if (user.emailVerificationExpires < new Date()) {
-      return res.status(400).json({
-        error: true,
-        message: 'Verification token expired'
-      });
-    }
-
-    // Mark email as verified
-    user.emailVerified = true;
-    user.emailVerificationToken = null;
-    user.emailVerificationExpires = null;
-    await user.save();
-
-    // Send welcome email
-    await emailService.sendWelcomeEmail(user.email, user.firstName);
-
-    res.json({
-      error: false,
-      message: 'Email verified successfully'
-    });
-  } catch (error) {
-    console.error('Error verifying email:', error);
-    res.status(500).json({
-      error: true,
-      message: 'Internal Server Error'
-    });
-  }
-});
 
 // Forgot password
 app.post('/forgot-password', async (req, res) => {
@@ -2505,7 +2363,7 @@ app.post('/reset-password-otp', async (req, res) => {
 });
 
 // Save onboarding data
-app.post('/save-onboarding', authenticateToken, async (req, res) => {
+app.post('/save-onboarding', authenticateToken, requireEmailVerified, async (req, res) => {
   try {
     const userId = getAuthUserId(req);
     const { onboardingData } = req.body;
@@ -2554,14 +2412,31 @@ app.post('/save-onboarding', authenticateToken, async (req, res) => {
       });
     }
     
-    // Update the user document with onboarding data
+    // Update the user document with onboarding data (CONSOLIDATED APPROACH)
     userDoc.onboardingData = onboardingDataToSave;
-    if (onboardingData.city) {
-      userDoc.currentLocation = onboardingData.city;
+    
+    // Auto-populate synapse data from onboardingData (only if synapse doesn't exist yet)
+    if (!userDoc.synapse) {
+      userDoc.synapse = {};
     }
-    if (onboardingData.university) {
-      userDoc.university = onboardingData.university;
+    
+    // Auto-populate synapse.culture.home.city from onboardingData.city
+    if (onboardingData.city && !userDoc.synapse.culture?.home?.city) {
+      if (!userDoc.synapse.culture) userDoc.synapse.culture = {};
+      if (!userDoc.synapse.culture.home) userDoc.synapse.culture.home = {};
+      userDoc.synapse.culture.home.city = onboardingData.city;
+      console.log(`🔄 Auto-populating synapse city: ${onboardingData.city}`);
     }
+
+    // Auto-populate synapse.logistics.budgetMax from onboardingData.budgetRange.max
+    if (onboardingData.budgetRange?.max && !userDoc.synapse.logistics?.budgetMax) {
+      if (!userDoc.synapse.logistics) userDoc.synapse.logistics = {};
+      userDoc.synapse.logistics.budgetMax = onboardingData.budgetRange.max;
+      console.log(`🔄 Auto-populating synapse budget: ${onboardingData.budgetRange.max}`);
+    }
+    
+    // REMOVED: No longer duplicating data to root level fields
+    // Data is now only stored in onboardingData and auto-populated to synapse
     
     const savedUser = await userDoc.save();
     console.log('✅ User saved successfully');
@@ -2920,7 +2795,7 @@ app.post("/upload-avatar", authenticateToken, upload.single("avatar"), async (re
 });
 
 // Add Property API:
-app.post('/add-property', authenticateToken, async (req, res) => {
+app.post('/add-property', authenticateToken, requireEmailVerified, async (req, res) => {
   const {
     title,
     content,                     // keep accepting if you still use it anywhere
@@ -3670,7 +3545,7 @@ const Budget = require('./models/budget.model');
 const FinancialReport = require('./models/financialReport.model');
 
 // Create a new marketplace item
-app.post("/marketplace/item", authenticateToken, async (req, res) => {
+app.post("/marketplace/item", authenticateToken, requireEmailVerified, async (req, res) => {
     const { user } = req.user;
     const {
       title,
@@ -4672,7 +4547,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
   });
 
   // Initiate a conversation if it doesn't exist
-  app.post('/conversations/initiate', authenticateToken, async (req, res) => {
+  app.post('/conversations/initiate', authenticateToken, requireEmailVerified, async (req, res) => {
     const { receiverId } = req.body; // Only pass receiverId from the frontend
     const senderId = getAuthUserId(req); // Get the sender (current user) from the token
 
@@ -4712,7 +4587,7 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
   });
 
   // Send a message in a conversation
-  app.post('/messages/send', authenticateToken, async (req, res) => {
+  app.post('/messages/send', authenticateToken, requireEmailVerified, async (req, res) => {
     console.log("Authenticated User:", req.user); // Debugging line
     const { conversationId, content, attachments, gif, emoji } = req.body;
     const senderId = getAuthUserId(req); // Current user from the token
@@ -5439,7 +5314,7 @@ app.get("/synapse/preferences", authenticateToken, async (req, res) => {
 });
 
 // POST: upsert (replace) current user's preferences
-app.post("/synapse/preferences", authenticateToken, async (req, res) => {
+app.post("/synapse/preferences", authenticateToken, requireEmailVerified, async (req, res) => {
   try {
     const userId = getAuthUserId(req);
     if (!userId) return res.status(401).json({ message: "Unauthorized" });

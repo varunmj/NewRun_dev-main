@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Mail, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axiosInstance from '../utils/axiosInstance';
 import Toast from '../components/ToastMessage/Toast';
 
@@ -144,6 +144,7 @@ function ParticleField({
 
 const EmailVerification = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [step, setStep] = useState('send'); // 'send' | 'verify' | 'success'
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [cooldown, setCooldown] = useState(0);
@@ -156,6 +157,25 @@ const EmailVerification = () => {
   const [toastType, setToastType] = useState('success');
   const timerRef = useRef(null);
   const inputRefs = useRef([]);
+
+  // Get email from navigation state
+  const email = location.state?.email || '';
+  
+  // Debug logging
+  console.log('EmailVerification - location.state:', location.state);
+  console.log('EmailVerification - email:', email);
+  
+  // If no email provided, redirect to login
+  useEffect(() => {
+    if (!email) {
+      console.log('No email provided, redirecting to login');
+      navigate('/login', { 
+        state: { 
+          message: 'Please log in to verify your email' 
+        } 
+      });
+    }
+  }, [email, navigate]);
 
   useEffect(() => {
     return () => {
@@ -186,12 +206,18 @@ const EmailVerification = () => {
   };
 
   const handleSendCode = async () => {
+    if (!email) {
+      setError('Email is required. Please log in again.');
+      return;
+    }
+    
     setLoading(true);
     setError('');
     setMessage('');
     
     try {
-      const response = await axiosInstance.post('/send-email-verification');
+      console.log('Sending verification email to:', email);
+      const response = await axiosInstance.post('/send-email-verification', { email });
       setStep('verify');
       // Start 1-minute countdown timer
       startCooldown(60); // 1 minute = 60 seconds
@@ -220,11 +246,17 @@ const EmailVerification = () => {
   };
 
   const handleResendCode = async () => {
+    if (!email) {
+      setError('Email is required. Please log in again.');
+      return;
+    }
+    
     setResendLoading(true);
     setError('');
     
     try {
-      await axiosInstance.post('/send-email-verification');
+      console.log('Resending verification email to:', email);
+      await axiosInstance.post('/send-email-verification', { email });
       // Start new 1-minute countdown timer
       startCooldown(60);
       
@@ -249,7 +281,7 @@ const EmailVerification = () => {
     setMessage('');
     
     try {
-      await axiosInstance.post('/verify-email-code', { code: otp.join('') });
+      await axiosInstance.post('/verify-email', { code: otp.join('') });
       setMessage('Account verification completed. Your NewRun account is now activated.');
       setStep('success');
       

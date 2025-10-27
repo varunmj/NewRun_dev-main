@@ -1,5 +1,6 @@
 // backend/utilities.js
 const jwt = require('jsonwebtoken');
+const User = require('./models/user.model');
 
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'] || '';
@@ -39,7 +40,51 @@ function getAuthUserId(req) {
   catch { return null; }
 }
 
+// Middleware to require email verification for critical features
+async function requireEmailVerified(req, res, next) {
+  try {
+    const userId = getAuthUserId(req);
+    if (!userId) {
+      return res.status(401).json({
+        error: true,
+        message: 'Authentication required',
+        verificationRequired: false
+      });
+    }
+
+    // Get user from database to check email verification status
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        error: true,
+        message: 'User not found',
+        verificationRequired: false
+      });
+    }
+
+    if (!user.emailVerified) {
+      return res.status(403).json({
+        error: true,
+        message: 'Please verify your email to access this feature',
+        verificationRequired: true,
+        email: user.email
+      });
+    }
+
+    // Email is verified, continue
+    next();
+  } catch (error) {
+    console.error('Error checking email verification:', error);
+    return res.status(500).json({
+      error: true,
+      message: 'Internal server error',
+      verificationRequired: false
+    });
+  }
+}
+
 module.exports = {
   authenticateToken,
-  getAuthUserId, // ← make sure this is exported
+  getAuthUserId,
+  requireEmailVerified, // ← new middleware
 };
