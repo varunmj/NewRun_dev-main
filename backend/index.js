@@ -9026,11 +9026,11 @@ Provide specific, actionable recommendations for improving roommate matching.`;
     });
   });
 
-  const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 8000;
 
-  server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`Socket.io server is running`);
-  });
-  
-  module.exports = app;
+server.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+  console.log(`Socket.io server is running`);
+});
+
+module.exports = app;
