@@ -732,7 +732,6 @@ app.post('/community/threads/:id/answers/:answerId/reply', authenticateToken, as
     res.status(500).json({ success: false, message: 'Server error', error: e.message });
   }
 });
-
 // Vote comment (for replies to answers)
 app.post('/community/threads/:id/comments/:commentId/vote', authenticateToken, async (req, res) => {
   try {
@@ -1480,14 +1479,8 @@ app.post("/create-account", async(req,res)=>{
         emailVerificationSent: true
     });
 });
-
-
-// Email verification link endpoint
-app.get('/verify-email', async (req, res) => {
-
 // Consolidated email verification endpoint (code-based only)
 app.post('/verify-email', async (req, res) => {
-
   try {
     const { code } = req.body;
     
@@ -2157,7 +2150,6 @@ app.post('/send-email-verification', async (req, res) => {
     });
   }
 });
-
 // Verify email with token
 
 // Forgot password
@@ -2439,9 +2431,9 @@ app.post('/save-onboarding', authenticateToken, requireEmailVerified, async (req
     // Data is now only stored in onboardingData and auto-populated to synapse
     
     const savedUser = await userDoc.save();
-    console.log('✅ User saved successfully');
-    console.log('💾 After save - userDoc.onboardingData:', JSON.stringify(userDoc.onboardingData, null, 2));
-    console.log('💾 Saved user document:', JSON.stringify(savedUser, null, 2));
+    // console.log('✅ User saved successfully');
+    // console.log('💾 After save - userDoc.onboardingData:', JSON.stringify(userDoc.onboardingData, null, 2));
+    // console.log('💾 Saved user document:', JSON.stringify(savedUser, null, 2));
 
     // Verify the data was actually saved by fetching from database
     const verifyUser = await User.findById(userId);
@@ -2549,8 +2541,8 @@ app.post('/update-university', authenticateToken, async (req, res) => {
       });
     }
 
-    console.log(`   Old university: ${userDoc.university}`);
-    console.log(`   New university: ${trimmedUniversity}`);
+    // console.log(`   Old university: ${userDoc.university}`);
+    // console.log(`   New university: ${trimmedUniversity}`);
 
     // Update both fields
     userDoc.university = trimmedUniversity;
@@ -2888,7 +2880,6 @@ app.post('/add-property', authenticateToken, requireEmailVerified, async (req, r
     return res.status(500).json({ error: true, message: 'Internal Server Error' });
   }
 });
-
 // Edit Property API:
 // Edit Property API:
 app.put('/edit-property/:propertyId', authenticateToken, async (req, res) => {
@@ -2966,15 +2957,23 @@ app.get("/get-all-property-user", authenticateToken, async (req, res) => {
 app.get("/get-all-property", async (req, res) => {
   const userId = req.user ? req.userId : null; // Check if user is authenticated
   try {
+      console.log('🔍 GET /get-all-property called');
+      console.log('🔍 User ID:', userId);
+      
       const properties = await Property.find({})
           .sort({ isPinned: -1 })
           .populate('userId', 'firstName lastName');
+      
+      console.log(`📊 Total properties found in DB: ${properties.length}`);
+      console.log('📊 Property IDs:', properties.map(p => p._id));
       
       const propertiesWithLikes = properties.map((property) => ({
           ...property.toObject(),
           likesCount: property.likes.length,
           likedByUser: userId ? property.likes.includes(userId) : false
       }));
+
+      console.log(`✅ Returning ${propertiesWithLikes.length} properties to frontend`);
 
       return res.json({
           error: false,
@@ -3106,7 +3105,7 @@ app.get("/search-properties", async (req, res) => {
       maxDistance,
       city,
       state,
-      availabilityStatus = 'available',
+      availabilityStatus,
       sortBy = 'createdAt',
       sortOrder = 'desc',
       page = 1,
@@ -3114,9 +3113,12 @@ app.get("/search-properties", async (req, res) => {
     } = req.query;
 
     // Build filter object
-    const filter = {
-      availabilityStatus: availabilityStatus
-    };
+    const filter = {};
+
+    // Availability status filter - only add if provided
+    if (availabilityStatus) {
+      filter.availabilityStatus = availabilityStatus;
+    }
 
     // Text search across multiple fields
     if (query) {
@@ -3666,7 +3668,6 @@ app.post("/marketplace/item", authenticateToken, requireEmailVerified, async (re
   function escapeRegExp(s = '') {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
-
 app.get('/marketplace/items', async (req, res) => {
   try {
     const {
@@ -3994,7 +3995,7 @@ app.post('/marketplace/favorites/:id', (req, res) => {
     try {
       if (insightType === 'housing') {
         // Direct property query
-        let propertyQuery = { availabilityStatus: 'available' };
+        let propertyQuery = {};
         if (user.onboardingData?.budgetRange?.min && user.onboardingData?.budgetRange?.max) {
           propertyQuery.price = { 
             $gte: user.onboardingData.budgetRange.min, 
@@ -4449,7 +4450,6 @@ function buildUserUpdate(body = {}) {
   }
   return doc;
 }
-
 async function updateUserHandler(req, res) {
   try {
     const userId = getAuthUserId(req);
@@ -4517,7 +4517,6 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
       }
 
       // Update all unread messages in this conversation for this user
-      const now = new Date();
       const result = await Message.updateMany(
         {
           conversationId: conversationId,
@@ -4525,18 +4524,17 @@ app.patch('/update-profile', authenticateToken, updateUserHandler);// alias for 
           isRead: false
         },
         {
-          $set: { isRead: true, readStatus: 'read', readAt: now }
+          $set: { isRead: true }
         }
       );
 
       console.log(`Marked ${result.modifiedCount} messages as read for user ${userId} in conversation ${conversationId}`);
       
-      // Emit read receipt update (batch)
-      io.to(`conversation_${conversationId}`).emit('readReceiptUpdate', {
+      // Emit read status to other participants
+      io.to(`conversation_${conversationId}`).emit('messageRead', {
         conversationId: conversationId,
-        messageId: null,
-        readStatus: 'read',
-        readAt: now
+        userId: userId,
+        modifiedCount: result.modifiedCount
       });
 
       res.json({ success: true, modifiedCount: result.modifiedCount });
@@ -5632,7 +5630,6 @@ function generateMatchExplanations(user, candidate, score) {
     .slice(0, 5)
     .map(exp => ({ type: exp.type, text: exp.text }));
 }
-
   // --- Synapse (roommate) matches ---
   // Query params:
   //   page (0-based), limit (default 24)
@@ -6310,7 +6307,6 @@ function generateMatchExplanations(user, candidate, score) {
       }
 
       const systemPrompt = `You are a helpful NewRun advisor AI.
-
 ${toolDirective}
 
 When explaining an insight:
@@ -6977,7 +6973,6 @@ Provide actionable insights for better roommate matching.`;
 User: ${userContext.profile.name}
 Results: ${roommates.length} matches found
 Top match: ${roommates[0]?.name} (${Math.round(roommates[0]?.matchScore * 100)}% compatibility)
-
 Provide specific, actionable recommendations for improving roommate matching.`;
 
       const response = await axios.post('https://api.openai.com/v1/chat/completions', {
@@ -7292,7 +7287,7 @@ Provide specific, actionable recommendations for improving roommate matching.`;
         console.log('🔍 Getting properties directly from database...');
         
         // Direct property query
-        let propertyQuery = { availabilityStatus: 'available' };
+        let propertyQuery = {};
         if (user.onboardingData?.budgetRange?.min && user.onboardingData?.budgetRange?.max) {
           propertyQuery.price = { 
             $gte: user.onboardingData.budgetRange.min, 
@@ -9026,11 +9021,11 @@ Provide specific, actionable recommendations for improving roommate matching.`;
     });
   });
 
-const PORT = process.env.PORT || 8000;
+  const PORT = process.env.PORT || 8000;
 
-server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`Socket.io server is running`);
-});
-
-module.exports = app;
+  server.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+    console.log(`Socket.io server is running`);
+  });
+  
+  module.exports = app;
