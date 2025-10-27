@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti';
 import { getToken } from '../../utils/axiosInstance';
 import AutocompleteInput from './AutocompleteInput';
 import { searchCities, searchUniversities } from '../../data/autocompleteData';
+import { getOnboardingKey, migrateOnboardingData, safeLocalStorage, DEBUG_KEYS } from '../../constants/localStorageKeys';
 import { 
   Home, 
   Users, 
@@ -963,23 +964,24 @@ export default function UnifiedOnboarding() {
   const [currentStep, setCurrentStep] = useState(0);
   const [profile, setProfile] = useState(() => {
     try {
-      const saved = localStorage.getItem('nr_onboarding');
+      // Use migration helper to get onboarding data (handles old key migration)
+      const saved = migrateOnboardingData();
       if (saved) {
-        const parsed = JSON.parse(saved);
         // Backward compatibility: normalize old CPT_OPT to OPT_STEM
-        if (parsed.visaStatus === 'CPT_OPT') {
-          parsed.visaStatus = 'OPT_STEM';
+        if (saved.visaStatus === 'CPT_OPT') {
+          saved.visaStatus = 'OPT_STEM';
         }
         // If onboarding is completed, redirect to appropriate page
-        if (parsed.completed) {
+        if (saved.completed) {
           const from = new URLSearchParams(window.location.search).get('from') || '/dashboard';
           setTimeout(() => navigate(from, { replace: true }), 100);
-          return parsed;
+          return saved;
         }
-        return parsed;
+        return saved;
       }
       return initProfile();
-    } catch {
+    } catch (error) {
+      console.error('Error loading onboarding data:', error);
       return initProfile();
     }
   });
@@ -1027,7 +1029,7 @@ export default function UnifiedOnboarding() {
 
   // Save profile to localStorage whenever it changes
   useEffect(() => {
-    localStorage.setItem('nr_onboarding', JSON.stringify(profile));
+    safeLocalStorage.setItem(getOnboardingKey(), JSON.stringify(profile));
   }, [profile]);
 
   // Save current step to profile
@@ -1055,7 +1057,7 @@ export default function UnifiedOnboarding() {
         }
 
         // Check for debug mode
-        const debugMode = localStorage.getItem('debug_mode') === 'true';
+        const debugMode = safeLocalStorage.getItem(DEBUG_KEYS.DEBUG_MODE) === 'true';
         const forceOnboarding = new URLSearchParams(window.location.search).get('force') === 'true';
         
         if (debugMode || forceOnboarding) {
@@ -1182,6 +1184,7 @@ export default function UnifiedOnboarding() {
       case 'university':
       case 'major': {
         const needsIt = ['undergraduate', 'graduate', 'alumni'].includes(profile.academicLevel);
+        // Step is valid if it's needed and user has entered a value
         return needsIt && !!profile[stepConfig.field]?.trim();
       }
 
@@ -1258,7 +1261,7 @@ export default function UnifiedOnboarding() {
       };
       
       setProfile(completedProfile);
-      localStorage.setItem('nr_onboarding', JSON.stringify(completedProfile));
+      safeLocalStorage.setItem(getOnboardingKey(), JSON.stringify(completedProfile));
       
       // Save onboarding data to backend
       try {
@@ -1340,12 +1343,12 @@ export default function UnifiedOnboarding() {
           console.log('✅ Onboarding data saved successfully:', responseData);
           
           // Set flag for UserProfile to refresh data
-          localStorage.setItem('onboarding_completed', Date.now().toString());
+          safeLocalStorage.setItem('onboarding_completed', Date.now().toString());
           
           // Clear old onboarding data only on successful save
-          localStorage.removeItem('nr_onboarding');
-          localStorage.removeItem('nr_onboarding_focus');
-          localStorage.removeItem('profileCompleted');
+          safeLocalStorage.removeItem('nr_onboarding');
+          safeLocalStorage.removeItem('nr_onboarding_focus');
+          safeLocalStorage.removeItem('profileCompleted');
         } else {
           const errorText = await response.text();
           console.error('❌ Failed to save onboarding data to backend:', errorText);
@@ -1412,7 +1415,7 @@ export default function UnifiedOnboarding() {
       const nextIdx = idx + 1;
       setCurrentStep(nextIdx);
       setProfile(p => ({ ...p, currentStepId: visibleSteps[nextIdx].id }));
-      localStorage.setItem('nr_onboarding', JSON.stringify({ ...profile, currentStepId: visibleSteps[nextIdx].id }));
+      safeLocalStorage.setItem(getOnboardingKey(), JSON.stringify({ ...profile, currentStepId: visibleSteps[nextIdx].id }));
     }
   }, [profile, visibleSteps, stepConfig, handleCompletion]);
 
@@ -1422,7 +1425,7 @@ export default function UnifiedOnboarding() {
       const prevIdx = idx - 1;
       setCurrentStep(prevIdx);
       setProfile(p => ({ ...p, currentStepId: visibleSteps[prevIdx].id }));
-      localStorage.setItem('nr_onboarding', JSON.stringify({ ...profile, currentStepId: visibleSteps[prevIdx].id }));
+      safeLocalStorage.setItem(getOnboardingKey(), JSON.stringify({ ...profile, currentStepId: visibleSteps[prevIdx].id }));
     }
   }, [visibleSteps, stepConfig, profile]);
 

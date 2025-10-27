@@ -58,3 +58,4 @@ module.exports = mongoose.model('UniversityBranding', UniversityBrandingSchema);
 
 
 
+

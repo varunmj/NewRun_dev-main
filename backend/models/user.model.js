@@ -13,15 +13,15 @@ const userSchema = new Schema({
   username:  { type: String, unique: true, sparse: true, lowercase: true, trim: true },
   avatar:    { type: String, default: '' },
 
-  // profile basics
-  currentLocation: { type: String, default: '' },
+  // profile basics (only hometown kept at root level)
   hometown:        { type: String, default: '' },
-  birthday:        { type: Date,   default: null },
-
-  // university
-  university:      { type: String, default: '' },
-  major:           { type: String, default: '' },
-  graduationDate:  { type: String, default: '' }, // e.g. "May 2026"
+  
+  // REMOVED DUPLICATE FIELDS - These are now only in onboardingData:
+  // - currentLocation (moved to onboardingData.city)
+  // - birthday (moved to onboardingData.birthday) 
+  // - university (moved to onboardingData.university)
+  // - major (moved to onboardingData.major)
+  // - graduationDate (moved to onboardingData.graduationDate)
 
   // routing / campus extras (used by Properties map)
   schoolDepartment:   { type: String, default: '' }, // e.g. College of Business
@@ -165,5 +165,53 @@ userSchema.add({
   synapse: { type: SynapseSchema, default: () => ({}) },
 });
 
+// Auto-population middleware: Populate synapse from onboardingData
+userSchema.pre('save', function(next) {
+  // Only auto-populate if onboardingData exists and synapse doesn't have the data yet
+  if (this.onboardingData) {
+    // Initialize synapse if it doesn't exist
+    if (!this.synapse) this.synapse = {};
+    
+    // Auto-populate synapse.culture.home.city from onboardingData.city
+    if (this.onboardingData.city && !this.synapse.culture?.home?.city) {
+      if (!this.synapse.culture) this.synapse.culture = {};
+      if (!this.synapse.culture.home) this.synapse.culture.home = {};
+      this.synapse.culture.home.city = this.onboardingData.city;
+    }
+
+    // Auto-populate synapse.logistics.budgetMax from onboardingData.budgetRange.max
+    if (this.onboardingData.budgetRange?.max && !this.synapse.logistics?.budgetMax) {
+      if (!this.synapse.logistics) this.synapse.logistics = {};
+      this.synapse.logistics.budgetMax = this.onboardingData.budgetRange.max;
+    }
+  }
+
+  next();
+});
+
+// Virtual getters for backward compatibility (read-only)
+userSchema.virtual('currentLocation').get(function() {
+  return this.onboardingData?.city || '';
+});
+
+userSchema.virtual('university').get(function() {
+  return this.onboardingData?.university || '';
+});
+
+userSchema.virtual('major').get(function() {
+  return this.onboardingData?.major || '';
+});
+
+userSchema.virtual('graduationDate').get(function() {
+  return this.onboardingData?.graduationDate || '';
+});
+
+userSchema.virtual('birthday').get(function() {
+  return this.onboardingData?.birthday || null;
+});
+
+// Ensure virtuals are included when converting to JSON
+userSchema.set('toJSON', { virtuals: true });
+userSchema.set('toObject', { virtuals: true });
 
 module.exports = mongoose.model('User', userSchema);

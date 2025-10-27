@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import MagicBento from "../components/MagicBento";
 import { BorderBeam } from "../components/ui/border-beam";
+import { getOnboardingKey, migrateOnboardingData, safeLocalStorage } from "../constants/localStorageKeys";
 
 // --- tiny helper for consistent input styling ---
 const inputClass =
@@ -176,12 +177,14 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
-  // If token already present (e.g., set by OAuth), bounce to dashboard
+  // If token already present (e.g., set by OAuth), check email verification first
   React.useEffect(() => {
     try {
       const t = localStorage.getItem('accessToken') || localStorage.getItem('token') || localStorage.getItem('userToken');
       if (t) {
-        nav('/dashboard', { replace: true });
+        // We need to check email verification status from the server
+        // For now, let the normal login flow handle this
+        // This prevents the early redirect from bypassing email verification
       }
     } catch {}
   }, [nav]);
@@ -213,21 +216,32 @@ export default function Login() {
         const loginResult = await login(res.data.user, res.data.accessToken);
         
         if (loginResult.success) {
-          // Check if user has completed onboarding
-          const onboardingData = localStorage.getItem('nr_unified_onboarding');
-          if (onboardingData) {
-            const parsed = JSON.parse(onboardingData);
-            if (parsed.completed) {
-              // User has completed onboarding, go to intended page or dashboard
-              const from = new URLSearchParams(window.location.search).get('from') || '/dashboard';
-              nav(from);
+          // Check if user has verified their email first
+          if (res.data.user.emailVerified) {
+            // Email is verified, proceed with normal flow
+            const onboardingData = migrateOnboardingData();
+            if (onboardingData) {
+              if (onboardingData.completed) {
+                // User has completed onboarding, go to intended page or dashboard
+                const from = new URLSearchParams(window.location.search).get('from') || '/dashboard';
+                nav(from);
+              } else {
+                // User has partial onboarding data, continue onboarding
+                nav("/onboarding");
+              }
             } else {
-              // User has partial onboarding data, continue onboarding
-              nav("/dashboard");
+              // New user, start onboarding
+              nav("/onboarding");
             }
           } else {
-            // New user, start onboarding
-            nav("/onboarding");
+            // Email not verified, redirect to verification page
+            nav("/verify-email", { 
+              state: { 
+                email: res.data.user.email,
+                from: 'login',
+                message: 'Please verify your email to continue'
+              }
+            });
           }
         } else {
           setError(loginResult.error || "Login failed. Please try again.");

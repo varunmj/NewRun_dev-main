@@ -535,6 +535,27 @@ const formatDateInput = (maybeDate) => {
   ).padStart(2, "0")}`;
 };
 
+// Helper functions for consolidated user data access
+const getCurrentLocation = (user) => {
+  return user?.onboardingData?.city || user?.currentLocation || '';
+};
+
+const getUniversity = (user) => {
+  return user?.onboardingData?.university || user?.university || '';
+};
+
+const getMajor = (user) => {
+  return user?.onboardingData?.major || user?.major || '';
+};
+
+const getGraduationDate = (user) => {
+  return user?.onboardingData?.graduationDate || user?.graduationDate || '';
+};
+
+const getBirthday = (user) => {
+  return user?.onboardingData?.birthday || user?.birthday || null;
+};
+
 const normalizeUser = (raw) => {
   const u = raw || {};
   return {
@@ -542,22 +563,23 @@ const normalizeUser = (raw) => {
     lastName: u.lastName || "",
     email: u.email || "",
     username: u.username || "",
-    currentLocation: u.currentLocation || "",
+    currentLocation: getCurrentLocation(u),
     hometown: u.hometown || "",
-    birthday: u.birthday || null,
-    university: u.university || "",
-    major: u.major || "",
-    graduationDate: u.graduationDate || "",
+    birthday: getBirthday(u),
+    university: getUniversity(u),
+    major: getMajor(u),
+    graduationDate: getGraduationDate(u),
     createdOn: u.createdOn || null,
-    // new optional routing fields (if your API already returns them)
+    // Campus fields (kept at root level - can be edited independently)
     schoolDepartment: u.schoolDepartment || "",
     cohortTerm: u.cohortTerm || "",
     campusLabel: u.campusLabel || "",
     campusPlaceId: u.campusPlaceId || "",
     campusDisplayName: u.campusDisplayName || "",
-    avatar: u.avatar || "", // Empty string for no avatar (will show initials)
-    // ✨ Include onboarding data
+    avatar: u.avatar || "",
+    // Raw data
     onboardingData: u.onboardingData || {},
+    synapse: u.synapse || {}
   };
 };
 
