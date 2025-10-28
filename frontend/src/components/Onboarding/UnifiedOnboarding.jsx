@@ -1033,9 +1033,84 @@ export default function UnifiedOnboarding() {
     safeLocalStorage.setItem(getOnboardingKey(), JSON.stringify(profile));
   }, [profile]);
 
-  // Save current step to profile
+  // Prefill from OAuth hints in URL (email domain, basic info) on first mount
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const hints = (params.get('prefilled') || '').split(',').map(s => s.trim()).filter(Boolean);
+      const emailDomain = params.get('emailDomain') || '';
+
+      if (hints.length === 0 && !emailDomain) return;
+
+      setProfile(prev => {
+        const next = { ...prev };
+
+        // Email is available from JWT via get-user; we avoid storing raw email here.
+        // University guess from email domain (if .edu and recognizable)
+        if (hints.includes('university') && emailDomain && /\.edu$/i.test(emailDomain)) {
+          const domain = emailDomain.toLowerCase();
+          // Simple heuristic mapping for common .edu patterns if user hasn't set it
+          if (!next.university) {
+            // Strip subdomain like mail., students., etc.
+            const base = domain.split('.').slice(-3).join('.');
+            const short = base.replace(/^students\.|^mail\.|^apps\./, '');
+            // Known quick mappings; frontend has richer utils but we avoid imports here
+            const domainToUniversity = {
+              'stanford.edu': 'Stanford University',
+              'harvard.edu': 'Harvard University',
+              'mit.edu': 'Massachusetts Institute of Technology',
+              'utdallas.edu': 'University of Texas at Dallas',
+              'niu.edu': 'Northern Illinois University'
+            };
+            next.university = domainToUniversity[short] || next.university;
+          }
+        }
+
+        // Location guess from timezone label
+        if (hints.includes('location') && !next.city && typeof Intl !== 'undefined' && Intl.DateTimeFormat) {
+          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+          // Map a few common timezones to broader locations as a soft default
+          const tzToCity = {
+            'America/Los_Angeles': 'California, USA',
+            'America/Denver': 'Mountain Time, USA',
+            'America/Chicago': 'Chicago, USA',
+            'America/New_York': 'New York, USA'
+          };
+          if (tzToCity[tz]) next.city = tzToCity[tz];
+        }
+
+        return next;
+      });
+    } catch (e) {
+      console.warn('Prefill hints processing failed:', e);
+    }
+  }, []);
+
+  // Save current step to profile and track progress
   useEffect(() => {
     setProfile(prev => ({ ...prev, currentStep }));
+    
+    // Track progress for abandonment detection
+    const trackProgress = async () => {
+      try {
+        const token = getToken();
+        if (token && currentStep > 0) {
+          const API_BASE = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || (window.location.hostname.endsWith('newrun.club') ? 'https://api.newrun.club' : 'http://localhost:8000')).replace(/\/+$/, '');
+          await fetch(`${API_BASE}/track-onboarding-progress`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ currentStep })
+          });
+        }
+      } catch (error) {
+        console.warn('Failed to track onboarding progress:', error);
+      }
+    };
+    
+    trackProgress();
   }, [currentStep]);
 
   // Resume from last completed step on component mount

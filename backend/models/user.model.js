@@ -83,6 +83,12 @@ const userSchema = new Schema({
   emailVerificationToken: { type: String, default: null },
   emailVerificationExpires: { type: Date, default: null },
   
+  // Onboarding abandonment tracking
+  lastOnboardingStep: { type: Number, default: 0 },
+  lastOnboardingTime: { type: Date, default: null },
+  onboardingAbandonmentEmail1Sent: { type: Boolean, default: false },
+  onboardingAbandonmentEmail2Sent: { type: Boolean, default: false },
+  
   // OTP for various purposes
   otp:                { type: String, default: null },
   otpExpires:         { type: Date, default: null },

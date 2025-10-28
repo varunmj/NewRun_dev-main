@@ -11,6 +11,12 @@ const ProtectedRoute = ({ children }) => {
   const validationTimeoutRef = useRef(null);
   const lastValidationRef = useRef(0);
 
+  // Debug bypass for onboarding route
+  const isOnboardingRoute = location.pathname.startsWith('/onboarding');
+  const debugMode = (typeof window !== 'undefined') && (localStorage.getItem('debug_mode') === 'true');
+  const forceOnboarding = (typeof window !== 'undefined') && (new URLSearchParams(location.search).get('force') === 'true');
+  const shouldBypassAuth = isOnboardingRoute && (debugMode || forceOnboarding);
+
   // Debounced authentication validation
   const validateAuthentication = async () => {
     const now = Date.now();
@@ -58,8 +64,12 @@ const ProtectedRoute = ({ children }) => {
     }
   };
 
-  // Validate authentication on mount with debouncing
+  // Validate authentication on mount with debouncing (skip if debug bypass)
   useEffect(() => {
+    if (shouldBypassAuth) {
+      setValidationComplete(true);
+      return;
+    }
     if (!loading && !validationComplete) {
       // Clear any existing timeout
       if (validationTimeoutRef.current) {
@@ -83,7 +93,7 @@ const ProtectedRoute = ({ children }) => {
   }, [loading, validationComplete, isAuthenticated]);
 
   // Show loading spinner while checking authentication
-  if (loading || isValidating || !validationComplete) {
+  if (!shouldBypassAuth && (loading || isValidating || !validationComplete)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0b0c0f]">
         <div className="flex flex-col items-center gap-4">
@@ -96,8 +106,8 @@ const ProtectedRoute = ({ children }) => {
     );
   }
   
-  // If not authenticated after validation, redirect to login
-  if (!isAuthenticated) {
+  // If not authenticated after validation, redirect to login (unless bypassing)
+  if (!shouldBypassAuth && !isAuthenticated) {
     // Clear everything
     localStorage.clear();
     sessionStorage.clear();

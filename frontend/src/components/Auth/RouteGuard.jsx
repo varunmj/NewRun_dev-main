@@ -100,6 +100,12 @@ const RouteGuard = ({ children }) => {
       // Only run this check after initial loading is complete
       if (loading || isValidating) return;
 
+      // Debug bypass for onboarding route
+      const isOnboardingRoute = location.pathname.startsWith('/onboarding');
+      const debugMode = (typeof window !== 'undefined') && (localStorage.getItem('debug_mode') === 'true');
+      const forceOnboarding = (typeof window !== 'undefined') && (new URLSearchParams(location.search).get('force') === 'true');
+      const shouldBypassAuth = isOnboardingRoute && (debugMode || forceOnboarding);
+
       // Check if current route is protected
       const protectedRoutes = [
         '/dashboard',
@@ -120,7 +126,7 @@ const RouteGuard = ({ children }) => {
       );
 
       // If it's a protected route, validate authentication
-      if (isProtectedRoute) {
+      if (isProtectedRoute && !shouldBypassAuth) {
         console.log('RouteGuard: Checking authentication for protected route:', location.pathname);
         
         // Clear any existing timeout
