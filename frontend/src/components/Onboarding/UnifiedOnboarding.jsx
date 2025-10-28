@@ -1355,6 +1355,7 @@ export default function UnifiedOnboarding() {
           safeLocalStorage.removeItem('nr_onboarding_focus');
           safeLocalStorage.removeItem('profileCompleted');
           saveOk = true;
+
         } else {
           const errorText = await response.text();
           console.error('❌ Failed to save onboarding data to backend:', errorText);

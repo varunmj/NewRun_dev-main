@@ -2410,7 +2410,27 @@ app.post('/save-onboarding', authenticateToken, requireEmailVerified, async (req
     // Auto-populate synapse data from onboardingData (only if synapse doesn't exist yet)
     if (!userDoc.synapse) {
       userDoc.synapse = {};
+
     }
+    
+    // Auto-populate synapse.culture.home.city from onboardingData.city
+    if (onboardingData.city && !userDoc.synapse.culture?.home?.city) {
+      if (!userDoc.synapse.culture) userDoc.synapse.culture = {};
+      if (!userDoc.synapse.culture.home) userDoc.synapse.culture.home = {};
+      userDoc.synapse.culture.home.city = onboardingData.city;
+      console.log(`🔄 Auto-populating synapse city: ${onboardingData.city}`);
+
+    }
+
+    // Auto-populate synapse.logistics.budgetMax from onboardingData.budgetRange.max
+    if (onboardingData.budgetRange?.max && !userDoc.synapse.logistics?.budgetMax) {
+      if (!userDoc.synapse.logistics) userDoc.synapse.logistics = {};
+      userDoc.synapse.logistics.budgetMax = onboardingData.budgetRange.max;
+      console.log(`🔄 Auto-populating synapse budget: ${onboardingData.budgetRange.max}`);
+    }
+    
+    // REMOVED: No longer duplicating data to root level fields
+    // Data is now only stored in onboardingData and auto-populated to synapse
     
     // Auto-populate synapse.culture.home.city from onboardingData.city
     if (onboardingData.city && !userDoc.synapse.culture?.home?.city) {
