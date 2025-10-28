@@ -990,6 +990,7 @@ export default function UnifiedOnboarding() {
   const [isCheckingCompletion, setIsCheckingCompletion] = useState(true);
   const [citySuggestions, setCitySuggestions] = useState([]);
   const [universitySuggestions, setUniversitySuggestions] = useState([]);
+  const [error, setError] = useState('');
 
   // Professional confetti animation
   const triggerConfetti = useCallback(() => {
@@ -1251,6 +1252,7 @@ export default function UnifiedOnboarding() {
     if (isLoading) return; // Prevent multiple calls
     
     setIsLoading(true);
+    setError('');
     
     try {
       // Mark as completed
@@ -1264,6 +1266,7 @@ export default function UnifiedOnboarding() {
       safeLocalStorage.setItem(getOnboardingKey(), JSON.stringify(completedProfile));
       
       // Save onboarding data to backend
+      let saveOk = false;
       try {
         // Calculate anniversary key for arrival date
         const annivKey = (() => {
@@ -1320,6 +1323,8 @@ export default function UnifiedOnboarding() {
 
         if (!token) {
           console.error('❌ No authentication token found! Cannot save onboarding data.');
+          setError('You are not logged in. Please log in and try again.');
+          setIsLoading(false);
           return;
         }
 
@@ -1349,16 +1354,25 @@ export default function UnifiedOnboarding() {
           safeLocalStorage.removeItem('nr_onboarding');
           safeLocalStorage.removeItem('nr_onboarding_focus');
           safeLocalStorage.removeItem('profileCompleted');
+          saveOk = true;
+
         } else {
           const errorText = await response.text();
           console.error('❌ Failed to save onboarding data to backend:', errorText);
-          // Keep local cache so user isn't stranded
+          setError('Unable to save your profile. Please check your internet connection and try again.');
+          setIsLoading(false);
+          return;
         }
       } catch (error) {
         console.error('❌ Error saving onboarding data:', error);
-        // Keep local cache so user isn't stranded
+        setError('Unable to save your profile. Please check your internet connection and try again.');
+        setIsLoading(false);
+        return;
       }
       
+      // Only proceed to redirect if save succeeded
+      if (!saveOk) return;
+
       // Show loading for 3 seconds then navigate
       const redirectTimeout = setTimeout(() => {
         try {
@@ -1400,6 +1414,7 @@ export default function UnifiedOnboarding() {
       };
     } catch (error) {
       console.error('Error during completion:', error);
+      setError('Something went wrong while completing onboarding. Please try again.');
       setIsLoading(false);
     }
   }, [profile, navigate, isLoading]);
@@ -2152,6 +2167,19 @@ export default function UnifiedOnboarding() {
                 </div>
               )}
             </div>
+
+            {error && (
+              <div className="bg-red-500/20 border border-red-500 rounded p-4 mb-6 max-w-xl mx-auto">
+                <p className="text-red-200 text-sm">{error}</p>
+                <button
+                  onClick={handleCompletion}
+                  disabled={isLoading}
+                  className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded text-white"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
             
             {/* Manual Continue Button */}
             <motion.button
