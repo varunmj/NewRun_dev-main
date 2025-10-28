@@ -1359,6 +1359,31 @@ io.on('connection', (socket) => {
   });
 });
 
+// Track onboarding progress for abandonment detection
+app.post('/track-onboarding-progress', authenticateToken, async (req, res) => {
+  try {
+    const { currentStep } = req.body;
+    const userId = getAuthUserId(req);
+    
+    if (!userId) {
+      return res.status(401).json({ error: true, message: 'Authentication required' });
+    }
+    
+    if (typeof currentStep !== 'number' || currentStep < 0) {
+      return res.status(400).json({ error: true, message: 'Valid currentStep required' });
+    }
+    
+    await User.findByIdAndUpdate(userId, {
+      lastOnboardingStep: currentStep,
+      lastOnboardingTime: new Date()
+    });
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error tracking onboarding progress:', error);
+    res.status(500).json({ error: true, message: 'Internal server error' });
+  }
+});
 
 //Create Account API:
 app.post("/create-account", async(req,res)=>{
@@ -1713,8 +1738,19 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
         console.log('[OAuth] Redirecting with JWT length:', accessToken.length);
         
         // Redirect to onboarding if not completed, otherwise dashboard
-        const redirectPath = hasCompletedOnboarding ? '/dashboard' : '/onboarding';
-        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}${redirectPath}?token=${accessToken}`);
+        const redirectBase = `${process.env.FRONTEND_URL || 'http://localhost:3000'}`;
+        if (hasCompletedOnboarding) {
+          return res.redirect(`${redirectBase}/dashboard?token=${accessToken}`);
+        }
+
+        // Provide prefill hints for onboarding to optimize flow for Google users
+        const emailDomain = (user.email || '').split('@')[1] || '';
+        // Only hint university when domain is .edu; always hint email+location
+        const wantsUniversity = /\.edu$/i.test(emailDomain);
+        const hints = wantsUniversity ? 'email,location,university' : 'email,location';
+        const prefilled = encodeURIComponent(hints);
+        const extra = emailDomain ? `&emailDomain=${encodeURIComponent(emailDomain)}` : '';
+        return res.redirect(`${redirectBase}/onboarding?token=${accessToken}&prefilled=${prefilled}${extra}`);
       })(req, res, next);
       } catch (error) {
       console.error('Google OAuth callback handler error:', error);
@@ -3569,6 +3605,7 @@ const FinancialReport = require('./models/financialReport.model');
 // Create a new marketplace item
 app.post("/marketplace/item", authenticateToken, requireEmailVerified, async (req, res) => {
     const { user } = req.user;
+    const userId = user._id; // Extract userId from user object
     const {
       title,
       description,
@@ -9047,5 +9084,97 @@ Provide specific, actionable recommendations for improving roommate matching.`;
     console.log(`Server is running on port ${PORT}`);
     console.log(`Socket.io server is running`);
   });
+
+  // Scheduled job for abandoned onboarding detection
+  async function checkAbandonedOnboarding() {
+    try {
+      console.log('🔍 Checking for abandoned onboarding...');
+      
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+      
+      // 1-hour abandoned users (first reminder)
+      const abandoned1h = await User.find({
+        'onboardingData.completed': false,
+        lastOnboardingTime: { $lt: oneHourAgo, $gte: oneDayAgo },
+        onboardingAbandonmentEmail1Sent: false,
+        emailVerified: true
+      }).select('email firstName lastName lastOnboardingStep');
+
+      console.log(`📧 Found ${abandoned1h.length} users abandoned for 1+ hours`);
+      
+      for (const user of abandoned1h) {
+        try {
+          const resumeLink = `${process.env.FRONTEND_URL || 'https://www.newrun.club'}/onboarding?resume=true`;
+          const totalSteps = 12; // Approximate total steps
+          
+          await emailService.sendOnboardingReminder(
+            user.email,
+            user.firstName || 'there',
+            user.lastOnboardingStep || 0,
+            totalSteps,
+            resumeLink,
+            true // isFirstReminder
+          );
+          
+          // Mark first email as sent
+          await User.findByIdAndUpdate(user._id, {
+            onboardingAbandonmentEmail1Sent: true
+          });
+          
+          console.log(`✅ Sent first reminder to ${user.email}`);
+        } catch (error) {
+          console.error(`❌ Failed to send first reminder to ${user.email}:`, error);
+        }
+      }
+
+      // 24-hour abandoned users (second reminder)
+      const abandoned24h = await User.find({
+        'onboardingData.completed': false,
+        lastOnboardingTime: { $lt: oneDayAgo, $gte: threeDaysAgo },
+        onboardingAbandonmentEmail1Sent: true,
+        onboardingAbandonmentEmail2Sent: false,
+        emailVerified: true
+      }).select('email firstName lastName lastOnboardingStep');
+
+      console.log(`📧 Found ${abandoned24h.length} users abandoned for 24+ hours`);
+      
+      for (const user of abandoned24h) {
+        try {
+          const resumeLink = `${process.env.FRONTEND_URL || 'https://www.newrun.club'}/onboarding?resume=true`;
+          const totalSteps = 12;
+          
+          await emailService.sendOnboardingReminder(
+            user.email,
+            user.firstName || 'there',
+            user.lastOnboardingStep || 0,
+            totalSteps,
+            resumeLink,
+            false // isFirstReminder = false (second reminder)
+          );
+          
+          // Mark second email as sent
+          await User.findByIdAndUpdate(user._id, {
+            onboardingAbandonmentEmail2Sent: true
+          });
+          
+          console.log(`✅ Sent second reminder to ${user.email}`);
+        } catch (error) {
+          console.error(`❌ Failed to send second reminder to ${user.email}:`, error);
+        }
+      }
+
+      console.log('✅ Abandoned onboarding check completed');
+    } catch (error) {
+      console.error('❌ Error in abandoned onboarding check:', error);
+    }
+  }
+
+  // Run the check every 30 seconds (for testing)
+  setInterval(checkAbandonedOnboarding, 30 * 1000);
+  
+  // Run initial check after 10 seconds (for testing)
+  setTimeout(checkAbandonedOnboarding, 10 * 1000);
   
   module.exports = app;

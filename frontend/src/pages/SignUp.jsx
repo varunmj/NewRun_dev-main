@@ -24,6 +24,51 @@ export default function SignUp() {
   const [showPassword, setShowPassword] = useState(false);
   const [usernameSuggestionNonce, setUsernameSuggestionNonce] = useState(0);
   
+  // Smarter username suggestions based on full name and current input
+  const sanitize = (val) => (val || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9._\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const generateUsernameSuggestions = (fullNameValue, usernameValue) => {
+    const suggestions = [];
+    const name = sanitize(fullNameValue);
+    const parts = name.split(' ').filter(Boolean);
+    const base = sanitize(usernameValue) || (parts[0] || 'user');
+
+    // Pattern 1: firstnamelastname
+    if (parts.length > 1) {
+      suggestions.push(`${parts[0]}${parts[parts.length - 1]}`);
+    }
+
+    // Pattern 2: firstname_lastinitial
+    if (parts.length > 1) {
+      suggestions.push(`${parts[0]}_${parts[1][0]}`);
+    }
+
+    // Pattern 3: firstname + year
+    if (parts[0]) {
+      const year = new Date().getFullYear();
+      suggestions.push(`${parts[0]}${year}`);
+    }
+
+    // Pattern 4: username + smart two-digit number (20-29)
+    const twoDigit = 20 + Math.floor(Math.random() * 10);
+    suggestions.push(`${base}${twoDigit}`);
+
+    // Fallbacks using base if name parts are missing
+    if (suggestions.length < 4) {
+      suggestions.push(`${base}_app`);
+    }
+
+    // Enforce max length and uniqueness
+    const uniq = Array.from(new Set(suggestions))
+      .map(s => s.slice(0, 30));
+    return uniq;
+  };
+  
   // Field-specific validation states
   const [fieldErrors, setFieldErrors] = useState({
     email: "",
@@ -715,20 +760,24 @@ export default function SignUp() {
               {username && username.length >= 3 && (
                 <div className="mt-2 space-y-1">
                   <div className="text-xs text-gray-400">Suggestions:</div>
-                  <div className="flex gap-2">
-                    <button 
+                  <div className="flex gap-2 flex-wrap">
+                    {generateUsernameSuggestions(fullName, username).map((s, idx) => (
+                      <button
+                        key={s + idx}
+                        type="button"
+                        onClick={() => setUsername(s)}
+                        className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-700 hover:bg-gray-200 transition-colors"
+                      >
+                        {s}
+                      </button>
+                    ))}
+                    <button
                       type="button"
-                      onClick={() => setUsername(`${username.toLowerCase()}.${Math.floor(Math.random() * 100)}`)}
+                      onClick={() => setUsernameSuggestionNonce(n => n + 1)}
                       className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-700 hover:bg-gray-200 transition-colors"
+                      title="Refresh suggestions"
                     >
-                      {username.toLowerCase()}.{Math.floor(Math.random() * 100 + usernameSuggestionNonce % 100)}
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={() => setUsername(`${username.toLowerCase()}_${Math.floor(Math.random() * 100)}`)}
-                      className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-700 hover:bg-gray-200 transition-colors"
-                    >
-                      {username.toLowerCase()}_{Math.floor(Math.random() * 100 + (usernameSuggestionNonce % 100))}
+                      Refresh
                     </button>
                   </div>
                 </div>

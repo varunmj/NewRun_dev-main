@@ -784,6 +784,55 @@ class EmailService {
     return await this.sendEmail(userEmail, subject, html, null, attachments);
   }
 
+  generateOnboardingReminderTemplate(userName, currentStep, totalSteps, resumeLink, isFirstReminder = true) {
+    const progressPercent = Math.round((currentStep / totalSteps) * 100);
+    const stepText = isFirstReminder ? 'You\'re making great progress!' : 'Don\'t miss out on completing your setup!';
+    
+    const bodyHtml = `
+      <p>Hi ${userName},</p>
+      <p>${stepText} You've completed ${currentStep} of ${totalSteps} steps (${progressPercent}%) in your NewRun onboarding.</p>
+      
+      <div style="background:#F0F9FF;border:1px solid #0EA5E9;border-radius:12px;padding:16px 18px;margin:16px 0;font-size:14px;color:#0C4A6E">
+        <strong>What's left:</strong> Complete your profile to unlock housing search, marketplace access, and roommate matching features.
+      </div>
+
+      <p style="margin:0">Ready to finish? Click below to pick up where you left off:</p>
+    `;
+
+    const ctaLabel = isFirstReminder ? 'Continue Setup' : 'Complete Profile';
+    const ctaColor = isFirstReminder ? '#0B5CFF' : '#9A67FB';
+
+    return this.renderNRLayout({
+      preheader: `Complete your NewRun setup - ${progressPercent}% done`,
+      heroUrl: "https://www.newrun.club/assets/email/hero-onboarding.png",
+      headline: isFirstReminder ? "You're almost there!" : "Complete your profile",
+      bodyHtml,
+      cta: { label: ctaLabel, href: resumeLink, color: ctaColor },
+      noteHtml: `
+        <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:12px 14px;margin-top:16px;font-size:13px;color:#475569">
+          <strong>Tip:</strong> Your progress is automatically saved, so you can continue anytime.
+        </div>
+      `,
+      social: { x:"https://x.com/newrunnn", linkedin:"https://linkedin.com/company/newrun-ed", instagram:"https://instagram.com/newrun" },
+      company: {
+        siteHref: process.env.FRONTEND_URL || "https://www.newrun.club",
+        phoneHref: "tel:+18885550123",
+        phoneText: "+1 (888) 555-0123",
+        addressHtml: "NewRun Inc · 123 Campus Drive · University City, CA 90210"
+      },
+      listUnsub: { link: (process.env.FRONTEND_URL || "https://www.newrun.club") + "/email/unsubscribe?u={{uid}}", oneClick:true }
+    });
+  }
+
+  async sendOnboardingReminder(userEmail, userName, currentStep, totalSteps, resumeLink, isFirstReminder = true) {
+    const subject = isFirstReminder 
+      ? `Complete your NewRun setup - ${Math.round((currentStep / totalSteps) * 100)}% done`
+      : 'Final reminder: Complete your NewRun profile';
+    const html = this.generateOnboardingReminderTemplate(userName, currentStep, totalSteps, resumeLink, isFirstReminder);
+    const attachments = this.getSocialMediaAttachments();
+    return await this.sendEmail(userEmail, subject, html, null, attachments);
+  }
+
   // Expose initialization method for manual reinitialization
   reinitialize() {
     this.initializeTransporter();
