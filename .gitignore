@@ -1,2 +1,4 @@
 
 backend/.env
+backend/.DS_Store
+frontend/src/pages/services/SimCards.jsx
