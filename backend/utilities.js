@@ -3,29 +3,31 @@ const jwt = require('jsonwebtoken');
 const User = require('./models/user.model');
 
 function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'] || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  
-  console.log('🔐 Auth check:', { 
-    hasAuthHeader: !!authHeader, 
-    hasToken: !!token,
-    tokenStart: token ? token.substring(0, 20) + '...' : 'none'
-  });
-  
-  if (!token) {
-    console.log('❌ No token found');
-    return res.sendStatus(401);
-  }
+  try {
+    const authHeader = req.headers['authorization'] || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-    if (err) {
-      console.log('❌ Token verification failed:', err.message);
-      return res.sendStatus(403);
+    if (!token) {
+      return res.sendStatus(401);
     }
-    console.log('✅ Token verified, user:', decoded);
-    req.user = decoded; // keep your existing shape
-    next();
-  });
+
+    const secret = process.env.ACCESS_TOKEN_SECRET;
+    if (!secret || typeof secret !== 'string' || !secret.length) {
+      console.error('ACCESS_TOKEN_SECRET is missing or invalid');
+      return res.status(500).json({ error: true, message: 'Server auth misconfiguration' });
+    }
+
+    jwt.verify(token, secret, (err, decoded) => {
+      if (err) {
+        return res.sendStatus(403);
+      }
+      req.user = decoded; // keep your existing shape
+      next();
+    });
+  } catch (e) {
+    console.error('authenticateToken error:', e);
+    return res.status(500).json({ error: true, message: 'Internal Server Error' });
+  }
 }
 
 // NEW: unify how we read the authed user's id (your JWT sometimes nests under user)

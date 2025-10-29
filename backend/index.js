@@ -48,6 +48,7 @@ mongoose.connect(config.connectionString);
 
 const User = require('./models/user.model');
 const Property = require('./models/property.model');
+const PropertyFavorite = require('./models/propertyFavorite.model');
 const MarketplaceItem = require('./models/marketplaceItem.model');
 const Message = require('./models/message.model');
 const Conversation = require('./models/conversation.model');
@@ -118,7 +119,7 @@ passport.deserializeUser(async (id, done) => {
 // Google OAuth Strategy (only if credentials are provided)
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   const googleCallbackUrl = process.env.GOOGLE_CALLBACK_URL || `${process.env.BACKEND_URL || 'https://api.newrun.club'}/api/auth/google/callback`;
-  console.log('[OAuth] Google callback URL:', googleCallbackUrl);
+  
   passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -465,7 +466,7 @@ app.post('/community/threads/:id/bookmark', authenticateToken, async (req, res) 
     const userId = getAuthUserId(req);
     const threadId = req.params.id;
     
-    console.log('Bookmark request - userId:', userId, 'threadId:', threadId);
+    
     
     // Validate ObjectIds
     if (!mongoose.Types.ObjectId.isValid(userId)) {
@@ -685,23 +686,22 @@ app.post('/community/threads/:id/answers/:answerId/reply', authenticateToken, as
     const threadId = req.params.id;
     const answerId = req.params.answerId;
     
-    console.log('🔄 Reply request:', { body: body?.substring(0, 50) + '...', userId, threadId, answerId });
-    console.log('🔄 User object:', req.user);
+    
     
     if (!body || !body.trim()) {
-      console.log('❌ Missing reply body');
+      
       return res.status(400).json({ success: false, message: 'Reply body is required' });
     }
     
     const thread = await CommunityThread.findById(threadId);
     if (!thread) {
-      console.log('❌ Thread not found:', threadId);
+      
       return res.status(404).json({ success: false, message: 'Thread not found' });
     }
     
     const answer = thread.answers.id(answerId);
     if (!answer) {
-      console.log('❌ Answer not found:', answerId, 'in thread:', threadId);
+      
       return res.status(404).json({ success: false, message: 'Answer not found' });
     }
     
@@ -716,11 +716,11 @@ app.post('/community/threads/:id/answers/:answerId/reply', authenticateToken, as
       isOP: isOP
     };
     
-    console.log('✅ Adding reply:', reply);
+    
     answer.replies.push(reply);
     await thread.save();
     
-    console.log('✅ Reply added successfully');
+    
     res.json({ 
       success: true, 
       message: 'Reply added successfully',
@@ -3072,6 +3072,63 @@ app.delete("/delete-property/:propertyId",authenticateToken,async(req,res)=>{
         });
     }
 });
+// Ensure favorites routes are registered BEFORE the generic `/properties/:id` route,
+// otherwise requests to `/properties/favorites` will be treated as an `:id`.
+app.post('/properties/favorites/:propertyId', authenticateToken, async (req, res) => {
+  try {
+    const userId = getAuthUserId(req);
+    const propertyId = req.params.propertyId;
+
+    if (!userId) {
+      return res.status(401).json({ error: true, message: 'User not authenticated' });
+    }
+
+    const property = await Property.findById(propertyId);
+    if (!property) {
+      return res.status(404).json({ error: true, message: 'Property not found' });
+    }
+
+    const existing = await PropertyFavorite.findOne({ userId, propertyId });
+    if (existing) {
+      await PropertyFavorite.deleteOne({ userId, propertyId });
+      return res.json({ success: true, favored: false });
+    } else {
+      await PropertyFavorite.create({ userId, propertyId });
+      return res.json({ success: true, favored: true });
+    }
+  } catch (err) {
+    if (err && err.code === 11000) {
+      // Duplicate on unique index -> already favorited; treat as idempotent success
+      return res.json({ success: true, favored: true });
+    }
+    console.error('POST /properties/favorites/:propertyId (early) error:', err);
+    res.status(500).json({ error: true, message: 'Internal Server Error' });
+  }
+});
+
+app.get('/properties/favorites', authenticateToken, async (req, res) => {
+  try {
+    const userId = getAuthUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: true, message: 'User not authenticated' });
+    }
+
+    const favorites = await PropertyFavorite.find({ userId })
+      .populate('propertyId')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const favoriteProperties = favorites
+      .map((fav) => fav.propertyId)
+      .filter(Boolean);
+
+    res.json({ properties: favoriteProperties });
+  } catch (err) {
+    console.error('GET /properties/favorites (early) error:', err);
+    res.status(500).json({ error: true, message: 'Internal Server Error' });
+  }
+});
+
 //API for // Find the property by ID
 app.get("/properties/:id", async (req, res) => {
   const propertyId = req.params.id;
@@ -3353,6 +3410,68 @@ app.put('/property/:propertyId/like', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Toggle like error:', error);
     return res.status(500).json({ error: true, message: 'Error toggling like' });
+  }
+});
+
+// Property Favorites API
+app.post('/properties/favorites/:propertyId', authenticateToken, async (req, res) => {
+  try {
+    const userId = getAuthUserId(req);
+    const propertyId = req.params.propertyId;
+
+    if (!userId) {
+      return res.status(401).json({ error: true, message: 'User not authenticated' });
+    }
+
+    // Check if property exists
+    const property = await Property.findById(propertyId);
+    if (!property) {
+      return res.status(404).json({ error: true, message: 'Property not found' });
+    }
+
+    // Check if already favorited
+    const existing = await PropertyFavorite.findOne({ userId, propertyId });
+    
+    if (existing) {
+      // Remove from favorites
+      await PropertyFavorite.deleteOne({ userId, propertyId });
+      return res.json({ success: true, favored: false });
+    } else {
+      // Add to favorites
+      await PropertyFavorite.create({ userId, propertyId });
+      return res.json({ success: true, favored: true });
+    }
+  } catch (err) {
+    if (err && err.code === 11000) {
+      return res.json({ success: true, favored: true });
+    }
+    console.error('POST /properties/favorites/:propertyId error:', err);
+    res.status(500).json({ error: true, message: 'Internal Server Error' });
+  }
+});
+
+// Get user's favorite properties
+app.get('/properties/favorites', authenticateToken, async (req, res) => {
+  try {
+    const userId = getAuthUserId(req);
+    
+    if (!userId) {
+      return res.status(401).json({ error: true, message: 'User not authenticated' });
+    }
+
+    const favorites = await PropertyFavorite.find({ userId })
+      .populate('propertyId')
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    const favoriteProperties = favorites
+      .map(fav => fav.propertyId)
+      .filter(Boolean); // Remove null properties
+    
+    res.json({ properties: favoriteProperties });
+  } catch (err) {
+    console.error('GET /properties/favorites error:', err);
+    res.status(500).json({ error: true, message: 'Internal Server Error' });
   }
 });
 
@@ -4392,6 +4511,77 @@ Provide a helpful, personalized response.`;
       res.status(500).json({ 
         error: 'Failed to generate response',
         fallback: true 
+      });
+    }
+  });
+
+  // Property Manager AI endpoint
+  app.post('/api/ai/property-manager', authenticateToken, async (req, res) => {
+    try {
+      const userId = getAuthUserId(req);
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+          const { propertyId, message, action = 'chat', isFollowUp = false } = req.body;
+
+      if (!propertyId) {
+        return res.status(400).json({ error: 'Property ID is required' });
+      }
+
+      // Check if OpenAI API key is configured
+      if (!process.env.NEWRUN_APP_OPENAI_API_KEY) {
+        return res.json({
+          success: false,
+          response: "AI features are not available - OpenAI API key not configured",
+          fallback: true
+        });
+      }
+
+      // Fetch property with host information
+      const Property = require('./models/property.model');
+      const property = await Property.findById(propertyId).populate('userId', 'firstName lastName university major campusDisplayName campusLabel');
+      
+      if (!property) {
+        return res.status(404).json({ error: 'Property not found' });
+      }
+
+      // Import Property Manager AI service
+      const propertyManagerAI = require('./services/propertyManagerAI');
+
+      let result;
+      
+      switch (action) {
+        case 'chat':
+          if (!message) {
+            return res.status(400).json({ error: 'Message is required for chat action' });
+          }
+              result = await propertyManagerAI.generatePropertyResponse(property, user, message, {}, isFollowUp);
+          break;
+          
+        case 'insights':
+          result = await propertyManagerAI.generatePropertyInsights(property, user);
+          break;
+          
+        case 'schedule-tour':
+          const { requestedDateTime } = req.body;
+          result = await propertyManagerAI.generateTourSchedulingResponse(property, user, requestedDateTime);
+          break;
+          
+        default:
+          return res.status(400).json({ error: 'Invalid action. Use: chat, insights, or schedule-tour' });
+      }
+
+      res.json(result);
+      
+    } catch (error) {
+      console.error('Property Manager AI Error:', error);
+      res.status(500).json({ 
+        success: false,
+        response: "I'm having trouble accessing property information right now. Please try again or contact the host directly.",
+        error: error.message,
+        fallback: true
       });
     }
   });
