@@ -775,11 +775,15 @@ export default function Community() {
           }
         `}
       </style>
-      <Navbar userInfo={userInfo} />
-
-      {/* ---------------- Hero ---------------- */}
-      <section className="nr-hero-bg">
-        <div className="mx-auto max-w-6xl px-4 pt-16 md:pt-20 pb-10">
+      {/* Hero Section - starts from top */}
+      <section className="nr-hero-bg relative min-h-screen pt-0">
+        {/* Navbar overlay on top of hero */}
+        <div className="absolute top-0 left-0 right-0 z-20 pt-4">
+          <Navbar userInfo={userInfo} />
+        </div>
+        
+        <div className="relative z-10 pt-24">
+          <div className="mx-auto max-w-6xl px-4 pb-10">
           {/* University Filter Toggle */}
           {userInfo?.university && universityBranding && (
             <div className="mb-6 flex justify-center">
@@ -937,8 +941,10 @@ export default function Community() {
             </div>
           </div>
         </div>
+        </div>
       </section>
 
+      <div className="relative z-10">
       {/* ---------------- Split: Ask panel + feature tiles ---------------- */}
       <section ref={askRef} className="mx-auto max-w-7xl px-4 pt-6 pb-12">
         <div className="mb-6 text-center">
@@ -1682,6 +1688,7 @@ export default function Community() {
         universityFilter={universityFilter}
         userInfo={userInfo}
       />
+      </div>
     </div>
   );
 }

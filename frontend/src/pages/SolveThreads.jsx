@@ -363,8 +363,8 @@ function SolveHero({
     };
 
   return (
-    <section className="nr-hero-bg nr-hero-starry">
-      <div className="mx-auto max-w-7xl px-4 pt-16 pb-10">
+    <div className="w-full pt-24">
+      <div className="mx-auto max-w-7xl px-4 pb-10">
         <p className="mb-2 text-center text-[11px] tracking-[0.18em] text-white/60 uppercase">
           Limited Beta
         </p>
@@ -438,7 +438,7 @@ function SolveHero({
           Over 200+ campus requests solved this week.
         </p>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -2345,9 +2345,15 @@ export default function SolveThreads() {
 
   return (
     <div className="nr-dots-page min-h-screen text-white">
-      <Navbar userInfo={userInfo} handleClearSearch={() => {}} />
-
-      <SolveHero
+      {/* Hero Section - starts from top */}
+      <section className="nr-hero-bg nr-hero-starry relative min-h-screen pt-0">
+        {/* Navbar overlay on top of hero */}
+        <div className="absolute top-0 left-0 right-0 z-20 pt-4">
+          <Navbar userInfo={userInfo} handleClearSearch={() => {}} />
+        </div>
+        
+        <div className="relative z-10">
+          <SolveHero
         firstName={userInfo?.firstName}
         value={solveText}
         setValue={setSolveText}
@@ -2359,8 +2365,11 @@ export default function SolveThreads() {
             modalType: "solve-housing",
           })
         }
-      />
+          />
+        </div>
+      </section>
 
+      <div className="relative z-10">
       {SHOW_LISTS && <div className="mx-auto max-w-7xl px-4 pb-24" />}
 
       <Modal
@@ -2480,6 +2489,7 @@ export default function SolveThreads() {
         type={toast.type}
         onClose={closeToast}
       />
+      </div>
     </div>
   );
 }

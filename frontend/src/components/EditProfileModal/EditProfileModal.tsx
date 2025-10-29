@@ -52,6 +52,7 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }: {
 }) {
   const { isLoaded } = useGoogleMapsLoader();
   const acRef = useRef<any>(null);
+  const geocodeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [toast, setToast] = useState({ isShown: false, message: "", type: "success" });
   const [currentAvatar, setCurrentAvatar] = useState(initialUser?.avatar || "");
@@ -214,12 +215,71 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }: {
     const sub = watch((value, { name, type }) => {
       if (type !== "change" || !name) return;
       setHasUnsavedChanges(true);
+      
+      // If campusDisplayName changes manually (not from autocomplete), try to geocode it
+      if (name === "campusDisplayName" && isLoaded && typeof window !== "undefined" && window.google) {
+        const campusDisplayName = (value as any).campusDisplayName;
+        
+        // Clear any pending geocode timeout
+        if (geocodeTimeoutRef.current) {
+          clearTimeout(geocodeTimeoutRef.current);
+          geocodeTimeoutRef.current = null;
+        }
+        
+        if (campusDisplayName && campusDisplayName.length > 3) {
+          // Debounce geocoding to avoid too many API calls (wait 1 second after user stops typing)
+          geocodeTimeoutRef.current = setTimeout(() => {
+            const geocoder = new window.google.maps.Geocoder();
+            geocoder.geocode({ address: campusDisplayName }, (results, status) => {
+              if (status === window.google.maps.GeocoderStatus.OK && results && results.length > 0) {
+                const result = results[0];
+                // Update placeId if we found a match
+                if (result.place_id) {
+                  setValue("campusPlaceId", result.place_id, { shouldDirty: true, shouldValidate: true });
+                  setValue("campusLabel", result.formatted_address || campusDisplayName, { shouldDirty: true, shouldValidate: true });
+                  
+                  if (import.meta.env.DEV) {
+                    console.log('📍 Campus geocoded automatically:', {
+                      placeId: result.place_id,
+                      address: result.formatted_address
+                    });
+                  }
+                  
+                  // Explicitly save campusPlaceId and campusLabel to DB
+                  const campusPayload = mapToApiPayload({
+                    campusPlaceId: result.place_id,
+                    campusLabel: result.formatted_address || campusDisplayName,
+                    campusDisplayName: campusDisplayName
+                  }, () => getValues());
+                  
+                  if (Object.keys(campusPayload).length > 0) {
+                    if (import.meta.env.DEV) {
+                      console.log('💾 Autosaving campus location data:', campusPayload);
+                    }
+                    debouncedAutosave(campusPayload);
+                  }
+                }
+              }
+            });
+            geocodeTimeoutRef.current = null;
+          }, 1000);
+        }
+      }
+      
       const partial = { [name]: (value as any)[name] };
       const apiPayload = mapToApiPayload(partial, () => getValues());
       debouncedAutosave(apiPayload);
     });
-    return () => sub.unsubscribe();
-  }, [watch, debouncedAutosave]);
+    
+    // Cleanup function to clear timeout on unmount
+    return () => {
+      sub.unsubscribe();
+      if (geocodeTimeoutRef.current) {
+        clearTimeout(geocodeTimeoutRef.current);
+        geocodeTimeoutRef.current = null;
+      }
+    };
+  }, [watch, debouncedAutosave, isLoaded, setValue, getValues, mapToApiPayload]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -249,8 +309,37 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }: {
     if (acRef.current !== null) {
       const place = acRef.current.getPlace();
       if (place && place.place_id) {
-        setValue("campusPlaceId", place.place_id);
-        setValue("campusDisplayName", place.name || place.formatted_address || "");
+        const campusDisplayName = place.name || place.formatted_address || "";
+        const campusLabel = place.formatted_address || place.name || "";
+        const campusPlaceId = place.place_id;
+        
+        // Set all campus-related fields when a place is selected
+        setValue("campusPlaceId", campusPlaceId, { shouldDirty: true, shouldValidate: true });
+        setValue("campusDisplayName", campusDisplayName, { shouldDirty: true, shouldValidate: true });
+        setValue("campusLabel", campusLabel, { shouldDirty: true, shouldValidate: true });
+        
+        // Trigger form change detection
+        setHasUnsavedChanges(true);
+        
+        // Immediately save campus data to DB
+        const campusPayload = mapToApiPayload({
+          campusPlaceId: campusPlaceId,
+          campusDisplayName: campusDisplayName,
+          campusLabel: campusLabel
+        }, () => getValues());
+        
+        if (Object.keys(campusPayload).length > 0) {
+          if (import.meta.env.DEV) {
+            console.log('📍 Campus selected and saving:', {
+              placeId: campusPlaceId,
+              name: campusDisplayName,
+              formattedAddress: campusLabel,
+              payload: campusPayload
+            });
+          }
+          // Use autosave but with shorter delay since user explicitly selected this
+          debouncedAutosave(campusPayload);
+        }
       }
     }
   };
@@ -278,6 +367,13 @@ function EditProfileModal({ open, onClose, initialUser, onSaved }: {
       if (updatedUser) {
         onSaved?.(updatedUser);
       }
+      
+      // Dispatch custom event to notify other components (like PropertyDetails) that profile was updated
+      window.dispatchEvent(new CustomEvent('profile_updated', { detail: updatedUser }));
+      
+      // Also set localStorage flag for cross-tab updates
+      localStorage.setItem('profile_updated', Date.now().toString());
+      
       onClose();
     } catch (error) {
       console.error("Error updating profile:", error);

@@ -58,7 +58,9 @@ function MessageIcon() {
     try {
       const response = await axiosInstance.get('/messages/unread-count');
       const count = response.data?.count || 0;
-      console.log('📊 Unread count loaded:', count);
+      if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_MESSAGES) {
+        console.log('📊 Unread count loaded:', count);
+      }
       setUnreadCount(count);
     } catch (error) {
       console.error('Error fetching unread count:', error);
@@ -91,7 +93,9 @@ function MessageIcon() {
 
         // Listen for new messages to update count
         const handleNewMessage = (data) => {
-          console.log('📨 New message received, updating unread count:', data);
+          if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_MESSAGES) {
+            console.log('📨 New message received, updating unread count:', data);
+          }
           // Increment count immediately for better UX
           setUnreadCount(prev => prev + 1);
           // Also fetch from server to ensure accuracy
@@ -100,7 +104,9 @@ function MessageIcon() {
 
         // Listen for message read events
         const handleMessageRead = (data) => {
-          console.log('👁️ Message read, updating unread count:', data);
+          if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_MESSAGES) {
+            console.log('👁️ Message read, updating unread count:', data);
+          }
           // Decrement count immediately for better UX
           setUnreadCount(prev => Math.max(0, prev - 1));
           // Also fetch from server to ensure accuracy
@@ -109,13 +115,17 @@ function MessageIcon() {
 
         // Listen for conversation updates
         const handleConversationUpdate = () => {
-          console.log('💬 Conversation updated, refreshing unread count');
+          if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_MESSAGES) {
+            console.log('💬 Conversation updated, refreshing unread count');
+          }
           loadUnreadCount();
         };
 
         // Listen for message read events (when user opens a message)
         const handleMessageMarkedRead = (data) => {
-          console.log('👁️ Message marked as read, updating unread count:', data);
+          if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_MESSAGES) {
+            console.log('👁️ Message marked as read, updating unread count:', data);
+          }
           // Decrement count immediately for better UX
           setUnreadCount(prev => Math.max(0, prev - 1));
           // Also fetch from server to ensure accuracy
@@ -124,7 +134,9 @@ function MessageIcon() {
 
         // Listen for read receipt updates
         const handleReadReceiptUpdate = (data) => {
-          console.log('📖 Read receipt update received in navbar:', data);
+          if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_MESSAGES) {
+            console.log('📖 Read receipt update received in navbar:', data);
+          }
           // Refresh unread count when read receipts are updated
           loadUnreadCount();
         };
@@ -153,7 +165,6 @@ function MessageIcon() {
     // Set up periodic refresh for message count (every 30 seconds)
     const refreshInterval = setInterval(() => {
       if (isAuthenticated) {
-        console.log('🔄 Periodic refresh of unread count');
         loadUnreadCount();
       }
     }, 30000); // 30 seconds
@@ -163,7 +174,6 @@ function MessageIcon() {
     };
   }, [isAuthenticated]);
 
-  console.log('MessageIcon rendering - isAuthenticated:', isAuthenticated, 'unreadCount:', unreadCount);
 
   return (
     <Link
@@ -408,8 +418,8 @@ export default function Navbar() {
   ];
 
   return (
-    <header className="sticky top-0 z-[100] w-full">
-      <div className="mx-auto mt-3 flex max-w-7xl items-center justify-between rounded-2xl bg-[#0b0c0f]/90 px-4 py-2.5 backdrop-blur border border-white/5">
+    <header className="sticky top-0 z-[100] w-full pt-4">
+      <div className="mx-auto flex max-w-7xl items-center justify-between rounded-2xl bg-[#0b0c0f]/60 px-4 py-2.5 backdrop-blur-xl border border-white/10">
         {/* brand */}
         <Link to="/" className="inline-flex items-center">
           <span className="brand-script text-3xl leading-none bg-gradient-to-r from-blue-600 to-teal-500 bg-clip-text text-transparent drop-shadow-[0_1px_0_rgba(255,255,255,0.06)]">

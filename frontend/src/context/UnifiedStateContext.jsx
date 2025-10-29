@@ -11,7 +11,10 @@ import NewRunAI from '../services/NewRunAI';
 const UnifiedStateContext = createContext();
 
 export const UnifiedStateProvider = ({ children }) => {
-  console.log('UnifiedStateProvider: Initializing...');
+  // Only log initialization in debug mode to reduce console spam
+  if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_STATE) {
+    console.log('UnifiedStateProvider: Initializing...');
+  }
   
   // Core state management
   const [state, setState] = useState({
@@ -117,7 +120,9 @@ export const UnifiedStateProvider = ({ children }) => {
 
   // Cache invalidation system
   const invalidateCache = useCallback((reason = 'data_change') => {
-    console.log(`🗑️ Cache invalidation triggered: ${reason}`);
+    if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_STATE) {
+      console.log(`🗑️ Cache invalidation triggered: ${reason}`);
+    }
     
     // Clear AI cache
     clearCache();
@@ -545,7 +550,9 @@ export const UnifiedStateProvider = ({ children }) => {
 
       // Check if we have all required data
       if (!state.userInfo || !state.dashboardData || !state.onboardingData) {
-        console.log('🤖 AI data fetch skipped: missing required data');
+        if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_STATE) {
+          console.log('🤖 AI data fetch skipped: missing required data');
+        }
         return null;
       }
 
@@ -628,7 +635,9 @@ export const UnifiedStateProvider = ({ children }) => {
 
   // Coordinated initialization
   const initializeAll = useCallback(async () => {
-    console.log('🚀 Starting coordinated initialization...');
+    if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_STATE) {
+      console.log('🚀 Starting coordinated initialization...');
+    }
     
     try {
       // Fetch user and onboarding data in parallel
@@ -649,7 +658,9 @@ export const UnifiedStateProvider = ({ children }) => {
         await fetchAIData();
       }
 
-      console.log('✅ Coordinated initialization complete');
+      if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_STATE) {
+        console.log('✅ Coordinated initialization complete');
+      }
     } catch (error) {
       console.error('❌ Initialization error:', error);
     }

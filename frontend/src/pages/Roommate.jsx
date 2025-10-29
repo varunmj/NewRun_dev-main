@@ -2088,11 +2088,15 @@ const StepCleanliness = () => {
           100% { background-position: 0% 50%; }
         }
       `}</style>
-      <Navbar />
-
-      {/* Clean hero section - minimal and space-efficient */}
-      <section className="nr-hero-bg" style={{ paddingTop: 20, paddingBottom: 20 }}>
-        <div className="mx-auto max-w-7xl px-4">
+      {/* Hero Section - starts from -top */}
+      <section className="nr-hero-bg relative min-h-screen pt-0" style={{ height: "100vh", overflow: "hidden" }}>
+        {/* Navbar overlay on top of hero */}
+        <div className="absolute top-0 left-0 right-0 z-20 pt-4">
+          <Navbar />
+        </div>
+        
+        <div className="relative z-10 pt-24 h-full">
+          <div className="mx-auto max-w-7xl px-4" style={{ paddingTop: 20, paddingBottom: 20 }}>
           <div className="flex items-start justify-between gap-8">
             {/* Left side - Title */}
             <div className="flex-1">
@@ -2168,6 +2172,7 @@ const StepCleanliness = () => {
               ) : null;
             })()}
           </div>
+        </div>
         </div>
       </section>
 

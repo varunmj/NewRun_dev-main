@@ -584,13 +584,16 @@ export default function UserDashboard() {
         <div className="hero-orb absolute bottom-1/4 right-1/4 w-48 h-48 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-full blur-3xl" />
         <div className="hero-orb absolute top-1/2 right-1/3 w-24 h-24 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 rounded-full blur-2xl" />
       </div>
-      
-      <Navbar />
-      
-      
-      <div className="relative z-10">
-        {/* Hero Section - Ultra Creative with Floating Elements */}
-        <section className="nr-hero-bg nr-hero-starry relative flex min-h-[80vh] items-center overflow-hidden">
+
+      {/* Hero Section - starts from top */}
+      <section className="nr-hero-bg nr-hero-starry relative flex min-h-screen items-center overflow-hidden pt-0">
+        {/* Navbar overlay on top of hero */}
+        <div className="absolute top-0 left-0 right-0 z-20 pt-4">
+          <Navbar />
+        </div>
+        
+        <div className="relative z-10 w-full">
+          {/* Hero Section - Ultra Creative with Floating Elements */}
           {/* Enhanced Animated Background */}
           <div className="absolute inset-0">
             <div className="hero-orb absolute top-1/4 left-1/4 w-32 h-32 bg-gradient-to-r from-orange-500/10 to-cyan-500/10 rounded-full blur-3xl animate-pulse" />
@@ -599,7 +602,7 @@ export default function UserDashboard() {
             <div className="hero-orb absolute top-3/4 left-1/3 w-40 h-40 bg-gradient-to-r from-pink-500/8 to-rose-500/8 rounded-full blur-3xl animate-pulse" style={{animationDelay: '6s'}} />
             </div>
 
-          <div className="mx-auto w-full max-w-[110rem] px-4 py-14 relative z-10">
+          <div className="mx-auto w-full max-w-[110rem] px-4 py-14 pt-24 relative z-10">
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-center">
               
               {/* Left Side - Floating Conversations Widget */}
@@ -1019,8 +1022,11 @@ export default function UserDashboard() {
               </div>
             </div>
           </div>
+        </div>
         </section>
 
+      {/* Content wrapper for sections below hero */}
+      <div className="relative z-10">
         {/* AI-Powered Dashboard Section */}
         {onboardingData && (
           <section className="mx-auto max-w-7xl px-4 py-8">

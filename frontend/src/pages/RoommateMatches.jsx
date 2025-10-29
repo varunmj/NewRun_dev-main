@@ -459,7 +459,7 @@ function HeroIntro({ firstName = "", onSkip }) {
   const line2 = `Here are the roommates who match your lifestyle best.`;
 
   return (
-    <section className="nr-hero-bg nr-hero-starry relative flex min-h-[60vh] items-center overflow-hidden">
+    <div className="w-full pt-24">
       {/* Animated background elements */}
       <div className="absolute inset-0">
         <div className="hero-orb absolute top-1/4 left-1/4 w-32 h-32 bg-gradient-to-r from-orange-500/10 to-cyan-500/10 rounded-full blur-3xl" />
@@ -556,7 +556,7 @@ function HeroIntro({ firstName = "", onSkip }) {
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -747,10 +747,20 @@ export default function RoommateMatches() {
 
   return (
     <div className="nr-dots-page min-h-screen text-white">
-      <Navbar />
+      {/* Hero Section - starts from top */}
+      <section className="nr-hero-bg nr-hero-starry relative min-h-screen pt-0">
+        {/* Navbar overlay on top of hero */}
+        <div className="absolute top-0 left-0 right-0 z-20 pt-4">
+          <Navbar />
+        </div>
+        
+        <div className="relative z-10">
+          {/* Hero with dotted grid + progress; user or CTA will trigger scroll */}
+          <HeroIntro firstName={firstName} onSkip={handleHeroSkip} />
+        </div>
+      </section>
 
-      {/* Hero with dotted grid + progress; user or CTA will trigger scroll */}
-      <HeroIntro firstName={firstName} onSkip={handleHeroSkip} />
+      <div className="relative z-10">
 
       {/* Subtle transition to blend hero with main content */}
       <div className="hero-to-main-transition pointer-events-none" />
@@ -837,6 +847,7 @@ Looking forward to hearing from you! 😊`;
         hasPrev={drawerIndex > 0}
         hasNext={drawerIndex >= 0 && drawerIndex < visibleMatches.length - 1}
       />
+      </div>
     </div>
   );
 }

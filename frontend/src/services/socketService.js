@@ -20,7 +20,9 @@ class SocketService {
       import.meta.env.VITE_API_URL?.replace(/\/$/, '') ||
       (window.location.hostname.endsWith('newrun.club') ? 'https://api.newrun.club' : 'http://localhost:8000');
 
-    console.log('🔌 Connecting to Socket.io:', socketUrl);
+    if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_SOCKET) {
+      console.log('🔌 Connecting to Socket.io:', socketUrl);
+    }
 
     this.socket = io(socketUrl, {
       transports: ['websocket'],
@@ -39,7 +41,9 @@ class SocketService {
     if (!this.socket) return;
 
     this.socket.on('connect', () => {
-      console.log('✅ Socket.io connected:', this.socket.id);
+      if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_SOCKET) {
+        console.log('✅ Socket.io connected:', this.socket.id);
+      }
       this.isConnected = true;
       this.reconnectAttempts = 0;
       
@@ -141,7 +145,9 @@ class SocketService {
       return;
     }
     
-    console.log('📤 Emitting event:', event, data);
+    if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_SOCKET) {
+      console.log('📤 Emitting event:', event, data);
+    }
     this.socket.emit(event, data);
   }
 
