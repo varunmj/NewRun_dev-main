@@ -50,6 +50,7 @@ const User = require('./models/user.model');
 const Property = require('./models/property.model');
 const PropertyFavorite = require('./models/propertyFavorite.model');
 const MarketplaceItem = require('./models/marketplaceItem.model');
+const Favorite = require('./models/favorite.model');
 const Message = require('./models/message.model');
 const Conversation = require('./models/conversation.model');
 const ContactAccessRequest = require('./models/contactAccessRequest.model');
@@ -3984,9 +3985,55 @@ app.post('/marketplace/item/:id/view', async (req, res) => {
   }
 });
 
-app.post('/marketplace/favorites/:id', (req, res) => {
-  // TODO: implement real per-user favorites (e.g., User.favoriteItemIds)
-  res.json({ favored: true });
+// Get user's favorite marketplace items
+app.get('/marketplace/favorites', authenticateToken, async (req, res) => {
+  try {
+    const userId = getAuthUserId(req);
+    
+    if (!userId) {
+      return res.status(401).json({ error: true, message: 'Unauthorized' });
+    }
+    
+    const favs = await Favorite.find({ userId }).populate('itemId').sort({ createdAt: -1 }).lean();
+    const favoriteItems = favs.map((f) => f.itemId).filter(Boolean);
+    res.json({ items: favoriteItems });
+  } catch (err) {
+    console.error('GET /marketplace/favorites error:', err);
+    res.status(500).json({ error: true, message: 'Internal Server Error' });
+  }
+});
+
+app.post('/marketplace/favorites/:id', authenticateToken, async (req, res) => {
+  try {
+    const userId = getAuthUserId(req);
+    const itemId = req.params.id;
+    
+    if (!userId) {
+      return res.status(401).json({ error: true, message: 'Unauthorized' });
+    }
+    
+    if (!itemId) {
+      return res.status(400).json({ error: true, message: 'Item ID is required' });
+    }
+    
+    // Check if favorite already exists
+    const existing = await Favorite.findOne({ userId, itemId });
+    
+    if (existing) {
+      // Remove favorite
+      await existing.deleteOne();
+      await MarketplaceItem.updateOne({ _id: itemId }, { $inc: { favorites: -1 } });
+      return res.json({ success: true, favored: false });
+    } else {
+      // Add favorite
+      await Favorite.create({ userId, itemId });
+      await MarketplaceItem.updateOne({ _id: itemId }, { $inc: { favorites: 1 } });
+      return res.json({ success: true, favored: true });
+    }
+  } catch (err) {
+    console.error('POST /marketplace/favorites/:id error:', err);
+    res.status(500).json({ error: true, message: 'Internal Server Error' });
+  }
 });
   // Update an existing marketplace item
   app.put("/marketplace/item/:id", authenticateToken, async (req, res) => {

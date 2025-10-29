@@ -343,11 +343,21 @@ export default function AllProperties() {
         <div className="hero-orb absolute bottom-1/4 right-1/4 w-48 h-48 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-full blur-3xl" />
         <div className="hero-orb absolute top-1/2 right-1/3 w-24 h-24 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 rounded-full blur-2xl" />
       </div>
-      
-      <Navbar />
-      
-      <PropertyHero onListProperty={handleOpenPropertyDrawer} />
-      <PropertyFeatureSplit />
+
+      {/* Hero Section - starts from top */}
+      <section className="nr-hero-bg nr-hero-starry relative flex min-h-screen items-center overflow-hidden pt-0">
+        {/* Navbar overlay on top of hero */}
+        <div className="absolute top-0 left-0 right-0 z-20 pt-4">
+          <Navbar />
+        </div>
+        
+        <div className="relative z-10 w-full">
+          <PropertyHero onListProperty={handleOpenPropertyDrawer} />
+        </div>
+      </section>
+
+      <div className="relative z-10">
+        <PropertyFeatureSplit />
 
       {/* Compact intro section (replaces large stats cards) */}
       <section className="mx-auto max-w-7xl px-4 py-4">
@@ -800,13 +810,13 @@ export default function AllProperties() {
         </div>
       </main>
 
-
       {/* Property Drawer */}
       <PropertyDrawer
         isOpen={isPropertyDrawerOpen}
         onClose={handleClosePropertyDrawer}
         onPropertyCreated={handlePropertyCreated}
       />
+      </div>
     </div>
   );
 }

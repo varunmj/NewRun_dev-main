@@ -1150,9 +1150,14 @@ const Transportation = () => {
         <div className="hero-orb absolute bottom-1/4 right-1/4 w-48 h-48 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 rounded-full blur-3xl" />
         <div className="hero-orb absolute top-1/2 right-1/3 w-24 h-24 bg-gradient-to-r from-orange-500/10 to-yellow-500/10 rounded-full blur-2xl" />
       </div>
-      
-      <Navbar />
 
+      {/* Navbar - fixed at top */}
+      <div className="fixed top-0 left-0 right-0 z-20 pt-4">
+        <Navbar />
+      </div>
+
+      {/* Hero Section - starts from top */}
+      <section className="nr-hero-bg nr-hero-starry relative flex min-h-screen items-center overflow-hidden pt-0">
       {/* Notifications Panel */}
       {notifications.length > 0 && (
         <motion.div
@@ -1242,8 +1247,7 @@ const Transportation = () => {
         </motion.div>
       )}
 
-      {/* Hero Section - Compact and Focused */}
-      <section className="nr-hero-bg nr-hero-starry relative flex min-h-[40vh] items-center overflow-hidden">
+        <div className="relative z-10 w-full">
         {/* Enhanced animated background elements */}
         <div className="absolute inset-0">
           <div className="hero-orb absolute top-1/4 left-1/4 w-32 h-32 bg-gradient-to-r from-green-500/10 to-cyan-500/10 rounded-full blur-3xl" />
@@ -1252,7 +1256,7 @@ const Transportation = () => {
           <div className="hero-orb absolute top-3/4 left-1/3 w-40 h-40 bg-gradient-to-r from-amber-500/8 to-orange-500/8 rounded-full blur-3xl" />
         </div>
 
-        <div className="mx-auto w-full max-w-[110rem] px-4 py-14 relative z-10">
+          <div className="mx-auto w-full max-w-[110rem] px-4 py-14 pt-24 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-20 items-start relative">
             {/* Portrait Ride Share Section - Left */}
             <div className="lg:col-span-1 order-1">
@@ -1607,6 +1611,7 @@ const Transportation = () => {
             </div>
 
           </div>
+        </div>
         </div>
       </section>
 

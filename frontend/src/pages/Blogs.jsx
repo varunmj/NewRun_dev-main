@@ -254,11 +254,15 @@ export default function Blogs() {
 
   return (
     <div className="nr-dots-page min-h-screen text-white">
-      <Navbar userInfo={userInfo} />
-
-      {/* ---------- HERO with dotted background ---------- */}
-      <div className="nr-hero-bg">
-        <section className="mx-auto max-w-7xl px-4 pt-14 pb-10">
+      {/* Hero Section - starts from top */}
+      <section className="nr-hero-bg relative min-h-screen pt-0">
+        {/* Navbar overlay on top of hero */}
+        <div className="absolute top-0 left-0 right-0 z-20 pt-4">
+          <Navbar userInfo={userInfo} />
+        </div>
+        
+        <div className="relative z-10 pt-24">
+          <div className="mx-auto max-w-7xl px-4 pb-10">
           {/* small pills */}
           <div className="mb-5 flex items-center justify-center gap-2 text-[11px]">
             <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/70">
@@ -323,9 +327,11 @@ export default function Blogs() {
               <span key={t} className="nr-chip text-sm">{t}</span>
             ))}
           </div>
-        </section>
-      </div>
+          </div>
+        </div>
+      </section>
 
+      <div className="relative z-10">
       {/* ---------- Filter bar ---------- */}
       <section id="filters" className="mx-auto max-w-7xl px-4 pt-8">
         <Panel className="overflow-hidden">
@@ -425,7 +431,8 @@ export default function Blogs() {
         </Panel>
       </section>
 
-      <Footer />
+        <Footer />
+      </div>
     </div>
   );
 }

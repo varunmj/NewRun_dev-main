@@ -81,7 +81,7 @@ export default function PropertyCard({ property, viewMode = 'grid', favored = fa
           window.location.href = `/login?redirect=${encodeURIComponent(detailsPath)}`;
         }
       }}
-      className={`group block overflow-hidden rounded-xl shadow-sm relative bg-gradient-to-br from-[#171717] to-blue-600 from-[85%] cursor-pointer transition-all duration-300 ring-1 ring-transparent hover:ring-blue-500/40 hover:shadow-[0_0_24px_rgba(59,130,246,0.25)] ${
+      className={`group block overflow-hidden rounded-xl shadow-sm relative bg-gradient-to-br from-[#171717] to-blue-600 from-[85%] cursor-pointer transition-all duration-300 ring-1 ring-transparent hover:ring-blue-500/40 hover:shadow-[0_0_24px_rgba(59,130,246,0.25)] h-full flex flex-col ${
         viewMode === 'grid' 
           ? 'border border-white/10 hover:from-[#1c1c1c] hover:border-white/20' 
           : 'border-[1px] border-[#424242] hover:bg-[#1c1c1c]'
@@ -89,7 +89,7 @@ export default function PropertyCard({ property, viewMode = 'grid', favored = fa
     >
       {viewMode === 'grid' ? (
         // Grid View Layout
-        <div className="flex flex-col gap-2 sm:gap-6">
+        <div className="flex flex-col gap-2 sm:gap-6 h-full">
           {/* Image Section */}
           <div className="relative aspect-[16/9] overflow-hidden rounded-t-xl">
             {!loaded && (
@@ -118,10 +118,10 @@ export default function PropertyCard({ property, viewMode = 'grid', favored = fa
           </div>
 
           {/* Content Section */}
-          <div className="p-6 relative">
+          <div className="p-6 relative flex-1 flex flex-col">
             {/* Diffuse seam between image and content (stronger and smoother) */}
             <div className="pointer-events-none absolute -top-6 left-0 right-0 h-12 bg-gradient-to-b from-black/80 via-black/40 to-transparent z-0"></div>
-            <div className="relative z-10 flex flex-col gap-4">
+            <div className="relative z-10 flex flex-col gap-4 flex-1">
               <div className="flex-1 space-y-2">
                 {/* Title and Action Buttons */}
                 <div className="flex justify-between items-start">

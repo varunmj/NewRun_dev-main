@@ -136,15 +136,7 @@ export default function HeroPromo({ onListItem }) {
 
 
   return (
-    <section className="nr-hero-bg nr-hero-starry relative flex min-h-[70vh] items-center overflow-hidden">
-      {/* Enhanced animated background elements */}
-      <div className="absolute inset-0">
-        <div className="hero-orb absolute top-1/4 left-1/4 w-32 h-32 bg-gradient-to-r from-orange-500/10 to-cyan-500/10 rounded-full blur-3xl" />
-        <div className="hero-orb absolute bottom-1/4 right-1/4 w-48 h-48 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-full blur-3xl" />
-        <div className="hero-orb absolute top-1/2 right-1/3 w-24 h-24 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 rounded-full blur-2xl" />
-        <div className="hero-orb absolute top-3/4 left-1/3 w-40 h-40 bg-gradient-to-r from-amber-500/8 to-orange-500/8 rounded-full blur-3xl" />
-      </div>
-
+    <div className="w-full pt-24">
       <div className="mx-auto w-full max-w-[110rem] px-4 py-14 relative z-10">
         {/* Simple, clean badges */}
         <div className={`text-center transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
@@ -307,6 +299,6 @@ export default function HeroPromo({ onListItem }) {
         </div>
 
       </div>
-    </section>
+    </div>
   );
 }

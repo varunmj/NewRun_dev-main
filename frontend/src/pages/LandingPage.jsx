@@ -13,6 +13,7 @@ import NewRunServices from "../components/Process/NewRunServices";
 import UniversityFinder from "../components/UniversityFinder";
 
 
+
 import meshHero from "../assets/Graphics/mesh-hero.png";
 import heroVideo from "../assets/Videos/hero/campus-arrival.mp4";
 import imgRoommates from "../assets/Images/landing/roommates-study.jpg";
@@ -65,13 +66,30 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="body-obsidian min-h-screen">
-      <Navbar />
-
-      {/* HERO */}
-      <section ref={heroRef} className="relative min-h-[92vh] w-full overflow-hidden" style={{ willChange: prefersReducedMotion ? 'auto' : 'transform' }}>
+    <div 
+      className="body-obsidian min-h-screen relative"
+      style={{
+        backgroundImage: 'url("/assets/gradient-BZl8jpii.png")',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center top',
+        backgroundRepeat: 'no-repeat',
+      }}
+      >
+      {/* HERO - starts from absolute top */}
+      <section 
+        ref={heroRef} 
+        className="relative min-h-screen w-full overflow-hidden pt-0" 
+        style={{ 
+          willChange: prefersReducedMotion ? 'auto' : 'transform',
+        }}
+      >
+        {/* Navbar overlay on top of hero */}
+        <div className="relative z-20">
+          <Navbar />
+        </div>
+        
         {/* Texture + globe */}
-        <img src={meshHero} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-25" />
+        {/* <img src={meshHero} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-0" /> */}
         <div ref={heroInViewRef} className="absolute inset-0 -z-0 opacity-[0.26]" aria-hidden="true">
           {!prefersReducedMotion && heroInView && (
             <Suspense fallback={null}>
@@ -84,7 +102,7 @@ export default function LandingPage() {
 
         <motion.div
           style={{ y: heroY, opacity: heroOpacity }}
-          className="relative z-10 mx-auto flex min-h-[92vh] max-w-7xl flex-col items-center justify-center px-6 text-center"
+          className="relative z-10 mx-auto flex min-h-screen max-w-7xl flex-col items-center justify-center px-6 text-center pt-24"
         >
           <motion.h1
             variants={fadeUp}
@@ -155,6 +173,8 @@ export default function LandingPage() {
         <div className="pointer-events-none absolute -bottom-1 left-0 h-24 w-full bg-gradient-to-b from-transparent to-[#0B0B0C]/70" />
       </section>
 
+      {/* Content wrapper for all sections below hero */}
+      <div className="relative z-10">
       {/* HOW IT WORKS */}
       {/* <section className="relative z-10 mx-auto max-w-7xl px-6 py-24">
         <motion.h2
@@ -192,6 +212,7 @@ export default function LandingPage() {
       {/* <AnimatedFeatureGrid /> */}
       <NewRunServices />
 
+      
       {/* FEATURES */}
       <section id="features" className="w-full">
         {[
@@ -291,7 +312,8 @@ export default function LandingPage() {
         </motion.div>
       </section>
 
-      <Footer />
+        <Footer />
+      </div>
     </div>
   );
 }
