@@ -39,7 +39,7 @@ const NewRunDrawer = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9998]"
             onClick={onClose}
           />
 
@@ -53,7 +53,7 @@ const NewRunDrawer = ({
               damping: 30, 
               stiffness: 300 
             }}
-            className={`fixed right-0 top-0 h-full ${width} ${maxWidth} bg-[#0f1115] border-l border-white/10 shadow-2xl z-50 flex flex-col ${className}`}
+            className={`fixed right-0 top-0 h-full ${width} ${maxWidth} bg-[#0f1115] border-l border-white/10 shadow-2xl z-[9999] flex flex-col ${className}`}
           >
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-white/10 bg-gradient-to-r from-white/5 to-transparent">

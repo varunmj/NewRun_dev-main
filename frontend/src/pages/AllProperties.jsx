@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axiosInstance from "../utils/axiosInstance";
 import Navbar from "../components/Navbar/Navbar";
+import { useAuth } from "../context/AuthContext.jsx";
 import PropertyCard from "../components/Cards/PropertyCard";
 import PropertyHero from "../components/Sections/PropertyHero";
 import PropertyFeatureSplit from "../components/Sections/PropertyFeatureSplit";
@@ -113,6 +114,7 @@ function Field({ label, ...props }) {
 /* =============================== Page =================================== */
 export default function AllProperties() {
   const nav = useNavigate();
+  const { isAuthenticated } = useAuth();
 
   // filters
   const [q, setQ] = useState("");
@@ -144,6 +146,9 @@ export default function AllProperties() {
   const [amenitiesDropdownOpen, setAmenitiesDropdownOpen] = useState(false);
   const [distanceDropdownOpen, setDistanceDropdownOpen] = useState(false);
   const [priceDropdownOpen, setPriceDropdownOpen] = useState(false);
+  
+  // view mode state
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
 
   // derived
   const filters = useMemo(() => {
@@ -210,6 +215,11 @@ export default function AllProperties() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
+  // Load favorites on component mount
+  useEffect(() => {
+    loadFavorites();
+  }, []);
+
   // Reset pagination when sort/filter changes
   useEffect(() => { 
     setCursor(null); 
@@ -260,7 +270,21 @@ export default function AllProperties() {
         else next.delete(property._id);
         return next;
       });
-    } catch {}
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      // Optionally show a toast notification to the user
+    }
+  };
+
+  // Load user's favorite properties
+  const loadFavorites = async () => {
+    try {
+      const response = await axiosInstance.get('/properties/favorites');
+      const favoriteIds = new Set(response.data.properties.map(p => p._id));
+      setFavIds(favoriteIds);
+    } catch (error) {
+      console.error('Error loading favorites:', error);
+    }
   };
 
   const handleOpenPropertyDrawer = () => {
@@ -325,234 +349,261 @@ export default function AllProperties() {
       <PropertyHero onListProperty={handleOpenPropertyDrawer} />
       <PropertyFeatureSplit />
 
-      {/* Stats Section */}
-      <section className="mx-auto max-w-7xl px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="text-center p-6 rounded-2xl border border-white/10 bg-[#0f1115]/50 backdrop-blur-sm">
-            <div className="text-3xl font-bold text-blue-400 mb-2">{properties.length}+</div>
-            <div className="text-sm text-white/70">Active Properties</div>
+      {/* Compact intro section (replaces large stats cards) */}
+      <section className="mx-auto max-w-7xl px-4 py-4">
+        <div className="p-0 relative">
+          {!isAuthenticated && (
+            <div className="mb-1">
+              <button
+                type="button"
+                className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm h-9 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md shadow-blue-500/50 hover:shadow-lg hover:shadow-blue-500/60 transition-all duration-200"
+              >
+                [NEW] Student Portal
+              </button>
+            </div>
+          )}
+          {/* Right blue promo box (desktop) */}
+          {!isAuthenticated && (
+          <div className="hidden md:block space-y-4 md:absolute md:right-0 md:top-0">
+            <div className="bg-gradient-to-r from-blue-600/90 to-indigo-700/90 p-4 rounded-lg shadow-md border border-indigo-400/20 max-w-xs">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="bg-yellow-300/20 p-1.5 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-lock h-4 w-4 text-yellow-300"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                  </div>
+                  <span className="text-sm font-semibold text-white">Premium Properties</span>
+                </div>
+                <p className="text-xs text-white/90 mb-3">
+                  Login to view verified listings, instant tour slots, ID‑verified hosts, exclusive move‑in perks, and chat with our AI Property Manager for instant answers.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => nav('/login?redirect=/properties')}
+                  className="whitespace-nowrap text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*=size-])]:size-4 shrink-0 outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] h-8 rounded-md px-3 w-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center gap-1.5"
+                >
+                  <span>Login / Sign Up</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-external-link h-3.5 w-3.5"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>
+                </button>
+            </div>
           </div>
-          <div className="text-center p-6 rounded-2xl border border-white/10 bg-[#0f1115]/50 backdrop-blur-sm">
-            <div className="text-3xl font-bold text-purple-400 mb-2">24/7</div>
-            <div className="text-sm text-white/70">Available</div>
+          )}
+          {/* Mobile blue banner */}
+          {!isAuthenticated && (
+          <div className="md:hidden flex items-center justify-between w-full bg-gradient-to-r from-blue-600/90 to-indigo-700/90 p-3 rounded-lg shadow-md border border-indigo-400/20 mb-4">
+            <div className="flex items-center gap-2">
+              <div className="bg-yellow-300/20 p-1.5 rounded-full">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-lock h-4 w-4 text-yellow-300"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a 5 5 0 0 1 10 0v4"></path></svg>
+              </div>
+              <span className="text-sm font-medium text-white">Premium Properties</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => nav('/login?redirect=/properties')}
+              className="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-md bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition-all"
+            >
+              Login to view
+            </button>
           </div>
-          <div className="text-center p-6 rounded-2xl border border-white/10 bg-[#0f1115]/50 backdrop-blur-sm">
-            <div className="text-3xl font-bold text-teal-400 mb-2">100%</div>
-            <div className="text-sm text-white/70">Student Verified</div>
+          )}
+
+          <h1 className="text-4xl md:text-5xl mt-1">Student Housing</h1>
+          <h2 className="text-lg md:text-xl font-light text-white/80 max-w-md mt-1">
+            Discover verified listings near your campus. Displays 20+ properties per search; transparent pricing and no listing fees.
+          </h2>
           </div>
-          <div className="text-center p-6 rounded-2xl border border-white/10 bg-[#0f1115]/50 backdrop-blur-sm">
-            <div className="text-3xl font-bold text-green-400 mb-2">$0</div>
-            <div className="text-sm text-white/70">Listing Fees</div>
+      </section>
+
+      {/* Global search bar like reference */}
+      <section className="mx-auto max-w-7xl px-4 pb-2">
+        <div className="relative">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 md:h-6 md:w-6 text-white/50"
+          >
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.3-4.3"></path>
+          </svg>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search properties..."
+            className="w-full rounded-lg border border-white/20 bg-[#121416]/70 px-4 py-3 pl-12 text-base text-white outline-none placeholder:text-white/40 focus:border-blue-400 focus:bg-[#121416]/90 transition-all"
+          />
           </div>
+      </section>
+
+      {/* Category quick links (chips) */}
+      <section className="mx-auto max-w-7xl px-4 pb-4">
+        <div className="mb-2 text-sm text-white/70">NewRun's Best in Category Lists:</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setPropertyType('Studio')}
+            className="inline-flex items-center justify-center rounded-md border w-fit whitespace-nowrap text-xs px-3 py-1 border-white/30 text-white hover:bg-white/10 transition-colors"
+          >
+            Studios
+          </button>
+          <button
+            onClick={() => setPropertyType('1 Bedroom')}
+            className="inline-flex items-center justify-center rounded-md border w-fit whitespace-nowrap text-xs px-3 py-1 border-white/30 text-white hover:bg-white/10 transition-colors"
+          >
+            1 Bedroom
+          </button>
+          <button
+            onClick={() => setAmenities('Pet Friendly')}
+            className="inline-flex items-center justify-center rounded-md border w-fit whitespace-nowrap text-xs px-3 py-1 border-white/30 text-white hover:bg-white/10 transition-colors"
+          >
+            Pet Friendly
+          </button>
+          <button
+            onClick={() => setDistance('1')}
+            className="inline-flex items-center justify-center rounded-md border w-fit whitespace-nowrap text-xs px-3 py-1 border-white/30 text-white hover:bg-white/10 transition-colors"
+          >
+            ≤ 1 mile
+          </button>
         </div>
       </section>
 
       <main className="mx-auto max-w-7xl px-4 pb-16 pt-4 overflow-visible">
+        {/* useultra-style Layout with Sidebar */}
+        <div className="flex">
+          {/* Left Sidebar - Filters */}
+          <div className="w-80 flex-shrink-0 pr-6">
+            <div className="sticky top-4">
+              {/* Filters Header */}
+              <div className="flex items-center gap-2 mb-6">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+                <h3 className="text-lg font-semibold text-white">Filters</h3>
+              </div>
 
-        {/* Enhanced Filter Toolbar */}
-        <section id="filter-section" className="relative z-50 mb-8 rounded-2xl border border-white/10 bg-[#0f1115]/95 backdrop-blur-xl shadow-2xl overflow-visible">
-          <div className="p-4">
-            {/* Active Filters Row */}
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-white/70">Active filters:</span>
-              {propertyType && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-3 py-1 text-xs text-blue-300">
-                  {propertyType}
-                  <button onClick={() => setPropertyType("")} className="ml-1 hover:text-blue-100">×</button>
-                </span>
-              )}
-              {amenities && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/20 px-3 py-1 text-xs text-purple-300">
-                  {amenities}
-                  <button onClick={() => setAmenities("")} className="ml-1 hover:text-purple-100">×</button>
-                </span>
-              )}
-              {distance && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-teal-500/20 px-3 py-1 text-xs text-teal-300">
-                  {DISTANCE_OPTIONS.find(d => d.key === distance)?.label}
-                  <button onClick={() => setDistance("")} className="ml-1 hover:text-teal-100">×</button>
-                </span>
-              )}
-              {(minPrice || maxPrice) && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-green-500/20 px-3 py-1 text-xs text-green-300">
-                  ${minPrice || 0}–${maxPrice || "∞"}
-                  <button onClick={() => { setMinPrice(""); setMaxPrice(""); }} className="ml-1 hover:text-green-100">×</button>
-                </span>
-              )}
-              {campus && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/20 px-3 py-1 text-xs text-orange-300">
-                  {campus}
-                  <button onClick={() => setCampus("")} className="ml-1 hover:text-orange-100">×</button>
-                </span>
-              )}
-              {(propertyType || amenities || distance || minPrice || maxPrice || campus) && (
-                <button
-                  onClick={() => {
-                    setPropertyType(""); setAmenities(""); setDistance("");
-                    setMinPrice(""); setMaxPrice(""); setCampus("");
-                  }}
-                  className="text-xs text-white/50 hover:text-white/80"
+              {/* Search removed (global search bar above handles this) */}
+
+              {/* Property Type */}
+              <div className="mb-6">
+                <label className="text-sm font-medium text-white/80 mb-2 block">Type</label>
+                <select
+                  value={propertyType}
+                  onChange={(e) => setPropertyType(e.target.value)}
+                  className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-400 focus:bg-white/10 transition-all duration-200"
                 >
-                  Clear all
-                </button>
-              )}
-            </div>
-
-            {/* Filter Controls */}
-            <div className="flex flex-wrap items-center gap-3 p-6 rounded-2xl border border-white/10 bg-[#0f1115]/50 backdrop-blur-xl overflow-visible">
-              {/* Search */}
-            <div className="relative flex-1 min-w-[220px]">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40">⌕</span>
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search properties…"
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.06] pl-8 pr-3 py-2.5 text-sm outline-none placeholder:text-white/40 focus:border-sky-500 focus:ring-1 focus:ring-sky-500/20"
-              />
-            </div>
-
-            {/* Campus */}
-            <input
-              value={campus}
-              onChange={(e) => setCampus(e.target.value)}
-              placeholder="Campus"
-                className="min-w-[150px] rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm outline-none placeholder:text-white/40 focus:border-sky-500 focus:ring-1 focus:ring-sky-500/20"
-              />
-
-              {/* Sort Dropdown */}
-              <ChipDropdown
-                label="Sort"
-                activeLabel={SORT_OPTIONS.find(s => s.key === sortBy)?.label || "Newest First"}
-                isOpen={sortDropdownOpen}
-                onToggle={setSortDropdownOpen}
-              >
-                <div className="grid gap-1 p-1">
-                  {SORT_OPTIONS.map((option) => (
-                    <Chip
-                      key={option.key}
-                      active={sortBy === option.key}
-                      onClick={() => {
-                        setSortBy(option.key);
-                        setSortDropdownOpen(false);
-                      }}
-                    >
-                      {option.label}
-                    </Chip>
+                  <option value="" className="bg-[#0f1115]">All Types</option>
+                  {PROPERTY_TYPES.map((type) => (
+                    <option key={type} value={type} className="bg-[#0f1115]">{type}</option>
                   ))}
-                </div>
-              </ChipDropdown>
-              
-
-            {/* Property Type dropdown chip */}
-              <ChipDropdown 
-                label="Type" 
-                activeLabel={propertyType || "All Types"}
-                isOpen={typeDropdownOpen}
-                onToggle={setTypeDropdownOpen}
-              >
-              <div className="grid grid-cols-2 gap-2 p-1">
-                <Chip active={!propertyType} onClick={() => { setPropertyType(""); setTypeDropdownOpen(false); }}>All</Chip>
-                {PROPERTY_TYPES.map((t) => (
-                  <Chip key={t} active={propertyType === t} onClick={() => { setPropertyType(t); setTypeDropdownOpen(false); }}>{t}</Chip>
-                ))}
+                </select>
               </div>
-            </ChipDropdown>
 
-            {/* Amenities dropdown chip */}
-              <ChipDropdown 
-                label="Amenities" 
-                activeLabel={amenities || "Any Amenities"}
-                isOpen={amenitiesDropdownOpen}
-                onToggle={setAmenitiesDropdownOpen}
-              >
-              <div className="grid grid-cols-2 gap-2 p-1">
-                <Chip active={!amenities} onClick={() => { setAmenities(""); setAmenitiesDropdownOpen(false); }}>Any</Chip>
-                {AMENITIES.map((a) => (
-                  <Chip key={a} active={amenities === a} onClick={() => { setAmenities(a); setAmenitiesDropdownOpen(false); }}>{a}</Chip>
-                ))}
+              {/* Amenities */}
+              <div className="mb-6">
+                <label className="text-sm font-medium text-white/80 mb-2 block">Amenities</label>
+                <select
+                  value={amenities}
+                  onChange={(e) => setAmenities(e.target.value)}
+                  className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-400 focus:bg-white/10 transition-all duration-200"
+                >
+                  <option value="" className="bg-[#0f1115]">Any Amenities</option>
+                  {AMENITIES.map((amenity) => (
+                    <option key={amenity} value={amenity} className="bg-[#0f1115]">{amenity}</option>
+                  ))}
+                </select>
               </div>
-            </ChipDropdown>
 
-            {/* Distance dropdown chip */}
-            <ChipDropdown
-              label="Distance"
-              activeLabel={DISTANCE_OPTIONS.find((d) => d.key === distance)?.label || "Any Distance"}
-              isOpen={distanceDropdownOpen}
-              onToggle={setDistanceDropdownOpen}
-            >
-              <div className="grid grid-cols-2 gap-2 p-1">
+              {/* Distance */}
+              <div className="mb-6">
+                <label className="text-sm font-medium text-white/80 mb-2 block">Distance</label>
+                <select
+                  value={distance}
+                  onChange={(e) => setDistance(e.target.value)}
+                  className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-400 focus:bg-white/10 transition-all duration-200"
+                >
                 {DISTANCE_OPTIONS.map((d) => (
-                  <Chip
-                    key={d.key || "any"}
-                    active={distance === d.key}
-                    onClick={() => { setDistance(d.key); setDistanceDropdownOpen(false); }}
-                  >
-                    {d.label}
-                  </Chip>
-                ))}
+                    <option key={d.key || "any"} value={d.key} className="bg-[#0f1115]">{d.label}</option>
+                  ))}
+                </select>
               </div>
-            </ChipDropdown>
 
-            {/* Price dropdown chip */}
-            <ChipDropdown
-                label="Price Range"
-              activeLabel={
-                  minPrice || maxPrice ? `$${minPrice || 0}–$${maxPrice || "∞"}` : "Any Price"
-              }
-              isOpen={priceDropdownOpen}
-              onToggle={setPriceDropdownOpen}
-            >
-              <div className="p-3">
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div>
-                    <label className="text-xs text-white/70 mb-1 block font-medium">Min Price</label>
+              {/* Price Range */}
+              <div className="mb-6">
+                <label className="text-sm font-medium text-white/80 mb-2 block">Price Range</label>
+                <div className="grid grid-cols-2 gap-2">
                     <input
                       type="number"
                       min="0"
                       value={minPrice}
                       onChange={(e) => setMinPrice(e.target.value)}
-                      placeholder="0"
-                      className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/40 focus:border-blue-400 focus:bg-white/10 transition-all duration-200"
+                    placeholder="Min"
+                    className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/40 focus:border-blue-400 focus:bg-white/10 transition-all duration-200"
                     />
-                  </div>
-                  <div>
-                    <label className="text-xs text-white/70 mb-1 block font-medium">Max Price</label>
                     <input
                       type="number"
                       min="0"
                       value={maxPrice}
                       onChange={(e) => setMaxPrice(e.target.value)}
-                      placeholder="2000"
-                      className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/40 focus:border-blue-400 focus:bg-white/10 transition-all duration-200"
+                    placeholder="Max"
+                    className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/40 focus:border-blue-400 focus:bg-white/10 transition-all duration-200"
                     />
                   </div>
                 </div>
-                <div className="flex items-center justify-between">
+
+              {/* Campus */}
+              <div className="mb-6">
+                <label className="text-sm font-medium text-white/80 mb-2 block">Campus</label>
+                <input
+                  value={campus}
+                  onChange={(e) => setCampus(e.target.value)}
+                  placeholder="Enter campus name"
+                  className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/40 focus:border-blue-400 focus:bg-white/10 transition-all duration-200"
+                />
+              </div>
+
+              {/* Sort */}
+              <div className="mb-6">
+                <label className="text-sm font-medium text-white/80 mb-2 block">Sort By</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-400 focus:bg-white/10 transition-all duration-200"
+                >
+                  {SORT_OPTIONS.map((option) => (
+                    <option key={option.key} value={option.key} className="bg-[#0f1115]">{option.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-3">
                   <button
-                    onClick={() => {
-                      setMinPrice("");
-                      setMaxPrice("");
-                      setPriceDropdownOpen(false);
-                    }}
-                    className="text-xs text-white/60 hover:text-white/80 transition-colors px-2 py-1 rounded hover:bg-white/5"
-                  >
-                    Clear
+                  onClick={() => load(false)}
+                  className="w-full rounded-lg bg-blue-500 hover:bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors"
+                >
+                  Apply Filters
                   </button>
                   <button
                     onClick={() => {
+                    setQ(""); setPropertyType(""); setAmenities(""); setDistance("");
+                    setMinPrice(""); setMaxPrice(""); setCampus("");
                       load(false);
-                      setPriceDropdownOpen(false);
                     }}
-                    className="rounded-lg bg-blue-500 px-4 py-2 text-xs font-medium text-white hover:bg-blue-600 transition-colors"
+                  className="w-full rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition-colors"
                   >
-                    Apply
+                  Clear Filters
             </button>
-                </div>
               </div>
-            </ChipDropdown>
             </div>
           </div>
-        </section>
+
+              {/* Separating Line */}
+              <div className="w-px bg-gradient-to-b from-transparent via-blue-400/60 to-transparent"></div>
+
+          {/* Right Content Area */}
+          <div className="flex-1 min-w-0 pl-6">
 
         {/* Results Section */}
         <div className="relative z-10 mb-6 flex items-center justify-between p-6 rounded-2xl border border-white/10 bg-[#0f1115]/30 backdrop-blur-xl">
@@ -570,8 +621,26 @@ export default function AllProperties() {
           {!loading && properties.length > 0 && (
             <div className="flex items-center gap-2 text-sm text-white/60">
               <span>View:</span>
-              <button className="rounded-lg bg-white/10 px-3 py-1 text-white text-sm">Grid</button>
-              <button className="rounded-lg px-3 py-1 hover:bg-white/5 text-sm">List</button>
+              <button 
+                onClick={() => setViewMode('grid')}
+                className={`rounded-lg px-3 py-1 text-sm transition-all duration-200 ${
+                  viewMode === 'grid' 
+                    ? 'bg-white/10 text-white' 
+                    : 'hover:bg-white/5 text-white/60'
+                }`}
+              >
+                Grid
+              </button>
+              <button 
+                onClick={() => setViewMode('list')}
+                className={`rounded-lg px-3 py-1 text-sm transition-all duration-200 ${
+                  viewMode === 'list' 
+                    ? 'bg-white/10 text-white' 
+                    : 'hover:bg-white/5 text-white/60'
+                }`}
+              >
+                List
+              </button>
             </div>
           )}
         </div>
@@ -579,7 +648,8 @@ export default function AllProperties() {
         {/* Grid */}
         <div id="properties-grid">
         {loading ? (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="group overflow-hidden rounded-3xl border border-white/10 bg-[#0f1115] shadow-[0_12px_32px_-12px_rgba(0,0,0,.60)]">
                 {/* Image skeleton */}
@@ -607,6 +677,39 @@ export default function AllProperties() {
               </div>
             ))}
           </div>
+          ) : (
+            <div className="space-y-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="overflow-hidden rounded-xl border-[1px] border-[#424242] bg-gradient-to-br from-[#171717] to-blue-600 from-[85%]">
+                  <div className="flex flex-col md:flex-row">
+                    {/* Image skeleton */}
+                    <div className="w-full md:w-80 h-48 md:h-auto animate-pulse bg-white/[0.06]"></div>
+                    
+                    {/* Content skeleton */}
+                    <div className="flex-1 p-6">
+                      <div className="flex flex-col h-full">
+                        <div className="mb-3">
+                          <div className="h-6 w-3/4 animate-pulse rounded bg-white/[0.06] mb-2"></div>
+                          <div className="h-4 w-full animate-pulse rounded bg-white/[0.04]"></div>
+                        </div>
+                        
+                        <div className="flex items-center gap-4 mb-4">
+                          <div className="h-4 w-16 animate-pulse rounded bg-white/[0.04]"></div>
+                          <div className="h-4 w-16 animate-pulse rounded bg-white/[0.04]"></div>
+                          <div className="h-4 w-20 animate-pulse rounded bg-white/[0.04]"></div>
+                        </div>
+                        
+                        <div className="mt-auto flex items-center justify-between">
+                          <div className="h-6 w-20 animate-pulse rounded bg-white/[0.06]"></div>
+                          <div className="h-6 w-16 animate-pulse rounded-full bg-white/[0.08]"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
         ) : properties.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-[#0f1115]/50 p-12 text-center backdrop-blur-sm">
             <div className="mx-auto mb-6 w-24 h-24 rounded-full bg-gradient-to-r from-orange-500/20 to-amber-500/20 flex items-center justify-center">
@@ -638,17 +741,32 @@ export default function AllProperties() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {properties.map((property) => (
                 <PropertyCard
                   key={property._id}
                   property={property}
+                    viewMode="grid"
                   favored={favIds.has(property._id)}
                   onToggleFav={toggleFav}
                   onClick={() => nav(`/property/${property._id}`)}
                 />
               ))}
             </div>
+            ) : (
+              <div className="space-y-4">
+                {properties.map((property) => (
+                  <PropertyCard
+                    key={property._id}
+                    property={property}
+                    viewMode="list"
+                    favored={favIds.has(property._id)}
+                    onToggleFav={toggleFav}
+                  />
+                ))}
+              </div>
+            )}
 
             {cursor && (
               <div className="mt-12 grid place-items-center">
@@ -677,159 +795,11 @@ export default function AllProperties() {
             )}
           </>
           )}
-        </div>
-      </main>
-
-      {/* Animated Filter Button */}
-      {showFilterButton && (
-        <div className="fixed left-4 top-1/2 -translate-y-1/2 z-50">
-          <button
-            onClick={handleFilterButtonClick}
-            data-filter-button
-            className={`group relative w-14 h-14 rounded-full bg-black/80 border shadow-2xl hover:bg-black/90 transition-all duration-500 ease-out flex items-center justify-center backdrop-blur-sm ${
-              isFilterCollapsed 
-                ? 'border-orange-500/50 shadow-orange-500/20' 
-                : 'border-white/20 hover:border-white/30'
-            } hover:scale-110`}
-          >
-            {/* Settings/Sliders Icon - More relevant for filters */}
-            <svg 
-              className={`w-6 h-6 text-white transition-all duration-500 ease-out ${isFilterCollapsed ? 'rotate-0 scale-100' : 'rotate-0 scale-110'}`} 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
-            </svg>
-            
-            {/* Pulse Animation */}
-            <div className="absolute inset-0 rounded-full bg-white/20 animate-ping"></div>
-            
-            {/* Glow Effect */}
-            <div className="absolute inset-0 rounded-full bg-white/10 opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300"></div>
-          </button>
-        </div>
-      )}
-
-      {/* Collapsed Filter Panel */}
-      {showFilterButton && (
-        <div className="fixed left-20 top-1/2 -translate-y-1/2 z-40">
-          <div 
-            data-filter-panel 
-            className={`w-80 rounded-2xl border border-white/20 bg-white/5 backdrop-blur-xl shadow-2xl p-6 transition-all duration-500 ease-out transform ${
-              isFilterCollapsed 
-                ? 'translate-x-0 opacity-100 scale-100' 
-                : '-translate-x-full opacity-0 scale-95 pointer-events-none'
-            }`}
-          >
-            <div className={`flex items-center justify-between mb-4 transition-all duration-700 ease-out ${
-              isFilterCollapsed ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'
-            }`}>
-              <h3 className="text-lg font-semibold text-white">Quick Filters</h3>
-              <button
-                onClick={scrollToFilters}
-                className="text-xs text-orange-400 hover:text-orange-300 transition-colors"
-              >
-                View All Filters
-              </button>
-            </div>
-            
-            {/* Quick Filter Options */}
-            <div className={`space-y-3 transition-all duration-700 ease-out delay-100 ${
-              isFilterCollapsed ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
-            }`}>
-              {/* Search */}
-              <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40">⌕</span>
-                <input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="Search properties…"
-                  className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm pl-8 pr-3 py-3 text-sm text-white outline-none placeholder:text-white/40 focus:border-white/40 focus:bg-white/10 transition-all duration-200"
-                />
-              </div>
-              
-              {/* Property Type */}
-              <div>
-                <label className="text-xs text-white/70 mb-2 block font-medium">Property Type</label>
-                <select
-                  value={propertyType}
-                  onChange={(e) => setPropertyType(e.target.value)}
-                  className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-sm text-white outline-none focus:border-white/40 focus:bg-white/10 transition-all duration-200"
-                >
-                  <option value="">All Types</option>
-                  {PROPERTY_TYPES.map((type) => (
-                    <option key={type} value={type} className="bg-[#0f1115]">{type}</option>
-                  ))}
-                </select>
-              </div>
-              
-              {/* Price Range */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-white/70 mb-2 block font-medium">Min Price</label>
-                  <input
-                    type="number"
-                    value={minPrice}
-                    onChange={(e) => setMinPrice(e.target.value)}
-                    placeholder="0"
-                    className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-sm text-white outline-none placeholder:text-white/40 focus:border-white/40 focus:bg-white/10 transition-all duration-200"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-white/70 mb-2 block font-medium">Max Price</label>
-                  <input
-                    type="number"
-                    value={maxPrice}
-                    onChange={(e) => setMaxPrice(e.target.value)}
-                    placeholder="2000"
-                    className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-sm text-white outline-none placeholder:text-white/40 focus:border-white/40 focus:bg-white/10 transition-all duration-200"
-                  />
-                </div>
-              </div>
-              
-              {/* Sort Options */}
-              <div>
-                <label className="text-xs text-white/70 mb-2 block font-medium">Sort By</label>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="w-full rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-sm text-white outline-none focus:border-white/40 focus:bg-white/10 transition-all duration-200"
-                >
-                  {SORT_OPTIONS.map((option) => (
-                    <option key={option.key} value={option.key} className="bg-[#0f1115]">{option.label}</option>
-                  ))}
-                </select>
-              </div>
-              
-              {/* Quick Actions */}
-              <div className={`flex gap-3 pt-4 transition-all duration-700 ease-out delay-200 ${
-                isFilterCollapsed ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
-              }`}>
-                <button
-                  onClick={() => {
-                    setQ(""); setPropertyType(""); setAmenities(""); setDistance("");
-                    setMinPrice(""); setMaxPrice(""); setCampus("");
-                    load(false); // Apply the cleared filters
-                  }}
-                  className="flex-1 rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm px-4 py-3 text-sm text-white/80 hover:bg-white/10 hover:border-white/30 transition-all duration-200"
-                >
-                  Clear All
-                </button>
-                <button
-                  onClick={() => {
-                    load(false); // Apply the current filters
-                    setIsFilterCollapsed(false); // Close the panel
-                  }}
-                  className="flex-1 rounded-xl border border-orange-500/50 bg-gradient-to-r from-orange-500/20 to-orange-600/20 backdrop-blur-sm px-4 py-3 text-sm text-orange-300 hover:from-orange-500/30 hover:to-orange-600/30 hover:border-orange-400/70 transition-all duration-200"
-                >
-                  Apply
-                </button>
-              </div>
             </div>
           </div>
         </div>
-      )}
+      </main>
+
 
       {/* Property Drawer */}
       <PropertyDrawer

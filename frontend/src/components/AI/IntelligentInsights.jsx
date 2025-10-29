@@ -27,8 +27,18 @@ import axiosInstance from '../../utils/axiosInstance';
  * Intelligent Insights Component
  * AI-powered helper that provides personalized insights, recommendations, and predictions
  * Uses OpenAI GPT-4o intelligence to analyze user data and generate actionable advice
+ * 
+ * Now also supports Property Manager AI mode for specific property assistance
  */
-const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
+const IntelligentInsights = ({ 
+  userInfo, 
+  dashboardData, 
+  onboardingData, 
+  // Property Manager AI props
+  propertyManagerMode = false,
+  property = null,
+  onPropertyManagerClose = null
+}) => {
   const navigate = useNavigate();
   const { 
     loading, 
@@ -67,6 +77,12 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
   const [composeText, setComposeText] = useState('');
   const [composerExpanded, setComposerExpanded] = useState(false);
 
+  // Property Manager AI state
+  const [propertyManagerMessages, setPropertyManagerMessages] = useState([]);
+  const [propertyManagerInput, setPropertyManagerInput] = useState('');
+  const [propertyManagerLoading, setPropertyManagerLoading] = useState(false);
+  const [propertyManagerAction, setPropertyManagerAction] = useState('chat');
+
   // Helper functions for polished UI
   const scoreColor = (p) =>
     p === 'high' ? 'bg-red-500/20 text-red-300' :
@@ -91,6 +107,148 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
   };
 
   const pct = (num, den) => (den ? Math.round((num/den)*100) : 0);
+
+  // Property Manager AI functions
+  const sendPropertyManagerMessage = async (message = propertyManagerInput) => {
+    if (!message.trim() || propertyManagerLoading || !property) return;
+
+    // Batch state updates to prevent flicker
+    const userMessage = {
+      id: Date.now().toString(),
+      type: 'user',
+      content: message.trim(),
+      timestamp: new Date().toISOString()
+    };
+
+    // Clear typewriter state and update messages in one batch
+    setDisplayedText('');
+    setIsTyping(false);
+    setPropertyManagerMessages(prev => [...prev, userMessage]);
+    setPropertyManagerInput('');
+    setPropertyManagerLoading(true);
+
+    try {
+      const response = await axiosInstance.post('/api/ai/property-manager', {
+        propertyId: property._id,
+        message: message.trim(),
+        action: propertyManagerAction,
+        isFollowUp: propertyManagerMessages.length > 0 // Indicate this is a follow-up message (after welcome)
+      });
+
+      const aiMessage = {
+        id: (Date.now() + 1).toString(),
+        type: 'ai',
+        content: response.data.response || 'I apologize, but I\'m having trouble processing your request right now.',
+        timestamp: new Date().toISOString(),
+        success: response.data.success
+      };
+
+      // Batch AI message addition and typewriter start
+      setPropertyManagerMessages(prev => [...prev, aiMessage]);
+      
+      // Start typewriter effect after a brief delay to ensure smooth transition
+      setTimeout(() => {
+        startTypewriterEffect(response.data.response || 'I apologize, but I\'m having trouble processing your request right now.');
+      }, 50);
+
+    } catch (error) {
+      console.error('Property Manager AI Error:', error);
+      
+      const errorMessage = {
+        id: (Date.now() + 1).toString(),
+        type: 'ai',
+        content: "I'm having trouble accessing property information right now. Please try again or contact the host directly.",
+        timestamp: new Date().toISOString(),
+        error: true
+      };
+
+      setPropertyManagerMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setPropertyManagerLoading(false);
+    }
+  };
+
+  const generatePropertyInsights = async () => {
+    setPropertyManagerLoading(true);
+    
+    // Clear typewriter state immediately
+    setDisplayedText('');
+    setIsTyping(false);
+    
+    try {
+      const response = await axiosInstance.post('/api/ai/property-manager', {
+        propertyId: property._id,
+        action: 'insights'
+      });
+
+      if (response.data.success) {
+        const insightMessage = {
+          id: Date.now().toString(),
+          type: 'ai',
+          content: response.data.insights,
+          timestamp: new Date().toISOString(),
+          isInsight: true
+        };
+        setPropertyManagerMessages(prev => [...prev, insightMessage]);
+        setPropertyManagerAction('insights');
+        
+        // Start typewriter effect after a brief delay
+        setTimeout(() => {
+          startTypewriterEffect(response.data.insights);
+        }, 50);
+      }
+    } catch (error) {
+      console.error('Insights Error:', error);
+    } finally {
+      setPropertyManagerLoading(false);
+    }
+  };
+
+  // Initialize Property Manager AI with personalized welcome message and typewriter effect
+  useEffect(() => {
+    if (propertyManagerMode && property && propertyManagerMessages.length === 0 && userInfo) {
+      const welcomeMessage = {
+        id: 'welcome',
+        type: 'ai',
+        content: `Hey ${userInfo.firstName || 'there'}!\n\nI'm your NewRun Property Manager AI for "${property.title}". This property looks perfect for your needs - it's conveniently located, offers great value, and has everything you're looking for.\n\nI can help you with questions about this property, provide detailed insights, or schedule a tour. What would you like to know?`,
+        timestamp: new Date().toISOString()
+      };
+      setPropertyManagerMessages([welcomeMessage]);
+      
+      // Start typewriter effect for welcome message
+      startTypewriterEffect(welcomeMessage.content);
+    }
+  }, [propertyManagerMode, property, propertyManagerMessages.length, userInfo]);
+
+  // Typewriter effect for Property Manager AI messages
+  const startTypewriterEffect = (text) => {
+    // Clear previous state immediately to prevent flicker
+    setDisplayedText('');
+    setIsTyping(true);
+    
+    // Use requestAnimationFrame for smoother animation
+    let index = 0;
+    const animate = () => {
+      if (index < text.length) {
+        setDisplayedText(text.substring(0, index + 1));
+        index++;
+        requestAnimationFrame(() => {
+          setTimeout(animate, 25); // Slightly faster for better UX
+        });
+      } else {
+        setIsTyping(false);
+      }
+    };
+    
+    // Start animation on next frame to prevent flicker
+    requestAnimationFrame(animate);
+  };
+
+  // Clear typewriter state when starting new message
+  const clearTypewriterState = () => {
+    setDisplayedText('');
+    setIsTyping(false);
+  };
 
   // Memoized initialization check
   const shouldInitialize = useMemo(() => {
@@ -625,6 +783,170 @@ const IntelligentInsights = ({ userInfo, dashboardData, onboardingData }) => {
           </div>
         </div>
       </div>
+    );
+  }
+
+  // Property Manager AI Mode - Use exact same design as AI Insight Details
+  if (propertyManagerMode) {
+    return (
+      <NewRunDrawer
+        isOpen={true}
+        onClose={onPropertyManagerClose}
+        title="AI Insight Details"
+        width="w-[500px]"
+        maxWidth="max-w-xl"
+      >
+        <div className="flex flex-col h-full">
+          {/* ChatGPT-style AI Message */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-6">
+              {propertyManagerLoading ? (
+                <div className="flex items-center gap-3 py-8">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-400"></div>
+                  <span className="text-white/70">AI is analyzing this property...</span>
+                </div>
+              ) : propertyManagerMessages.length > 0 ? (
+                <div className="prose prose-invert max-w-none">
+                  {/* Continuous Chat Flow - NewRun AI Insights Style */}
+                  <div className="space-y-6">
+                    {propertyManagerMessages.map((message, index) => {
+                      const isLastMessage = index === propertyManagerMessages.length - 1;
+                      const isCurrentlyTyping = isLastMessage && isTyping && message.type === 'ai';
+                      
+                      return (
+                        <div key={message.id}>
+                          {message.type === 'user' ? (
+                            // User Message - Dark grey bubble with tail (like ChatGPT)
+                            <div className="text-right mb-4">
+                              <div className="relative inline-block bg-[#1b1d24] text-white px-4 py-3 rounded-lg max-w-[80%] text-base shadow-sm text-left">
+                                {message.content}
+                                {/* Small tail pointing to the right */}
+                                <div className="absolute -bottom-1 right-2 w-0 h-0 border-l-[6px] border-l-[#1b1d24] border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent"></div>
+                              </div>
+                            </div>
+                          ) : (
+                            // AI Message - Same style as NewRun AI insights (no bubble)
+                            <div 
+                              className="whitespace-pre-wrap text-white/90 leading-relaxed text-base"
+                              dangerouslySetInnerHTML={{ 
+                                __html: (isCurrentlyTyping ? displayedText : message.content)
+                                  // Fix all markdown patterns
+                                  .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                                  .replace(/\*Title:\s*"(.*?)"\*/g, '<strong>$1</strong>')
+                                  .replace(/\*Priority:\*\*/g, '')
+                                  .replace(/\*Message:\*\*/g, '')
+                                  .replace(/\*Action:\*\*/g, '')
+                                  // Clean up any remaining markdown artifacts
+                                  .replace(/\*([^*]+)\*/g, '<strong>$1</strong>')
+                                  .replace(/\*\*/g, '')
+                                  .replace(/\*/g, '') + 
+                                (isCurrentlyTyping ? '<span class="inline-block w-2 h-5 bg-white/90 ml-1 animate-pulse"></span>' : '')
+                              }}
+                            ></div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    
+                    {/* Property Information Card - Only show after welcome message is complete */}
+                    {property && !isTyping && propertyManagerMessages.length === 1 && (
+                      <div className="mt-6">
+                        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                          Property Details
+                        </h3>
+                        {/* Use the same CompactPropertyCard as in main AI insights */}
+                        <CompactPropertyCard
+                          property={property}
+                          index={0}
+                          isRecommended={true}
+                          onClick={(property) => {
+                            console.log('Property clicked:', property);
+                            // Handle property click - could open contact form, booking flow, etc.
+                          }}
+                          showContactActions={false}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="py-8">
+                  <p className="text-white/70">Loading Property Manager AI...</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Cursor-style Input Box with smooth expand animation - EXACT SAME AS MAIN AI */}
+          <div className="border-t border-white/10 bg-[#0f1115]">
+            <motion.div
+              layout
+              transition={{ type: 'spring', stiffness: 220, damping: 28 }}
+              className={composerExpanded ? 'p-5' : 'p-4'}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-300 text-sm font-medium hover:bg-blue-500/30 transition-colors">
+                  <span className="text-xs">∞</span>
+                  <span>Agent AI</span>
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 text-white/70 text-sm font-medium hover:bg-white/20 transition-colors">
+                  <span>Auto</span>
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+              
+              <motion.div
+                layout
+                animate={composerExpanded ? { scale: 1.01, boxShadow: '0 24px 60px rgba(0,0,0,0.35)' } : { scale: 1, boxShadow: '0 0 0 rgba(0,0,0,0)' }}
+                transition={{ type: 'spring', stiffness: 220, damping: 28 }}
+                className="relative"
+              >
+                <textarea
+                  placeholder="Ask AI about this property or get more personalized advice..."
+                  className="w-full p-4 pr-12 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/50 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
+                  rows={composerExpanded ? 6 : 3}
+                  style={{ minHeight: composerExpanded ? '140px' : '80px' }}
+                  value={propertyManagerInput}
+                  onChange={(e) => {
+                    setPropertyManagerInput(e.target.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (!composerExpanded) setComposerExpanded(true);
+                      sendPropertyManagerMessage();
+                    }
+                  }}
+                />
+                <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                  <button className="p-2 rounded-lg hover:bg-white/10 transition-colors">
+                    <svg className="w-4 h-4 text-white/50" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  <button 
+                    className="p-2 rounded-lg bg-blue-500 hover:bg-blue-600 transition-colors" 
+                    onClick={() => {
+                      setComposerExpanded(true);
+                      sendPropertyManagerMessage();
+                    }}
+                    disabled={propertyManagerLoading || !propertyManagerInput.trim()}
+                  >
+                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                    </svg>
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          </div>
+        </div>
+      </NewRunDrawer>
     );
   }
 

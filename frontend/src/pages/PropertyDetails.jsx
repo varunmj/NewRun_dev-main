@@ -4,10 +4,11 @@ import axiosInstance from "../utils/axiosInstance";
 import Navbar from "../components/Navbar/Navbar";
 import { FaWhatsapp, FaEnvelope } from "react-icons/fa";
 import { GoogleMap, Marker, DirectionsRenderer, InfoWindow } from "@react-google-maps/api";
-import { MdChevronLeft, MdChevronRight, MdClose } from "react-icons/md";
+import { MdChevronLeft, MdChevronRight, MdClose, MdChat } from "react-icons/md";
 import { AiFillHeart, AiOutlineHeart } from "react-icons/ai";
 import default_property_image from "../assets/Images/default-property-image.jpg";
 import { useGoogleMapsLoader } from "../utils/googleMapsLoader";
+import IntelligentInsights from "../components/AI/IntelligentInsights";
 
 /* ---------------------------- map & helpers ---------------------------- */
 const MAP_STYLE = { width: "100%", height: "420px" };
@@ -88,6 +89,10 @@ export default function PropertyDetailPage() {
   const [reqState, setReqState] = useState("idle");
   const [reqError, setReqError] = useState("");
 
+  // Property Manager AI state
+  const [showPropertyManagerAI, setShowPropertyManagerAI] = useState(false);
+  const [userInfo, setUserInfo] = useState(null);
+
   /* ---------------------------- custom markers --------------------------- */
   const PROPERTY_ICON = useMemo(() => {
     if (!isLoaded) return undefined;
@@ -139,7 +144,10 @@ export default function PropertyDetailPage() {
   const fetchUser = async () => {
     try {
       const r = await axiosInstance.get("/get-user");
-      if (r?.data?.user?._id) setUserId(r.data.userId);
+      if (r?.data?.user?._id) {
+        setUserId(r.data.userId);
+        setUserInfo(r.data.user);
+      }
     } catch {}
   };
 
@@ -425,27 +433,35 @@ export default function PropertyDetailPage() {
               {/* Main Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                 <button
-                  className="group flex-1 sm:flex-none px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-semibold transition-all duration-300 flex items-center justify-center gap-2 hover:scale-105 hover:shadow-lg hover:shadow-violet-500/25"
+                  className="group px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-all duration-200 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] text-sm"
+                  onClick={() => setShowPropertyManagerAI(true)}
+                >
+                  <MdChat className="text-sm" />
+                  Ask Property Manager AI
+                </button>
+
+                <button
+                  className="group px-4 py-2.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white font-medium transition-all duration-200 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] text-sm"
                   onClick={startDM}
                 >
-                  <FaEnvelope className="text-sm group-hover:scale-110 transition-transform duration-300" />
+                  <FaEnvelope className="text-sm" />
                   Message Host
                 </button>
 
                 {!isOwner && !canShowContact && (
                   isPending ? (
-                    <div className="flex-1 sm:flex-none px-6 py-3 rounded-xl border border-yellow-400/30 bg-yellow-400/10 text-yellow-200 text-center font-medium animate-pulse">
+                    <div className="px-4 py-2.5 rounded-lg border border-yellow-400/30 bg-yellow-400/10 text-yellow-200 text-center font-medium animate-pulse text-sm">
                       ⏳ Contact Request Pending
                     </div>
                   ) : (
                     <button
-                      className="group flex-1 sm:flex-none px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-all duration-300 flex items-center justify-center gap-2 hover:scale-105 hover:shadow-lg hover:shadow-blue-500/25"
+                      className="group px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-all duration-200 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] text-sm"
                       onClick={() => {
                         setReqState("idle");
                         setRequestOpen(true);
                       }}
                     >
-                      <FaEnvelope className="text-sm group-hover:scale-110 transition-transform duration-300" />
+                      <FaEnvelope className="text-sm" />
                       Request Contact Info
                     </button>
                   )
@@ -746,6 +762,14 @@ export default function PropertyDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Property Manager AI */}
+      <IntelligentInsights
+        propertyManagerMode={showPropertyManagerAI}
+        property={property}
+        userInfo={userInfo}
+        onPropertyManagerClose={() => setShowPropertyManagerAI(false)}
+      />
     </div>
   );
 }

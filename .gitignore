@@ -3,3 +3,4 @@ backend/.env
 backend/.DS_Store
 frontend/src/pages/services/SimCards.jsx
 frontend/src/pages/services/SimCards.jsx
+frontend/.env
