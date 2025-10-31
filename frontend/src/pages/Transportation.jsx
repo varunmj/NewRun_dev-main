@@ -1151,10 +1151,8 @@ const Transportation = () => {
         <div className="hero-orb absolute top-1/2 right-1/3 w-24 h-24 bg-gradient-to-r from-orange-500/10 to-yellow-500/10 rounded-full blur-2xl" />
       </div>
 
-      {/* Navbar - fixed at top */}
-      <div className="fixed top-0 left-0 right-0 z-20 pt-4">
-        <Navbar />
-      </div>
+      {/* Navbar */}
+      <Navbar />
 
       {/* Hero Section - starts from top */}
       <section className="nr-hero-bg nr-hero-starry relative flex min-h-screen items-center overflow-hidden pt-0">

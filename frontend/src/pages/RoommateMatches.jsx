@@ -749,10 +749,8 @@ export default function RoommateMatches() {
     <div className="nr-dots-page min-h-screen text-white">
       {/* Hero Section - starts from top */}
       <section className="nr-hero-bg nr-hero-starry relative min-h-screen pt-0">
-        {/* Navbar overlay on top of hero */}
-        <div className="absolute top-0 left-0 right-0 z-20 pt-4">
-          <Navbar />
-        </div>
+        {/* Navbar */}
+        <Navbar />
         
         <div className="relative z-10">
           {/* Hero with dotted grid + progress; user or CTA will trigger scroll */}
