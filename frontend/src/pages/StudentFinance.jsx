@@ -288,12 +288,10 @@ const StudentFinance = () => {
         <div className="hero-orb absolute top-1/2 right-1/3 w-24 h-24 bg-gradient-to-r from-orange-500/10 to-yellow-500/10 rounded-full blur-2xl" />
       </div>
 
+      {/* Navbar at top (outside hero) */}
+      <Navbar />
       {/* Hero Section - starts from top */}
       <section className="nr-hero-bg nr-hero-starry relative flex min-h-screen items-center overflow-hidden pt-0">
-        {/* Navbar overlay on top of hero */}
-        <div className="absolute top-0 left-0 right-0 z-20 pt-4">
-          <Navbar />
-        </div>
         {/* Enhanced animated background elements */}
         <div className="absolute inset-0">
           <div className="hero-orb absolute top-1/4 left-1/4 w-32 h-32 bg-gradient-to-r from-green-500/10 to-cyan-500/10 rounded-full blur-3xl" />

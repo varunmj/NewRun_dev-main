@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axiosInstance from "../utils/axiosInstance";
 import Navbar from "../components/Navbar/Navbar";
@@ -6,16 +6,44 @@ import { FaWhatsapp } from "react-icons/fa";
 import { GoogleMap, Marker, DirectionsRenderer, InfoWindow } from "@react-google-maps/api";
 import { MdChevronLeft, MdChevronRight, MdClose } from "react-icons/md";
 import { AiFillHeart, AiOutlineHeart } from "react-icons/ai";
-import { Phone,Brain, MessageSquare, Mail, MapPin, Route, BedDouble, Bath, Copy, Share2, CheckCircle2, XCircle, Bus, Clock, UserRound, Shield, LockKeyhole, Info, ContactRound } from "lucide-react";
+import { Phone,Brain, MessageSquare, Mail, MapPin, Route, BedDouble, Bath, Copy, Share2, CheckCircle2, XCircle, Bus, Clock, UserRound, Shield, LockKeyhole, Info, ContactRound, Maximize2, X } from "lucide-react";
 import default_property_image from "../assets/Images/default-property-image.jpg";
 import { useGoogleMapsLoader } from "../utils/googleMapsLoader";
 import IntelligentInsights from "../components/AI/IntelligentInsights";
 import { BorderBeam } from "../components/ui/border-beam";
 
 /* ---------------------------- map & helpers ---------------------------- */
-const MAP_STYLE = { width: "100%", height: "420px" };
+const MAP_STYLE = { width: "100%", height: "420px", background: "transparent" };
 const INITIAL_CENTER = { lat: 41.8781, lng: -87.6298 };
-const MAP_OPTIONS = { streetViewControl: false, mapTypeControl: false, fullscreenControl: false };
+
+// Uber-like dark style (tweaked for good contrast with our UI)
+const DARK_MAP_STYLE = [
+  { elementType: "geometry", stylers: [{ color: "#0a0a0a" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#6b7280" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#0a0a0a" }] },
+  { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#151515" }] },
+  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#0b0b0b" }] },
+  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#6e737b" }] },
+  { featureType: "poi", elementType: "labels.icon", stylers: [{ saturation: -100 }, { lightness: -30 }, { gamma: 0.7 }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#0d0d0d" }] },
+  { featureType: "transit", elementType: "labels.text.fill", stylers: [{ color: "#6e737b" }] },
+  { featureType: "transit", elementType: "labels.icon", stylers: [{ saturation: -100 }, { lightness: -30 }, { gamma: 0.7 }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#0e0e0e" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#141414" }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#757b83" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#181818" }] },
+  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#202020" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#0b0b0b" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#a3a3a3" }] }
+];
+
+const MAP_OPTIONS = { 
+  streetViewControl: false, 
+  mapTypeControl: false, 
+  fullscreenControl: false,
+  backgroundColor: "rgba(0,0,0,0)",
+  styles: DARK_MAP_STYLE
+};
 
 const money = (n) => (typeof n === "number" ? n.toLocaleString("en-US") : String(n || ""));
 const addressLine = (addr) => {
@@ -78,6 +106,70 @@ export default function PropertyDetailPage() {
   // distance & transit info
   const [distanceInfo, setDistanceInfo] = useState(null);
   const [transitDirections, setTransitDirections] = useState(null);
+  // map modal
+  const [mapExpanded, setMapExpanded] = useState(false);
+  const pageMapRef = useRef(null);
+  const modalMapRef = useRef(null);
+  const [modalReady, setModalReady] = useState(false);
+
+  const fitToContent = useCallback((mapInstance) => {
+    try {
+      const map = mapInstance;
+      if (!map) return;
+      if (directions?.routes?.[0]?.bounds) {
+        map.fitBounds(directions.routes[0].bounds);
+        return;
+      }
+      if (originLL && campusLL) {
+        const b = new window.google.maps.LatLngBounds();
+        b.extend(originLL);
+        b.extend(campusLL);
+        map.fitBounds(b, 64);
+      }
+    } catch {}
+  }, [directions, originLL, campusLL]);
+  
+  // transit timing selection
+  const [departWhen, setDepartWhen] = useState('weekday9'); // 'now' | 'weekday9'
+  
+  const getNextWeekday9am = () => {
+    const now = new Date();
+    const result = new Date(now);
+    result.setSeconds(0, 0);
+    // start with today 9:00 AM
+    result.setHours(9, 0, 0, 0);
+    const day = now.getDay(); // 0 Sun .. 6 Sat
+    const isWeekend = day === 0 || day === 6;
+    const isAfterNineToday = now >= result && day >= 1 && day <= 5;
+    if (isWeekend || isAfterNineToday) {
+      // move to next weekday
+      const next = new Date(now);
+      let add = 1;
+      if (day === 5) add = 3; // Fri -> Mon
+      if (day === 6) add = 2; // Sat -> Mon
+      if (day === 0) add = 1; // Sun -> Mon
+      next.setDate(now.getDate() + add);
+      next.setHours(9, 0, 0, 0);
+      return next;
+    }
+    // before 9 AM on a weekday => today 9 AM
+    return result;
+  };
+  
+  const selectedDepartureTime = useMemo(() => (
+    departWhen === 'now' ? new Date() : getNextWeekday9am()
+  ), [departWhen]);
+
+  // Refit when expanding modal
+  useEffect(() => {
+    if (mapExpanded) {
+      setModalReady(false);
+      setTimeout(() => {
+        fitToContent(modalMapRef.current);
+        setModalReady(true);
+      }, 100);
+    }
+  }, [mapExpanded, fitToContent]);
 
   // contact gating status (queried from server)
   const [contactStatus, setContactStatus] = useState({
@@ -369,52 +461,24 @@ export default function PropertyDetailPage() {
         // Geocode property address
         const o = propAddr ? await geocode(propAddr) : null;
         
-        // Geocode user's campus (handle Place ID vs address string)
+        // Geocode user's campus robustly
         let d = null;
+        // If a campus Place ID exists, trust it exclusively and resolve its geometry
         if (typeof campusQuery === 'object' && campusQuery.placeId) {
-          if (import.meta.env.DEV) {
-            console.log('🗺️ Geocoding campus using Place ID:', campusQuery.placeId);
-          }
-          // Use Places API for Place ID
           const service = new window.google.maps.places.PlacesService(document.createElement('div'));
           await new Promise((resolve) => {
-            service.getDetails({ placeId: campusQuery.placeId, fields: ['geometry', 'name', 'formatted_address'] }, (place, status) => {
+            service.getDetails({ placeId: campusQuery.placeId, fields: ['geometry'] }, (place, status) => {
               if (status === window.google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
                 d = { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() };
-                if (import.meta.env.DEV) {
-                  console.log('🗺️ Place ID resolved to:', {
-                    name: place.name,
-                    address: place.formatted_address,
-                    location: d
-                  });
-                }
-              } else {
-                if (import.meta.env.DEV) {
-                  console.warn('🗺️ Place ID lookup failed:', status);
-                }
               }
               resolve();
             });
           });
-          if (!d) {
-            if (import.meta.env.DEV) {
-              console.log('🗺️ Place ID lookup returned null, trying geocode fallback...');
-            }
-            d = await geocode(campusQuery.placeId).catch(() => null);
-          }
         } else {
-          if (import.meta.env.DEV) {
-            console.log('🗺️ Geocoding campus using address string:', campusQuery);
-          }
-          // Geocode the user's campus location string
-          d = await geocode(campusQuery).catch((err) => {
-            if (import.meta.env.DEV) {
-              console.error('🗺️ Error geocoding campus location:', err);
-            }
-            return null;
-          });
-          if (d && import.meta.env.DEV) {
-            console.log('🗺️ Address geocoded to location:', d);
+          // Fallback to text-based geocoding when no Place ID is present
+          const labelText = (typeof campusQuery === 'string' ? campusQuery : (userInfo?.campusLabel || userInfo?.campusDisplayName || ''));
+          if (labelText) {
+            d = await geocode(labelText).catch(() => null);
           }
         }
 
@@ -423,58 +487,84 @@ export default function PropertyDetailPage() {
 
         if (o && d) {
           const svc = new window.google.maps.DirectionsService();
+          const destParam = (typeof campusQuery === 'object' && campusQuery.placeId)
+            ? { placeId: campusQuery.placeId }
+            : d;
           
-          // Get driving directions
+          // Get driving directions (consider alternatives; pick fastest)
           svc.route(
-            { origin: o, destination: d, travelMode: window.google.maps.TravelMode.DRIVING },
+            { 
+              origin: o, 
+              destination: destParam, 
+              travelMode: window.google.maps.TravelMode.DRIVING,
+              provideRouteAlternatives: true
+            },
             (res, status) => {
-              if (status === "OK") {
-                setDirections(res);
-                // Extract distance and duration
-                const route = res.routes[0];
-                const leg = route.legs[0];
+              if (status === "OK" && res?.routes?.length) {
+                // Pick the route with minimum duration
+                const best = res.routes.reduce((min, r) => {
+                  const lv = r?.legs?.[0]?.duration?.value ?? Number.POSITIVE_INFINITY;
+                  return lv < (min?.legs?.[0]?.duration?.value ?? Number.POSITIVE_INFINITY) ? r : min;
+                }, res.routes[0]);
+                const leg = best.legs[0];
+                if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_MAPS) {
+                  console.log('🚗 Driving candidates:', res.routes.map(r => r.legs[0]?.duration?.text));
+                  console.log('🚗 Driving chosen:', leg.duration.text, leg.distance.text);
+                }
+                setDirections({ ...res, routes: [best] });
                 setDistanceInfo({
                   driving: {
                     distance: leg.distance.text,
-                    distanceValue: leg.distance.value, // meters
+                    distanceValue: leg.distance.value,
                     duration: leg.duration.text,
-                    durationValue: leg.duration.value, // seconds
+                    durationValue: leg.duration.value,
                   }
                 });
               }
             }
           );
 
-          // Get transit directions (bus/public transport)
+          // Get transit directions (consider alternatives; pick fastest)
           svc.route(
             { 
               origin: o, 
-              destination: d, 
+              destination: destParam, 
               travelMode: window.google.maps.TravelMode.TRANSIT,
               transitOptions: {
                 modes: [window.google.maps.TransitMode.BUS, window.google.maps.TransitMode.RAIL],
-                routingPreference: window.google.maps.TransitRoutePreference.LESS_WALKING
-              }
+                routingPreference: window.google.maps.TransitRoutePreference.LESS_WALKING,
+                departureTime: selectedDepartureTime
+              },
+              provideRouteAlternatives: true
             },
             (res, status) => {
-              if (status === "OK") {
-                setTransitDirections(res);
-                const route = res.routes[0];
-                const leg = route.legs[0];
+              if (status === "OK" && res?.routes?.length) {
+                // Pick the fastest transit route
+                const best = res.routes.reduce((min, r) => {
+                  const lv = r?.legs?.[0]?.duration?.value ?? Number.POSITIVE_INFINITY;
+                  return lv < (min?.legs?.[0]?.duration?.value ?? Number.POSITIVE_INFINITY) ? r : min;
+                }, res.routes[0]);
+                const leg = best.legs[0];
+                if (import.meta.env.DEV && import.meta.env.VITE_DEBUG_MAPS) {
+                  console.log('🚌 Transit candidates:', res.routes.map(r => r.legs[0]?.duration?.text));
+                  console.log('🚌 Transit chosen:', leg.duration.text, leg.distance.text);
+                }
+                setTransitDirections({ ...res, routes: [best] });
                 
                 // Extract transit line information from steps
                 const transitSteps = [];
                 leg.steps?.forEach(step => {
                   if (step.transit) {
-                    const line = step.transit.line;
-                    const transitInfo = {
-                      lineName: line?.short_name || line?.name || 'Bus',
-                      vehicleType: step.transit.line?.vehicle?.name || 'Bus',
+                    const line = step.transit.line || {};
+                    const vehicle = line.vehicle || {};
+                    const vehicleType = vehicle.type || vehicle.name || 'TRANSIT';
+                    transitSteps.push({
+                      lineName: line.short_name || line.name || vehicleType,
+                      vehicleType,
                       departureStop: step.transit.departure_stop?.name || '',
                       arrivalStop: step.transit.arrival_stop?.name || '',
                       numStops: step.transit.num_stops || 0
-                    };
-                    transitSteps.push(transitInfo);
+                    });
                   }
                 });
                 
@@ -506,7 +596,7 @@ export default function PropertyDetailPage() {
         console.error('Error calculating distance:', err);
       }
     })();
-  }, [isLoaded, property, userInfo]);
+  }, [isLoaded, property, userInfo, departWhen]);
 
   /* ------------------------------ actions -------------------------------- */
   const toggleLike = async () => {
@@ -641,13 +731,11 @@ export default function PropertyDetailPage() {
       {/* Subtle overlay to ensure content readability */}
       <div className="absolute inset-0 bg-[#0b0c0f]/60 pointer-events-none"></div>
       
-      {/* Navbar - fixed at top with high z-index */}
-      <div className="fixed top-0 left-0 right-0 z-[100] pt-4">
-        <Navbar />
-      </div>
+      {/* Navbar */}
+      <Navbar />
 
-      {/* Main content with padding to account for navbar */}
-      <div className="container mx-auto py-8 lg:py-10 pt-24 relative z-10">
+      {/* Main content */}
+      <div className="container mx-auto py-8 lg:py-10 relative z-10">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           {/* LEFT: gallery */}
           <div className="flex flex-col space-y-4">
@@ -855,7 +943,7 @@ export default function PropertyDetailPage() {
                   {(originLL && campusLL) && (
                     <a
                       className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs bg-blue-500/15 text-blue-200 hover:bg-blue-500/25 border border-blue-500/30 transition-colors flex-shrink-0"
-                      href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(`${originLL.lat},${originLL.lng}`)}&destination=${encodeURIComponent(`${campusLL.lat},${campusLL.lng}`)}`}
+                      href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(`${originLL.lat},${originLL.lng}`)}&${userInfo?.campusPlaceId ? `destination_place_id=${encodeURIComponent(userInfo.campusPlaceId)}` : `destination=${encodeURIComponent(`${campusLL.lat},${campusLL.lng}`)}`}`}
                       target="_blank"
                       rel="noreferrer"
                     >
@@ -872,41 +960,35 @@ export default function PropertyDetailPage() {
                 
                 {/* Transit/Bus Route Info */}
                 {distanceInfo?.transit && (
-                  <div className="flex-1 flex items-center justify-between gap-3 p-3 rounded-lg bg-black/40 backdrop-blur-sm border border-white/10">
-                    <Bus size={19} className="text-blue-700 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-semibold text-white/85">Bus/Transit Route</span>
-                        {distanceInfo.transit.numTransfers > 0 && (
-                          <span className="text-xs text-white/50">• {distanceInfo.transit.numTransfers} transfer{distanceInfo.transit.numTransfers > 1 ? 's' : ''}</span>
-                        )}
-                  </div>
-                      <div className="text-sm font-semibold text-white/90 mb-1">
-                        {distanceInfo.transit.duration} • {distanceInfo.transit.distance}
-                      </div>
-                      {distanceInfo.transit.transitLines?.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                          {distanceInfo.transit.transitLines.map((line, i) => (
-                            <div key={i} className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-white/5 border border-white/10">
-                              <span className="text-[10px] font-bold text-white/60 uppercase">{line.vehicleType}</span>
-                              <span className="text-xs font-semibold text-white/90">{line.lineName}</span>
-                              {i < distanceInfo.transit.transitLines.length - 1 && (
-                                <span className="text-xs text-white/40 mx-1">→</span>
-                              )}
-                            </div>
-                          ))}
+                  <div className="flex-1 grid grid-cols-[1fr_auto] items-center gap-3 p-3 rounded-lg bg-black/40 backdrop-blur-sm border border-white/10">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Bus size={19} className="text-blue-700 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-semibold text-white/85">Bus/Transit Route</span>
+                          {distanceInfo.transit.numTransfers > 0 && (
+                            <span className="text-xs text-white/50">• {distanceInfo.transit.numTransfers} transfer{distanceInfo.transit.numTransfers > 1 ? 's' : ''}</span>
+                          )}
                         </div>
-                      )}
+                        <div className="text-sm font-semibold text-white/90">
+                          {distanceInfo.transit.duration} • {distanceInfo.transit.distance}
+                        </div>
+                      </div>
                     </div>
+                    {/* removed inline bus chips for cleaner layout */}
                     {(originLL && campusLL) && (
                       <a
-                        className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium bg-white/10 text-white/90 hover:bg-white/15 border border-white/20 transition-colors flex-shrink-0"
+                        className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 transition-colors text-white/90 no-underline justify-self-end"
                         href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(`${originLL.lat},${originLL.lng}`)}&destination=${encodeURIComponent(`${campusLL.lat},${campusLL.lng}`)}&travelmode=transit`}
                         target="_blank"
                         rel="noreferrer"
+                        aria-label="Open full transit route in Google Maps"
                         title="View full transit route in Google Maps"
                       >
-                        View route
+                        <div className="flex flex-col items-center justify-center gap-1">
+                          <span className="text-[11px] sm:text-xs font-semibold text-white/70 uppercase tracking-wide">BUS</span>
+                          <span className="text-base sm:text-xl font-bold text-white/95">{distanceInfo.transit.transitLines?.[0]?.lineName || '—'}</span>
+                        </div>
                       </a>
                     )}
                   </div>
@@ -1064,13 +1146,17 @@ export default function PropertyDetailPage() {
               </div>
 
               {/* ====== MAP ====== */}
-              <div className="relative mt-8">
+              <div className="relative mt-8 edge-blend rounded-2xl overflow-hidden" style={{ boxShadow: '0 20px 25px -5px rgb(39, 37, 37)' }}>
                 {isLoaded ? (
                   <GoogleMap
                     mapContainerStyle={MAP_STYLE}
                     center={originLL || campusLL || INITIAL_CENTER}
                     zoom={originLL ? 14 : 12}
                     options={MAP_OPTIONS}
+                    onLoad={(map) => {
+                      pageMapRef.current = map;
+                      fitToContent(map);
+                    }}
                   >
                     {directions && (
                       <DirectionsRenderer
@@ -1097,20 +1183,15 @@ export default function PropertyDetailPage() {
                   <p className="text-white/70">Loading map…</p>
                 )}
 
-                {(originLL || campusLL) && (
-                  <div className="mt-3">
-                    <a
-                      className="inline-block rounded-md bg-[#2f64ff] px-3 py-2 text-white hover:bg-[#2958e3]"
-                      href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
-                        `${originLL?.lat},${originLL?.lng}`
-                      )}&destination=${encodeURIComponent(`${campusLL?.lat},${campusLL?.lng}`)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open in Google Maps
-                    </a>
-                  </div>
-                )}
+                {/* expand map button */}
+                <button
+                  type="button"
+                  onClick={() => setMapExpanded(true)}
+                  className="absolute top-3 right-3 z-10 rounded-lg bg-white/10 hover:bg-white/15 border border-white/20 p-2 text-white/90 shadow"
+                  title="Expand map"
+                >
+                  <Maximize2 size={18} />
+                </button>
               </div>
               {/* ====== /MAP ====== */}
           </div>
@@ -1118,6 +1199,50 @@ export default function PropertyDetailPage() {
       </div>
 
       {/* gallery modal */}
+      {mapExpanded && (
+        <div
+          className="fixed inset-0 z-[60] flex items-start justify-center bg-black/20 backdrop-blur-sm pt-24 sm:pt-28"
+          // className="relative mt-8 edge-blend rounded-2xl overflow-hidden" style={{ boxShadow: '0 20px 25px -5px rgb(39, 37, 37)' }}>
+          onClick={() => setMapExpanded(false)}
+        >
+          <div className="relative w-11/12 max-w-6xl h-[80vh] rounded-2xl overflow-hidden edge-blend border border-white/10 shadow-[0_30px_60px_-25px_rgba(0,0,0,0.7)]" onClick={(e) => e.stopPropagation()}>
+            <button className="absolute right-3 top-3 text-white/90 bg-white/10 hover:bg-white/15 border border-white/20 rounded-lg p-2 z-10" onClick={() => setMapExpanded(false)} title="Close">
+              <X size={22} />
+            </button>
+            {isLoaded ? (
+              <GoogleMap
+                mapContainerStyle={{ width: "100%", height: "100%" }}
+                center={originLL || campusLL || INITIAL_CENTER}
+                zoom={originLL ? 14 : 12}
+                options={MAP_OPTIONS}
+                onLoad={(map) => {
+                  modalMapRef.current = map;
+                  // small delay to ensure container laid out
+                  setTimeout(() => {
+                    fitToContent(map);
+                    setModalReady(true);
+                  }, 50);
+                }}
+              >
+                {modalReady && directions && (
+                  <DirectionsRenderer
+                    directions={directions}
+                    options={{ suppressMarkers: true, polylineOptions: { strokeColor: "#2f64ff", strokeWeight: 6 } }}
+                  />
+                )}
+                {modalReady && originLL && (
+                  <Marker position={originLL} icon={PROPERTY_ICON} />
+                )}
+                {modalReady && campusLL && <Marker position={campusLL} icon={CAMPUS_ICON} />}
+              </GoogleMap>
+            ) : (
+              <p className="text-white/70">Loading map…</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
           <button className="absolute right-5 top-5 text-white" onClick={() => setIsModalOpen(false)}>
