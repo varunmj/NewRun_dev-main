@@ -186,6 +186,8 @@ export default function PropertyDetailPage() {
   /** 'idle' | 'sent' | 'pending' | 'approved' | 'self' | 'error' */
   const [reqState, setReqState] = useState("idle");
   const [reqError, setReqError] = useState("");
+  const [requestFromAI, setRequestFromAI] = useState(false);
+  const aiMessengerRef = useRef(null);
 
   // Property Manager AI state
   const [showPropertyManagerAI, setShowPropertyManagerAI] = useState(false);
@@ -615,10 +617,12 @@ export default function PropertyDetailPage() {
 
   const startDM = async () => {
     try {
-      const r = await axiosInstance.post("/conversations/initiate", {
-        receiverId: property?.userId?._id || property?.userId,
-      });
-      if (r.data?.success) nav(`/messaging/${r.data.conversationId}`);
+      const receiverId = property?.userId?._id || property?.userId;
+      if (!receiverId) return nav('/messaging');
+      // Prefer query-param flow so the Messaging page can auto-open/create the conversation
+      const prefill = `Hi! I have a question about ${property?.title || 'this property'}.`;
+      const params = new URLSearchParams({ to: String(receiverId), ctx: 'property', message: encodeURIComponent(prefill) });
+      nav(`/messaging?${params.toString()}`);
     } catch {}
   };
 
@@ -631,24 +635,29 @@ export default function PropertyDetailPage() {
       const d = r?.data || {};
       if (d.self) {
         setReqState("self");
+        // No AI note for self
         return;
       }
       if (d.already) {
         if (d.approved) {
           setContactStatus((s) => ({ ...s, approved: true, pending: false }));
           setReqState("approved");
+          if (aiMessengerRef.current) aiMessengerRef.current.postSystemMessage("I see your contact request for this host is already approved. You should now be able to view contact details above.");
         } else if (d.pending) {
           setContactStatus((s) => ({ ...s, pending: true, approved: false }));
           setReqState("pending");
+          if (aiMessengerRef.current) aiMessengerRef.current.postSystemMessage("Looks like you've already requested contact info. I'll notify you here as soon as the host responds.");
         } else setReqState("sent");
         return;
       }
       if (d.pending || r.status === 201) {
         setContactStatus((s) => ({ ...s, pending: true, approved: false }));
         setReqState("sent");
+        if (aiMessengerRef.current) aiMessengerRef.current.postSystemMessage("Nice — I just sent your contact-info request to the host. I'll update you here when they respond.");
         return;
       }
       setReqState("sent");
+      if (aiMessengerRef.current) aiMessengerRef.current.postSystemMessage("Your contact-info request has been sent. I’ll let you know when the host responds.");
     } catch (e) {
       const code = e?.response?.status;
       if (code === 401) setReqError("Please sign in to request contact details.");
@@ -735,37 +744,72 @@ export default function PropertyDetailPage() {
       <Navbar />
 
       {/* Main content */}
-      <div className="container mx-auto py-8 lg:py-10 relative z-10">
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-8 lg:py-10 relative z-10">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           {/* LEFT: gallery */}
           <div className="flex flex-col space-y-4">
             {imgs.length ? (
               <>
-                <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-                  <img
-                    src={imgs[0]}
-                    alt="Main"
-                    className="h-auto w-full cursor-pointer rounded-lg"
-                    onClick={() => {
-                      setIdx(0);
-                      setIsModalOpen(true);
-                    }}
-                  />
-                </div>
-                {imgs.length > 1 && (
-                  <div className="grid grid-cols-2 gap-4">
-                    {imgs.slice(1).map((src, i) => (
-                      <div key={i} className="rounded-xl border border-white/10 bg-white/[0.04] p-2">
-                        <img
-                          src={src}
-                          alt={`Thumb ${i + 2}`}
-                          className="h-auto w-full cursor-pointer rounded-lg"
+                <div className="flex items-start gap-3">
+                  {/* Vertical thumbnail rail (left) */}
+                  {imgs.length > 1 && (
+                    <div className="hidden sm:flex flex-col gap-2 w-16 sm:w-20 max-h-[420px] overflow-y-auto pr-1 -ml-2 sm:-ml-4 lg:-ml-6">
+                      {imgs.map((src, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          className={`rounded-lg overflow-hidden ring-1 bg-white/[0.03] transition focus:outline-none ${
+                            idx === i ? "ring-blue-400/60" : "ring-white/10 hover:ring-white/20"
+                          }`}
+                          onMouseEnter={() => setIdx(i)}
+                          onFocus={() => setIdx(i)}
                           onClick={() => {
-                            setIdx(i + 1);
+                            setIdx(i);
                             setIsModalOpen(true);
                           }}
-                        />
-                      </div>
+                          title={`Open image ${i + 1}`}
+                          aria-current={idx === i ? "true" : undefined}
+                        >
+                          <img src={src} alt={`Thumb ${i + 1}`} className="w-full h-16 object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Main image (right) */}
+                  <div className="rounded-2xl overflow-hidden ring-1 ring-white/10 bg-white/[0.03] flex-1">
+                    <img
+                      src={imgs[idx]}
+                      alt={`Main ${idx + 1}`}
+                      className="w-full h-[340px] sm:h-[420px] object-cover cursor-pointer transition-transform duration-300 hover:scale-[1.01]"
+                      onClick={() => {
+                        setIsModalOpen(true);
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Mobile thumbnail grid (below) */}
+                {imgs.length > 1 && (
+                  <div className="grid grid-cols-4 gap-2 sm:hidden mt-3">
+                    {imgs.map((src, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        className={`rounded-lg overflow-hidden ring-1 bg-white/[0.03] transition focus:outline-none ${
+                          idx === i ? "ring-blue-400/60" : "ring-white/10 hover:ring-white/20"
+                        }`}
+                        onMouseEnter={() => setIdx(i)}
+                        onFocus={() => setIdx(i)}
+                        onClick={() => {
+                          setIdx(i);
+                          setIsModalOpen(true);
+                        }}
+                        title={`Open image ${i + 1}`}
+                        aria-current={idx === i ? "true" : undefined}
+                      >
+                        <img src={src} alt={`Thumb ${i + 1}`} className="w-full h-16 object-cover" />
+                      </button>
                     ))}
                   </div>
                 )}
@@ -940,7 +984,7 @@ export default function PropertyDetailPage() {
                       )}
                     </div>
                   </div>
-                  {(originLL && campusLL) && (
+                  {/* {(originLL && campusLL) && (
                     <a
                       className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs bg-blue-500/15 text-blue-200 hover:bg-blue-500/25 border border-blue-500/30 transition-colors flex-shrink-0"
                       href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(`${originLL.lat},${originLL.lng}`)}&${userInfo?.campusPlaceId ? `destination_place_id=${encodeURIComponent(userInfo.campusPlaceId)}` : `destination=${encodeURIComponent(`${campusLL.lat},${campusLL.lng}`)}`}`}
@@ -950,7 +994,7 @@ export default function PropertyDetailPage() {
                       Open route
                       <Route size={12} />
                     </a>
-                  )}
+                  )} */}
                 </div>
                 
                 {/* Dotted vertical separator */}
@@ -1244,11 +1288,21 @@ export default function PropertyDetailPage() {
       
       
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
-          <button className="absolute right-5 top-5 text-white" onClick={() => setIsModalOpen(false)}>
-            <MdClose size={35} />
-          </button>
-          <div className="relative w-11/12 max-w-5xl md:w-2/3">
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 pt-24 sm:pt-28"
+          onClick={() => setIsModalOpen(false)}
+        >
+          <div
+            className="relative w-11/12 max-w-5xl md:w-2/3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="absolute right-3 top-3 text-white bg-black/40 hover:bg-black/60 rounded-md p-1.5"
+              onClick={() => setIsModalOpen(false)}
+              title="Close"
+            >
+              <MdClose size={28} />
+            </button>
             <img src={imgs[idx]} alt={`Image ${idx + 1}`} className="h-auto w-full rounded-lg shadow-lg" />
             <button
               className="absolute left-0 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white"
@@ -1268,7 +1322,7 @@ export default function PropertyDetailPage() {
 
       {/* request contact modal */}
       {requestOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+        <div className={`fixed inset-0 ${requestFromAI ? 'z-[10001]' : 'z-[60]'} flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-300`}>
           <div className="w-full max-w-md rounded-3xl bg-white/10 backdrop-blur-xl border border-white/20 p-8 text-white shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-500">
             {/* Header */}
             <div className="text-center mb-6">
@@ -1382,7 +1436,7 @@ export default function PropertyDetailPage() {
               
               <button
                 type="button"
-                onClick={() => setRequestOpen(false)}
+                onClick={() => { setRequestOpen(false); setRequestFromAI(false); }}
                 className="w-full py-3 text-white/70 hover:text-white font-medium transition-all duration-300 hover:bg-white/5 rounded-xl hover:scale-[1.01]"
               >
                 {reqState === "idle" || reqState === "error" ? "Cancel" : "Close"}
@@ -1398,6 +1452,39 @@ export default function PropertyDetailPage() {
         property={property}
         userInfo={userInfo}
         onPropertyManagerClose={() => setShowPropertyManagerAI(false)}
+        onMessageHost={startDM}
+        onRequestContact={async () => {
+          try {
+            // Add a small user bubble to reflect the click
+            if (aiMessengerRef.current?.postUserNote) {
+              aiMessengerRef.current.postUserNote('You tapped "Request Contact Info"');
+            }
+            // Check status first; if already pending/approved, do not open modal
+            const r = await axiosInstance.get(`/contact-access/status/${id}`);
+            const s = r?.data || {};
+            if (s?.approved) {
+              setContactStatus((prev)=>({ ...prev, approved: true, pending: false }));
+              if (aiMessengerRef.current) aiMessengerRef.current.postSystemMessage('I see your contact request is already approved. You should now be able to view the contact details above.');
+              return;
+            }
+            if (s?.pending) {
+              setContactStatus((prev)=>({ ...prev, pending: true, approved: false }));
+              if (aiMessengerRef.current) aiMessengerRef.current.postSystemMessage("Looks like you've already requested contact info. I'll notify you here as soon as the host responds.");
+              return;
+            }
+          } catch {}
+          // Not pending/approved: open modal to send a new request
+          setReqState('idle');
+          setRequestFromAI(true);
+          setRequestOpen(true);
+        }}
+        onScheduleTour={() => {
+          // Placeholder: could open a scheduling UI; for now open request modal
+          setReqState("idle");
+          setRequestFromAI(true);
+          setRequestOpen(true);
+        }}
+        onRegisterExternal={(api) => { aiMessengerRef.current = api; }}
       />
     </div>
   );

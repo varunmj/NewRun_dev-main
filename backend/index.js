@@ -4447,9 +4447,11 @@ Provide 4-6 specific, actionable next steps prioritized by importance and urgenc
       });
 
       const aiContent = aiResponse?.data?.choices?.[0]?.message?.content || '';
+      const { sanitizeAIText } = require('./utils/aiSanitizer');
+      const aiContentSanitized = sanitizeAIText(aiContent);
       
       // Parse AI response into structured actions
-      const rawActions = parseAIActions(aiContent, userContext);
+      const rawActions = parseAIActions(aiContentSanitized, userContext);
       
       // Validate and fix any duplicate content
       // const validatedActions = AIDataValidator.validateActions(rawActions); // AIDataValidator not available
@@ -4551,8 +4553,10 @@ Provide a helpful, personalized response.`;
       });
 
       const response = aiResponse?.data?.choices?.[0]?.message?.content || 'I apologize, but I\'m having trouble processing your request right now.';
+      const { sanitizeAIText } = require('./utils/aiSanitizer');
+      const responseSanitized = sanitizeAIText(response);
       
-      res.json({ success: true, response, aiGenerated: true });
+      res.json({ success: true, response: responseSanitized, aiGenerated: true });
     } catch (error) {
       console.error('AI Chat Error:', error);
       res.status(500).json({ 
@@ -4615,9 +4619,13 @@ Provide a helpful, personalized response.`;
           const { requestedDateTime } = req.body;
           result = await propertyManagerAI.generateTourSchedulingResponse(property, user, requestedDateTime);
           break;
+
+        case 'draft-host-outreach':
+          result = await propertyManagerAI.generateHostOutreachDraft(property, user);
+          break;
           
         default:
-          return res.status(400).json({ error: 'Invalid action. Use: chat, insights, or schedule-tour' });
+          return res.status(400).json({ error: 'Invalid action. Use: chat, insights, schedule-tour, or draft-host-outreach' });
       }
 
       res.json(result);
@@ -7874,6 +7882,58 @@ Provide specific, actionable recommendations for improving roommate matching.`;
     } catch (error) {
       console.error('Cache clear error:', error);
       res.status(500).json({ success: false, error: 'Failed to clear cache' });
+    }
+  });
+
+  // AI feedback endpoint (thumbs up/down, optional comment)
+  app.post('/api/ai/feedback', authenticateToken, async (req, res) => {
+    try {
+      const userId = getAuthUserId(req);
+      const { context = {}, rating, comment = '' } = req.body || {};
+      console.log('AI Feedback:', { userId, rating, comment, context, ts: new Date().toISOString() });
+      return res.json({ success: true });
+    } catch (e) {
+      console.error('AI Feedback Error:', e);
+      return res.status(500).json({ success: false });
+    }
+  });
+
+  // Simple tour availability (placeholder) for scheduling UI
+  app.get('/api/scheduling/availability/:propertyId', authenticateToken, async (req, res) => {
+    try {
+      const { propertyId } = req.params;
+      if (!propertyId) return res.status(400).json({ success: false, error: 'propertyId required' });
+      const now = new Date();
+      const base = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0, 0);
+      const slots = [0, 1, 2, 3, 4].map(d => {
+        return [10, 13, 16].map(h => new Date(base.getTime() + d*24*3600*1000).setHours(h, 0, 0, 0));
+      }).flat().map(ts => new Date(ts).toISOString());
+      return res.json({ success: true, propertyId, slots });
+    } catch (e) {
+      console.error('Availability Error:', e);
+      return res.status(500).json({ success: false });
+    }
+  });
+
+  // Hold a proposed slot (placeholder - no DB)
+  app.post('/api/scheduling/hold', authenticateToken, async (req, res) => {
+    try {
+      const { propertyId, slot } = req.body || {};
+      if (!propertyId || !slot) return res.status(400).json({ success: false, error: 'propertyId and slot required' });
+      return res.json({ success: true, holdId: `${propertyId}:${slot}` });
+    } catch (e) {
+      return res.status(500).json({ success: false });
+    }
+  });
+
+  // Book a slot (placeholder - no DB)
+  app.post('/api/scheduling/book', authenticateToken, async (req, res) => {
+    try {
+      const { propertyId, slot, holdId } = req.body || {};
+      if (!propertyId || !slot) return res.status(400).json({ success: false, error: 'propertyId and slot required' });
+      return res.json({ success: true, bookingId: `${propertyId}:${slot}`, slot });
+    } catch (e) {
+      return res.status(500).json({ success: false });
     }
   });
 

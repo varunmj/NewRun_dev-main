@@ -22,6 +22,8 @@ import PropertyGrid from './PropertyGrid';
 import CompactPropertyCard from './CompactPropertyCard';
 import PropertyTextParser from '../../utils/propertyTextParser';
 import axiosInstance from '../../utils/axiosInstance';
+import { Copy as LucideCopy, ThumbsUp as LucideThumbsUp, ThumbsDown as LucideThumbsDown } from 'lucide-react';
+import AgentWorkbenchPanel from './AgentWorkbenchPanel';
 
 /**
  * Intelligent Insights Component
@@ -37,7 +39,11 @@ const IntelligentInsights = ({
   // Property Manager AI props
   propertyManagerMode = false,
   property = null,
-  onPropertyManagerClose = null
+  onPropertyManagerClose = null,
+  onMessageHost,
+  onRequestContact,
+  onScheduleTour,
+  onRegisterExternal
 }) => {
   const navigate = useNavigate();
   const { 
@@ -82,6 +88,25 @@ const IntelligentInsights = ({
   const [propertyManagerInput, setPropertyManagerInput] = useState('');
   const [propertyManagerLoading, setPropertyManagerLoading] = useState(false);
   const [propertyManagerAction, setPropertyManagerAction] = useState('chat');
+  const [lastActionSuggestions, setLastActionSuggestions] = useState([]);
+  const [consumedActions, setConsumedActions] = useState(new Set());
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeDraft, setComposeDraft] = useState('');
+  const [composeSending, setComposeSending] = useState(false);
+  
+  // Agent Workbench Panel state
+  const [workbenchOpen, setWorkbenchOpen] = useState(false);
+  const [workbenchAction, setWorkbenchAction] = useState(null);
+
+  // Scheduling (tour) UI state
+  const [tourOpen, setTourOpen] = useState(false);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilitySlots, setAvailabilitySlots] = useState([]);
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [bookingSending, setBookingSending] = useState(false);
+
+  // Saved search (local toggle)
+  const [savedSearchEnabled, setSavedSearchEnabled] = useState(false);
 
   // Helper functions for polished UI
   const scoreColor = (p) =>
@@ -135,21 +160,49 @@ const IntelligentInsights = ({
         isFollowUp: propertyManagerMessages.length > 0 // Indicate this is a follow-up message (after welcome)
       });
 
+      // Heuristic: detect draft-like responses even if backend didn't flag
+      const detectDraftFromText = (text) => {
+        if (!text || typeof text !== 'string') return null;
+        const lower = text.toLowerCase();
+        if (lower.includes("draft") || text.includes('---')) {
+          // Try to extract content between --- markers
+          const parts = text.split(/\n[-]{3,}\n/);
+          if (parts.length >= 2) {
+            const between = parts[1] || '';
+            if (between.trim().length > 30) return between.trim();
+          }
+          // Fallback: find first greeting line starting with Hi/Hello
+          const hiIdx = text.search(/\n?(hi|hello)\b/i);
+          if (hiIdx >= 0) {
+            const candidate = text.slice(hiIdx).trim();
+            if (candidate.length > 30) return candidate;
+          }
+        }
+        return null;
+      };
+
+      const autoDraft = detectDraftFromText(response.data.response);
+
       const aiMessage = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
         content: response.data.response || 'I apologize, but I\'m having trouble processing your request right now.',
         timestamp: new Date().toISOString(),
-        success: response.data.success
+        success: response.data.success,
+        actionSuggestions: response.data.actionSuggestions || [],
+        isDraft: !!response.data.isDraft || !!autoDraft,
+        draft: response.data.draft || autoDraft
       };
 
       // Batch AI message addition and typewriter start
       setPropertyManagerMessages(prev => [...prev, aiMessage]);
+      setLastActionSuggestions(aiMessage.actionSuggestions);
       
-      // Start typewriter effect after a brief delay to ensure smooth transition
-      setTimeout(() => {
-        startTypewriterEffect(response.data.response || 'I apologize, but I\'m having trouble processing your request right now.');
-      }, 50);
+      // Start typewriter effect immediately for snappier UX
+      startTypewriterEffect(
+        response.data.response || 'I apologize, but I\'m having trouble processing your request right now.',
+        { speed: 10, mode: 'line' }
+      );
 
     } catch (error) {
       console.error('Property Manager AI Error:', error);
@@ -192,10 +245,8 @@ const IntelligentInsights = ({
         setPropertyManagerMessages(prev => [...prev, insightMessage]);
         setPropertyManagerAction('insights');
         
-        // Start typewriter effect after a brief delay
-        setTimeout(() => {
-          startTypewriterEffect(response.data.insights);
-        }, 50);
+        // Start typewriter effect with line streaming
+        startTypewriterEffect(response.data.insights, { speed: 10, mode: 'line' });
       }
     } catch (error) {
       console.error('Insights Error:', error);
@@ -210,38 +261,56 @@ const IntelligentInsights = ({
       const welcomeMessage = {
         id: 'welcome',
         type: 'ai',
-        content: `Hey ${userInfo.firstName || 'there'}!\n\nI'm your NewRun Property Manager AI for "${property.title}". This property looks perfect for your needs - it's conveniently located, offers great value, and has everything you're looking for.\n\nI can help you with questions about this property, provide detailed insights, or schedule a tour. What would you like to know?`,
+        content: `Hey ${userInfo.firstName || 'there'}!\n\nI'm your NewRun Property Manager AI for "${property.title}". I can answer questions about this listing, share helpful details, or help you schedule a tour.\n\nIf you need to reach the host, use the in-app **Message Host** button or **Request Contact Info**. What would you like to know?`,
         timestamp: new Date().toISOString()
       };
       setPropertyManagerMessages([welcomeMessage]);
       
-      // Start typewriter effect for welcome message
-      startTypewriterEffect(welcomeMessage.content);
+      // Start typewriter effect for welcome message (snappy)
+      startTypewriterEffect(welcomeMessage.content, { speed: 10, mode: 'line' });
     }
   }, [propertyManagerMode, property, propertyManagerMessages.length, userInfo]);
 
-  // Typewriter effect for Property Manager AI messages
-  const startTypewriterEffect = (text) => {
-    // Clear previous state immediately to prevent flicker
+  // Typewriter effect for Property Manager AI messages (ChatGPT/Cursor-like streaming)
+  const startTypewriterEffect = (text, opts = {}) => {
+    // Options
+    const speedMs = typeof opts.speed === 'number' ? opts.speed : 10; // interval between ticks
+    const lineMode = opts.mode === 'line' ? 'line' : 'auto';
+    const fastChunk = typeof opts.chunk === 'number' ? Math.max(1, opts.chunk) : 10; // chars per tick (fallback)
+
+    // Reset state
     setDisplayedText('');
     setIsTyping(true);
-    
-    // Use requestAnimationFrame for smoother animation
-    let index = 0;
-    const animate = () => {
-      if (index < text.length) {
-        setDisplayedText(text.substring(0, index + 1));
-        index++;
-        requestAnimationFrame(() => {
-          setTimeout(animate, 25); // Slightly faster for better UX
-        });
+
+    // If line mode or multi-line content, stream by line quickly
+    const lines = String(text || '').split(/\n/);
+    if (lineMode === 'line' || lines.length > 1) {
+      let i = 0;
+      const next = () => {
+        if (i < lines.length) {
+          // Append next line with newline (except first line)
+          setDisplayedText(prev => (i === 0 ? lines[i] : prev + '\n' + lines[i]));
+          i += 1;
+          setTimeout(() => requestAnimationFrame(next), speedMs);
+        } else {
+          setIsTyping(false);
+        }
+      };
+      return requestAnimationFrame(next);
+    }
+
+    // Fallback: chunked character streaming for single-line text
+    let idx = 0;
+    const pump = () => {
+      if (idx < text.length) {
+        idx = Math.min(text.length, idx + fastChunk);
+        setDisplayedText(text.substring(0, idx));
+        setTimeout(() => requestAnimationFrame(pump), speedMs);
       } else {
         setIsTyping(false);
       }
     };
-    
-    // Start animation on next frame to prevent flicker
-    requestAnimationFrame(animate);
+    requestAnimationFrame(pump);
   };
 
   // Clear typewriter state when starting new message
@@ -249,6 +318,39 @@ const IntelligentInsights = ({
     setDisplayedText('');
     setIsTyping(false);
   };
+
+  // Expose a minimal external messenger so parent can inject system messages (e.g., after contact request)
+  useEffect(() => {
+    if (!propertyManagerMode) return;
+    if (typeof onRegisterExternal !== 'function') return;
+    const api = {
+      postSystemMessage: (text) => {
+        if (!text) return;
+        const msg = {
+          id: `sys-${Date.now()}`,
+          type: 'ai',
+          content: String(text),
+          timestamp: new Date().toISOString(),
+          success: true,
+          isSystemNote: true
+        };
+        setPropertyManagerMessages(prev => [...prev, msg]);
+        // stream it
+        startTypewriterEffect(String(text), { speed: 10, mode: 'line' });
+      },
+      postUserNote: (text) => {
+        if (!text) return;
+        const msg = {
+          id: `user-${Date.now()}`,
+          type: 'user',
+          content: String(text),
+          timestamp: new Date().toISOString()
+        };
+        setPropertyManagerMessages(prev => [...prev, msg]);
+      }
+    };
+    onRegisterExternal(api);
+  }, [propertyManagerMode, onRegisterExternal]);
 
   // Memoized initialization check
   const shouldInitialize = useMemo(() => {
@@ -788,11 +890,18 @@ const IntelligentInsights = ({
 
   // Property Manager AI Mode - Use exact same design as AI Insight Details
   if (propertyManagerMode) {
+    const lastAiIndex = (() => {
+      for (let i = propertyManagerMessages.length - 1; i >= 0; i--) {
+        if (propertyManagerMessages[i]?.type === 'ai') return i;
+      }
+      return -1;
+    })();
     return (
+      <>
       <NewRunDrawer
         isOpen={true}
         onClose={onPropertyManagerClose}
-        title="AI Insight Details"
+        title="NewRun AI Manager"
         width="w-[500px]"
         maxWidth="max-w-xl"
       >
@@ -800,18 +909,14 @@ const IntelligentInsights = ({
           {/* ChatGPT-style AI Message */}
           <div className="flex-1 overflow-y-auto">
             <div className="p-6">
-              {propertyManagerLoading ? (
-                <div className="flex items-center gap-3 py-8">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-400"></div>
-                  <span className="text-white/70">AI is analyzing this property...</span>
-                </div>
-              ) : propertyManagerMessages.length > 0 ? (
+              {propertyManagerMessages.length > 0 ? (
                 <div className="prose prose-invert max-w-none">
                   {/* Continuous Chat Flow - NewRun AI Insights Style */}
                   <div className="space-y-6">
                     {propertyManagerMessages.map((message, index) => {
                       const isLastMessage = index === propertyManagerMessages.length - 1;
                       const isCurrentlyTyping = isLastMessage && isTyping && message.type === 'ai';
+                      const isLatestAi = index === lastAiIndex;
                       
                       return (
                         <div key={message.id}>
@@ -824,26 +929,135 @@ const IntelligentInsights = ({
                                 <div className="absolute -bottom-1 right-2 w-0 h-0 border-l-[6px] border-l-[#1b1d24] border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent"></div>
                               </div>
                             </div>
-                          ) : (
-                            // AI Message - Same style as NewRun AI insights (no bubble)
-                            <div 
-                              className="whitespace-pre-wrap text-white/90 leading-relaxed text-base"
-                              dangerouslySetInnerHTML={{ 
-                                __html: (isCurrentlyTyping ? displayedText : message.content)
-                                  // Fix all markdown patterns
-                                  .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                                  .replace(/\*Title:\s*"(.*?)"\*/g, '<strong>$1</strong>')
-                                  .replace(/\*Priority:\*\*/g, '')
-                                  .replace(/\*Message:\*\*/g, '')
-                                  .replace(/\*Action:\*\*/g, '')
-                                  // Clean up any remaining markdown artifacts
-                                  .replace(/\*([^*]+)\*/g, '<strong>$1</strong>')
-                                  .replace(/\*\*/g, '')
-                                  .replace(/\*/g, '') + 
-                                (isCurrentlyTyping ? '<span class="inline-block w-2 h-5 bg-white/90 ml-1 animate-pulse"></span>' : '')
-                              }}
-                            ></div>
-                          )}
+                          ) : (<>
+                            {/* AI Message - text or draft card */}
+                            {message.isDraft ? (
+                              <div className="mt-2 rounded-xl border border-white/10 bg-white/5 p-4">
+                                <div className="text-white/80 text-sm mb-2">Draft message to host</div>
+                                <div className="rounded-lg bg-black/30 border border-white/10 p-3 text-white whitespace-pre-wrap text-sm" style={{maxHeight:'240px', overflowY:'auto'}}>
+                                  {message.draft || message.content}
+                                </div>
+                                <div className="mt-3 flex gap-2">
+                                  <button className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm" onClick={() => { 
+                                    setComposeDraft(message.draft || message.content || ''); 
+                                    setWorkbenchAction('ask_host');
+                                    setWorkbenchOpen(true);
+                                    // Compose UI will appear inside workbench, no separate modal needed
+                                  }}>Use this draft</button>
+                                  <button className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm" onClick={async()=>{ try{ await navigator.clipboard.writeText(message.draft || message.content || ''); } catch{} }}>Copy</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div 
+                                className="whitespace-pre-wrap text-white/90 leading-relaxed text-base"
+                                dangerouslySetInnerHTML={{ 
+                                  __html: (isCurrentlyTyping ? displayedText : message.content)
+                                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                                    .replace(/\*Title:\s*"(.*?)"\*/g, '<strong>$1</strong>')
+                                    .replace(/\*Priority:\*\*/g, '')
+                                    .replace(/\*Message:\*\*/g, '')
+                                    .replace(/\*Action:\*\*/g, '')
+                                    .replace(/\*([^*]+)\*/g, '<strong>$1</strong>')
+                                    .replace(/\*\*/g, '')
+                                    .replace(/\*/g, '') + 
+                                  (isCurrentlyTyping ? '<span class="inline-block w-2 h-5 bg-white/90 ml-1 animate-pulse"></span>' : '')
+                                }}
+                              ></div>
+                            )}
+                            {/* Render action suggestions under AI messages */}
+                              {!isCurrentlyTyping && isLatestAi && Array.isArray(message.actionSuggestions) && message.actionSuggestions.length > 0 && (
+                                <div className="mt-5 flex flex-wrap justify-center gap-3">
+                                {message.actionSuggestions.map((a) => (
+                                    <button
+                                    key={`${a.type}-${a.propertyId}-${message.id}`}
+                                      className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 transition-colors ring-1 ring-white/20 shadow-md shadow-blue-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      disabled={consumedActions.has(`${message.id}-${a.type}`)}
+                                    onClick={() => {
+                                        setConsumedActions(prev => new Set(prev).add(`${message.id}-${a.type}`));
+                                        
+                                        // Open workbench panel for visual progress tracking
+                                        if (a.type === 'message_host' || a.type === 'ask_host_details') {
+                                          setWorkbenchAction('ask_host');
+                                          setWorkbenchOpen(true);
+                                          // Also trigger the actual action
+                                          if (a.type === 'ask_host_details') {
+                                            (async () => {
+                                              try {
+                                                const r = await axiosInstance.post('/api/ai/property-manager', { propertyId: property._id, action: 'draft-host-outreach' });
+                                                setComposeDraft(r?.data?.draft || 'Hi! I\'m interested in this property...');
+                                                // Compose UI will appear inside workbench when ready for review
+                                              } catch {
+                                                setComposeDraft('Hi! I\'m interested in this property...');
+                                              }
+                                            })();
+                                          } else if (onMessageHost) {
+                                            setTimeout(() => onMessageHost(), 800);
+                                          }
+                                        } else if (a.type === 'request_contact') {
+                                          setWorkbenchAction('request_contact');
+                                          setWorkbenchOpen(true);
+                                          if (onRequestContact) {
+                                            setTimeout(() => onRequestContact(), 800);
+                                          }
+                                        } else if (a.type === 'schedule_tour') {
+                                          // Open in-drawer tour picker
+                                          (async () => {
+                                            try {
+                                              setTourOpen(true);
+                                              setAvailabilityLoading(true);
+                                              setSelectedSlot(null);
+                                              const r = await axiosInstance.get(`/api/scheduling/availability/${property._id}`);
+                                              const slots = r?.data?.slots || [];
+                                              setAvailabilitySlots(slots);
+                                            } catch {
+                                              setAvailabilitySlots([]);
+                                            } finally {
+                                              setAvailabilityLoading(false);
+                                            }
+                                          })();
+                                        }
+                                    }}
+                                  >
+                                    {a.label || 'Action'}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                              {!isCurrentlyTyping && message.type === 'ai' && message.id !== 'welcome' && (
+                                <div className="mt-3 flex items-center gap-3 text-white/70">
+                                  {/* Copy */}
+                                  <button
+                                    className="p-1.5 rounded hover:bg-white/10"
+                                    title="Copy"
+                                    onClick={async () => {
+                                      try { await navigator.clipboard.writeText(message.content || ''); } catch {}
+                                    }}
+                                  >
+                                    <LucideCopy size={16} className="text-white/70" />
+                                  </button>
+                                  {/* Thumbs up */}
+                                  <button
+                                    className="p-1.5 rounded hover:bg-white/10"
+                                    title="Helpful"
+                                    onClick={async () => {
+                                      try { await axiosInstance.post('/api/ai/feedback', { rating: 'up', context: { propertyId: property?._id, messageId: message.id, mode: 'property_manager' } }); } catch {}
+                                    }}
+                                  >
+                                    <LucideThumbsUp size={16} className="text-white/70" />
+                                  </button>
+                                  {/* Thumbs down */}
+                                  <button
+                                    className="p-1.5 rounded hover:bg-white/10"
+                                    title="Not helpful"
+                                    onClick={async () => {
+                                      try { await axiosInstance.post('/api/ai/feedback', { rating: 'down', context: { propertyId: property?._id, messageId: message.id, mode: 'property_manager' } }); } catch {}
+                                    }}
+                                  >
+                                    <LucideThumbsDown size={16} className="text-white/70" />
+                                  </button>
+                                </div>
+                              )}
+                          </>)}
                         </div>
                       );
                     })}
@@ -865,6 +1079,19 @@ const IntelligentInsights = ({
                           }}
                           showContactActions={false}
                         />
+                      </div>
+                    )}
+                    {/* Inline typing/loading indicator without hiding history */}
+                    {propertyManagerLoading && (
+                      <div className="flex items-center gap-3 py-4 text-white/70">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-white/60 animate-pulse"></div>
+                          <div className="w-2 h-2 rounded-full bg-white/60 animate-pulse [animation-delay:120ms]"></div>
+                          <div className="w-2 h-2 rounded-full bg-white/60 animate-pulse [animation-delay:240ms]"></div>
+                        </div>
+                        <span>
+                          {propertyManagerMessages.length <= 1 ? 'Analyzing this property…' : 'Thinking…'}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -898,6 +1125,7 @@ const IntelligentInsights = ({
                     <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                   </svg>
                 </button>
+                <div className="ml-auto text-[11px] text-white/50">Powered by NewRun AI Engine</div>
               </div>
               
               <motion.div
@@ -945,9 +1173,169 @@ const IntelligentInsights = ({
               </motion.div>
             </motion.div>
           </div>
+          {/* Compose outreach modal - Left side portrait (only show if workbench is not open) */}
+          {composeOpen && !workbenchOpen && (
+            <div className="fixed inset-0 z-[10002] bg-black/70 backdrop-blur-sm flex items-start justify-start p-4">
+              <div className="w-[420px] h-[92vh] bg-gradient-to-br from-[#0f1115] to-[#1a1d24] border border-white/10 rounded-[36px] shadow-[0px_0px_39.9px_-4px_hsla(220,50%,50%,0.15)] overflow-hidden flex flex-col">
+                {/* Header */}
+                <div className="flex items-center justify-between p-6 pb-4 border-b border-white/10">
+                  <div className="flex items-center gap-3">
+                    <div className="inline-flex items-center justify-center rounded-full border border-blue-500/40 bg-blue-500/10 text-blue-400 size-9 shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 256 256" className="size-5">
+                        <path d="M12,111l112,64a8,8,0,0,0,7.94,0l112-64a8,8,0,0,0,0-13.9l-112-64a8,8,0,0,0-7.94,0l-112,64A8,8,0,0,0,12,111ZM128,49.21,223.87,104,128,158.79,32.13,104ZM246.94,140A8,8,0,0,1,244,151L132,215a8,8,0,0,1-7.94,0L12,151A8,8,0,0,1,20,137.05l108,61.74,108-61.74A8,8,0,0,1,246.94,140Z"></path>
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold text-white leading-tight">Message Host</h3>
+                  </div>
+                  <button className="p-2 rounded-lg hover:bg-white/10 transition-colors" onClick={() => setComposeOpen(false)}>
+                    <svg className="w-4 h-4 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                  </button>
+                </div>
+                
+                {/* Content */}
+                <div className="flex-1 overflow-auto px-6 pt-4 pb-6">
+                  <div className="mb-4">
+                    <label className="text-sm text-white/70 mb-2 block">Your message</label>
+                    <textarea 
+                      className="w-full min-h-[60vh] bg-white/5 border border-white/10 rounded-2xl p-4 text-white placeholder-white/30 resize-y focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all" 
+                      value={composeDraft} 
+                      onChange={e=>setComposeDraft(e.target.value)}
+                      placeholder="Type your message to the host..."
+                    />
+                  </div>
+                </div>
+                
+                {/* Footer Actions */}
+                <div className="border-t border-white/10 p-6 pt-4 flex justify-end gap-3">
+                  <button 
+                    className="px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-colors font-medium" 
+                    onClick={()=>setComposeOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    className="px-6 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-blue-900/30" 
+                    disabled={composeSending || !composeDraft.trim()} 
+                    onClick={async ()=>{
+                    try {
+                      setComposeSending(true);
+                      // Initiate/create conversation and send message
+                      const receiverId = property?.userId?._id || property?.userId;
+                      const init = await axiosInstance.post('/conversations/initiate', { receiverId });
+                      const convId = init?.data?.conversationId;
+                      if (convId) {
+                        await axiosInstance.post('/messages/send', { conversationId: convId, content: composeDraft });
+                        // Show quick system note
+                        setPropertyManagerMessages(prev => [...prev, { id: `sys-${Date.now()}`, type: 'ai', content: 'I\'ve sent your message to the host. I\'ll update you here when they reply.', timestamp: new Date().toISOString(), success: true }]);
+                        setComposeOpen(false);
+                      }
+                    } catch {
+                    } finally {
+                      setComposeSending(false);
+                    }
+                  }}>{composeSending ? 'Sending…' : 'Send'}</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </NewRunDrawer>
-    );
+      
+      {/* Agent Workbench Panel - Render outside drawer at page level */}
+      <AgentWorkbenchPanel
+        isOpen={workbenchOpen}
+        onClose={() => {
+          setWorkbenchOpen(false);
+          setWorkbenchAction(null);
+        }}
+        actionType={workbenchAction}
+        property={property}
+        composeDraft={composeDraft}
+        onComposeChange={setComposeDraft}
+        onComposeSend={async () => {
+          try {
+            setComposeSending(true);
+            const receiverId = property?.userId?._id || property?.userId;
+            const init = await axiosInstance.post('/conversations/initiate', { receiverId });
+            const convId = init?.data?.conversationId;
+            if (convId) {
+              await axiosInstance.post('/messages/send', { conversationId: convId, content: composeDraft });
+              setPropertyManagerMessages(prev => [...prev, { 
+                id: `sys-${Date.now()}`, 
+                type: 'ai', 
+                content: 'I\'ve sent your message to the host. I\'ll update you here when they reply.', 
+                timestamp: new Date().toISOString(), 
+                success: true 
+              }]);
+            }
+          } catch (err) {
+            console.error('Failed to send message:', err);
+          } finally {
+            setComposeSending(false);
+          }
+        }}
+        composeSending={composeSending}
+        onActionComplete={() => {
+          // Optional: callback when workflow completes
+        }}
+      />
+
+      {/* Tour scheduling modal inside page (drawer context) */}
+      {tourOpen && (
+        <div className="fixed inset-0 z-[10002] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#0f1115] border border-white/10 rounded-2xl p-6 text-white">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold">Schedule a tour</h3>
+              <button className="p-2 rounded hover:bg-white/10" onClick={()=>setTourOpen(false)}>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            </div>
+            {availabilityLoading ? (
+              <div className="py-10 text-center text-white/70">Loading available slots…</div>
+            ) : availabilitySlots.length === 0 ? (
+              <div className="py-10 text-center text-white/70">No slots published yet. Please check back later.</div>
+            ) : (
+              <div>
+                <div className="grid grid-cols-2 gap-3">
+                  {availabilitySlots.map((slot, idx) => (
+                    <button
+                      key={`${slot.start}-${idx}`}
+                      className={`px-3 py-2 rounded-lg border text-sm ${selectedSlot?.start===slot.start? 'border-blue-500 bg-blue-500/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                      onClick={()=>setSelectedSlot(slot)}
+                    >
+                      {new Date(slot.start).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button className="px-4 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20" onClick={()=>setTourOpen(false)}>Cancel</button>
+                  <button
+                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50"
+                    disabled={!selectedSlot || bookingSending}
+                    onClick={async()=>{
+                      try {
+                        setBookingSending(true);
+                        await axiosInstance.post('/api/scheduling/hold', { propertyId: property._id, slot: selectedSlot });
+                        await axiosInstance.post('/api/scheduling/book', { propertyId: property._id, slot: selectedSlot });
+                        setPropertyManagerMessages(prev => [...prev, { id: `sys-${Date.now()}`, type: 'ai', content: `Tour booked for ${new Date(selectedSlot.start).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}. I'll keep you posted here.`, timestamp: new Date().toISOString(), success: true }]);
+                        setTourOpen(false);
+                      } catch {
+                        setPropertyManagerMessages(prev => [...prev, { id: `sys-${Date.now()}`, type: 'ai', content: 'Sorry, booking failed. Please try another slot.', timestamp: new Date().toISOString(), success: false }]);
+                      } finally {
+                        setBookingSending(false);
+                      }
+                    }}
+                  >
+                    {bookingSending ? 'Booking…' : 'Book slot'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
   }
 
   return (
@@ -967,6 +1355,20 @@ const IntelligentInsights = ({
             <div>
               <h3 className="text-lg font-bold text-white">AI-Powered Insights</h3>
               <p className="text-white/60 text-sm">Personalized recommendations powered by GPT-4o</p>
+            </div>
+            {/* Saved search toggle (local) */}
+            <div className="ml-auto flex items-center gap-2">
+              <label className="text-white/70 text-sm">Save this search</label>
+              <button
+                className={`w-10 h-6 rounded-full transition-colors ${savedSearchEnabled ? 'bg-green-500' : 'bg-white/20'}`}
+                onClick={() => {
+                  const next = !savedSearchEnabled;
+                  setSavedSearchEnabled(next);
+                  setPropertyManagerMessages(prev => [...prev, { id: `sys-${Date.now()}`, type: 'ai', content: next ? 'Okay, I\'ll watch for new matches and notify you here.' : 'Okay, I\'ll stop watching this search.', timestamp: new Date().toISOString(), success: true }]);
+                }}
+              >
+                <span className={`block w-5 h-5 bg-white rounded-full transform transition-transform translate-y-0.5 ${savedSearchEnabled ? 'translate-x-4' : 'translate-x-1'}`}></span>
+              </button>
             </div>
           </div>
           
