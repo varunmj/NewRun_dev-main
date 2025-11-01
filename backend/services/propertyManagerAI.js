@@ -75,7 +75,8 @@ class PropertyManagerAI {
       };
 
     } catch (error) {
-      console.error('❌ Property Manager AI Error:', error);
+      // Avoid dumping axios config/headers (which can include API keys) to logs
+      this.safeLogAxiosError(error, 'Property Manager AI Error');
       return {
         success: false,
         response: "I'm having trouble accessing property information right now. Please try again or contact the host directly.",
@@ -225,24 +226,49 @@ Please provide a helpful response based on the property information provided.`;
     if (!this.openaiApiKey) {
       throw new Error('OpenAI API key not configured');
     }
+    // Retry with exponential backoff on rate limits and transient errors
+    const maxAttempts = 4;
+    const baseDelayMs = 600; // starting delay
 
-    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      temperature: 0.3, // Lower temperature for more consistent, factual responses
-      max_tokens: 500
-    }, {
-      headers: {
-        'Authorization': `Bearer ${this.openaiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      timeout: 30000
-    });
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+          model: "gpt-4o",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          temperature: 0.3,
+          max_tokens: 500
+        }, {
+          headers: {
+            'Authorization': `Bearer ${this.openaiApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000,
+          validateStatus: (s) => s >= 200 && s < 300 // throw on anything else
+        });
+        return response.data.choices[0].message.content;
+      } catch (err) {
+        const status = err?.response?.status;
+        const isTimeout = err?.code === 'ECONNABORTED' || /timeout/i.test(err?.message || '');
+        const isRetryable = status === 429 || (status >= 500 && status < 600) || isTimeout || err?.code === 'ECONNRESET' || err?.code === 'ETIMEDOUT';
 
-    return response.data.choices[0].message.content;
+        if (attempt >= maxAttempts || !isRetryable) {
+          throw err;
+        }
+
+        // Calculate delay using Retry-After header when present
+        const retryAfter = this.parseRetryAfterSeconds(err?.response?.headers?.['retry-after']);
+        const backoffMs = retryAfter != null
+          ? retryAfter * 1000
+          : Math.min(8000, Math.round(baseDelayMs * Math.pow(2, attempt - 1)));
+        const jitter = Math.floor(Math.random() * 250);
+        const waitMs = backoffMs + jitter;
+
+        await new Promise((r) => setTimeout(r, waitMs));
+      }
+    }
   }
 
   /**
@@ -261,6 +287,27 @@ Please provide a helpful response based on the property information provided.`;
       return masked;
     });
     return out;
+  }
+
+  /**
+   * Parse Retry-After header (seconds) safely
+   */
+  parseRetryAfterSeconds(headerValue) {
+    if (!headerValue) return null;
+    // numeric seconds or HTTP-date; we only support numeric here
+    const seconds = parseInt(String(headerValue).trim(), 10);
+    return Number.isFinite(seconds) ? seconds : null;
+  }
+
+  /**
+   * Log axios errors without leaking sensitive headers
+   */
+  safeLogAxiosError(error, label = 'AxiosError') {
+    const status = error?.response?.status;
+    const message = error?.response?.data?.error?.message || error?.message;
+    const requestId = error?.response?.headers?.['x-request-id'];
+    const retryAfter = error?.response?.headers?.['retry-after'];
+    console.error(`❌ ${label}:`, { status, message, requestId, retryAfter, code: error?.code });
   }
 
   /**
